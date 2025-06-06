@@ -66,6 +66,19 @@ public class OllamaChatResponse
     public int EvalCount { get; set; }
 }
 
+public class OllamaChatStreamResponse
+{
+    public string Model { get; set; } = string.Empty;
+    public OllamaChatMessage? Message { get; set; }
+    public bool Done { get; set; }
+    public long? TotalDuration { get; set; }
+    public long? LoadDuration { get; set; }
+    public int? PromptEvalCount { get; set; }
+    public long? PromptEvalDuration { get; set; }
+    public int? EvalCount { get; set; }
+    public long? EvalDuration { get; set; }
+}
+
 public class OllamaModelInfo
 {
     public string Name { get; set; } = string.Empty;

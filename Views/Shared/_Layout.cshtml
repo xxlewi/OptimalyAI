@@ -11,8 +11,41 @@
     <link rel="stylesheet" href="~/plugins/fontawesome-free/css/all.min.css">
     <!-- Theme style -->
     <link rel="stylesheet" href="~/css/adminlte.min.css">
+    <!-- SweetAlert2 -->
+    <link rel="stylesheet" href="~/plugins/sweetalert2-theme-bootstrap-4/bootstrap-4.min.css">
     <!-- Custom styles -->
     <link rel="stylesheet" href="~/css/site.css">
+    <style>
+        /* Chat menu icons hover effect */
+        .nav-sidebar .nav-item:hover .chat-actions {
+            opacity: 1 !important;
+        }
+        
+        .nav-sidebar .nav-item .chat-actions {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .nav-sidebar .nav-item .chat-actions a {
+            padding: 2px 4px;
+            line-height: 1;
+        }
+        
+        .nav-sidebar .nav-item .chat-actions a:hover {
+            opacity: 0.8;
+        }
+        
+        .nav-sidebar .nav-link.d-flex {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        
+        /* Ensure chat menu stays open */
+        #chat-menu.menu-open > .nav-treeview {
+            display: block !important;
+        }
+    </style>
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="hold-transition sidebar-mini dark-mode" id="body-element">
     <!-- Site wrapper -->
@@ -127,6 +160,41 @@
                                 <p>Live Monitoring</p>
                             </a>
                         </li>
+                        <li class="nav-header">SYSTEM</li>
+                        <li class="nav-item">
+                            <a asp-controller="Logs" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-file-alt"></i>
+                                <p>Application Logs</p>
+                            </a>
+                        </li>
+                        <li class="nav-header">CHAT</li>
+                        <li class="nav-item has-treeview menu-open" id="chat-menu">
+                            <a href="#" class="nav-link">
+                                <i class="nav-icon fas fa-comments"></i>
+                                <p>
+                                    AI Chat
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview" style="display: block;">
+                                <li class="nav-item">
+                                    <a asp-controller="Chat" asp-action="New" class="nav-link">
+                                        <i class="fas fa-plus nav-icon"></i>
+                                        <p>Nový chat</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Chat" asp-action="List" class="nav-link">
+                                        <i class="fas fa-history nav-icon"></i>
+                                        <p>Historie chatů</p>
+                                    </a>
+                                </li>
+                                <li class="nav-divider"></li>
+                                <li id="recent-chats-container">
+                                    <!-- Zde budou dynamicky načítány nedávné chaty -->
+                                </li>
+                            </ul>
+                        </li>
                     </ul>
                 </nav>
                 <!-- /.sidebar-menu -->
@@ -159,6 +227,8 @@
     <script src="~/plugins/jquery/jquery.min.js"></script>
     <!-- Bootstrap 4 -->
     <script src="~/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 -->
+    <script src="~/plugins/sweetalert2/sweetalert2.min.js"></script>
     <!-- AdminLTE App -->
     <script src="~/js/adminlte.min.js"></script>
     
@@ -202,7 +272,114 @@
                     localStorage.setItem('darkMode', 'enabled');
                 }
             });
+            
+            // Load recent chats into menu
+            loadRecentChats();
         });
+        
+        // Function to load recent chats into the sidebar menu
+        function loadRecentChats() {
+            $.ajax({
+                url: '/api/chat/recent',
+                method: 'GET',
+                success: function(data) {
+                    const container = $('#recent-chats-container');
+                    container.empty();
+                    
+                    if (data && data.length > 0) {
+                        data.forEach(function(chat) {
+                            const li = $('<li>').addClass('nav-item');
+                            
+                            const chatLink = $('<a>')
+                                .addClass('nav-link ml-3 d-flex align-items-center justify-content-between')
+                                .attr('href', '/Chat/Conversation/' + chat.id);
+                            
+                            const chatTitle = $('<span>')
+                                .addClass('d-flex align-items-center')
+                                .html('<i class="far fa-comment nav-icon"></i>' + (chat.title || 'Chat bez názvu'));
+                            
+                            const actionButtons = $('<span>')
+                                .addClass('chat-actions ml-auto')
+                                .css('display', 'flex')
+                                .css('align-items', 'center');
+                            
+                            const editBtn = $('<a>')
+                                .attr('href', '#')
+                                .attr('title', 'Přejmenovat')
+                                .addClass('text-muted mr-2')
+                                .css('font-size', '0.85rem')
+                                .html('<i class="fas fa-edit"></i>')
+                                .click(function(e) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    renameChat(chat.id, chat.title);
+                                });
+                            
+                            const deleteBtn = $('<a>')
+                                .attr('href', '#')
+                                .attr('title', 'Smazat')
+                                .addClass('text-danger')
+                                .css('font-size', '0.85rem')
+                                .html('<i class="fas fa-trash"></i>')
+                                .click(function(e) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    deleteChat(chat.id, chat.title);
+                                });
+                            
+                            actionButtons.append(editBtn).append(deleteBtn);
+                            chatLink.append(chatTitle).append(actionButtons);
+                            li.append(chatLink);
+                            container.append(li);
+                        });
+                    } else {
+                        container.append('<p class="text-muted ml-4 small">Žádné nedávné chaty</p>');
+                    }
+                },
+                error: function() {
+                    $('#recent-chats-container').append('<p class="text-muted ml-4 small">Žádné nedávné chaty</p>');
+                }
+            });
+        }
+        
+        // Function to rename chat
+        function renameChat(chatId, currentTitle) {
+            const newTitle = prompt('Nový název chatu:', currentTitle || '');
+            if (newTitle && newTitle !== currentTitle) {
+                $.ajax({
+                    url: '/Chat/Rename',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ id: chatId, title: newTitle }),
+                    success: function() {
+                        loadRecentChats();
+                    },
+                    error: function() {
+                        alert('Nepodařilo se přejmenovat chat.');
+                    }
+                });
+            }
+        }
+        
+        // Function to delete chat
+        function deleteChat(chatId, title) {
+            if (confirm('Opravdu chcete smazat chat "' + (title || 'Chat bez názvu') + '"?')) {
+                $.ajax({
+                    url: '/Chat/Delete/' + chatId,
+                    method: 'POST',
+                    success: function() {
+                        loadRecentChats();
+                        // If we're on the deleted chat page, redirect to new chat
+                        if (window.location.pathname === '/Chat/Conversation/' + chatId) {
+                            window.location.href = '/Chat/New';
+                        }
+                    },
+                    error: function() {
+                        alert('Nepodařilo se smazat chat.');
+                    }
+                });
+            }
+        }
     </script>
     
     @await RenderSectionAsync("Scripts", required: false)

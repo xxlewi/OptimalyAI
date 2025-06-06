@@ -1,0 +1,447 @@
+@{
+    ViewData["Title"] = "Nový Chat";
+    var availableModels = ViewBag.AvailableModels as List<string> ?? new List<string>();
+}
+
+@section Styles {
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f4f6f9;
+        }
+        
+        .dark-mode .messages-container {
+            background-color: #1f2937;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .message-user {
+            justify-content: flex-end;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 10px;
+            word-wrap: break-word;
+        }
+        
+        .message-user .message-content {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .message-assistant .message-content {
+            background-color: white;
+            color: #333;
+            border: 1px solid #dee2e6;
+        }
+        
+        .dark-mode .message-assistant .message-content {
+            background-color: #374151;
+            color: #e5e7eb;
+            border-color: #4b5563;
+        }
+        
+        .message-icon {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 10px;
+            flex-shrink: 0;
+        }
+        
+        .message-user .message-icon {
+            background-color: #6c757d;
+            color: white;
+            order: 1;
+        }
+        
+        .message-assistant .message-icon {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .input-container {
+            padding: 20px;
+            background-color: white;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .dark-mode .input-container {
+            background-color: #1f2937;
+            border-top-color: #374151;
+        }
+        
+        .typing-indicator {
+            display: none;
+            padding: 10px;
+            font-style: italic;
+            color: #6c757d;
+        }
+        
+        .model-selector {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+        
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        
+        .dark-mode pre {
+            background-color: #374151;
+        }
+        
+        code {
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (ViewBag.OllamaOffline == true)
+{
+    <div class="container-fluid">
+        <div class="alert alert-warning alert-dismissible">
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+            <h5><i class="icon fas fa-exclamation-triangle"></i> Ollama server není dostupný!</h5>
+            Ollama server neběží. Prosím spusťte Ollama server pomocí příkazu <code>ollama serve</code> nebo přejděte do sekce <a href="/Ollama" class="alert-link">Ollama Server</a>.
+        </div>
+    </div>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card card-primary card-outline chat-container">
+            <div class="card-header">
+                <h3 class="card-title">AI Chat</h3>
+                <div class="card-tools">
+                    <div class="input-group input-group-sm model-selector">
+                        <select id="model-select" class="form-control">
+                            @foreach (var modelName in availableModels)
+                            {
+                                @if (modelName == "llama3.2")
+                                {
+                                    <option value="@modelName" selected>@modelName</option>
+                                }
+                                else
+                                {
+                                    <option value="@modelName">@modelName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="messages-container" id="messages-container">
+                <div class="text-center text-muted">
+                    <i class="fas fa-comments fa-3x mb-3"></i>
+                    <p>Začněte konverzaci napsáním zprávy níže</p>
+                </div>
+            </div>
+            
+            <div class="typing-indicator" id="typing-indicator">
+                <i class="fas fa-ellipsis-h"></i> AI píše...
+            </div>
+            
+            <div class="input-container">
+                <form id="chat-form">
+                    <div class="input-group">
+                        <textarea id="message-input" class="form-control" rows="2" placeholder="Napište zprávu..." required></textarea>
+                        <div class="input-group-append">
+                            <button type="submit" class="btn btn-primary" id="send-button">
+                                <i class="fas fa-paper-plane"></i> Odeslat
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@7.0.0/dist/browser/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        let conversationId = null;
+        let isProcessing = false;
+        let connection = null;
+        let currentMessageDiv = null;
+        
+        $(document).ready(function() {
+            $('#message-input').focus();
+            
+            // Initialize SignalR connection
+            initializeSignalR();
+            
+            // Handle form submission
+            $('#chat-form').on('submit', async function(e) {
+                e.preventDefault();
+                
+                if (isProcessing) {
+                    // Cancel message generation
+                    if (connection && connection.state === signalR.HubConnectionState.Connected) {
+                        connection.invoke("StopGeneration").catch(function(err) {
+                            console.error('Error stopping generation:', err);
+                        });
+                    }
+                    return;
+                }
+                
+                const message = $('#message-input').val().trim();
+                if (!message) return;
+                
+                await sendMessage(message);
+            });
+            
+            // Handle Enter/Ctrl+Enter
+            $('#message-input').on('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    $('#chat-form').submit();
+                }
+            });
+        });
+        
+        function initializeSignalR() {
+            console.log('Initializing SignalR connection...');
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/chatHub")
+                .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Debug)
+                .build();
+            
+            // Handle streaming chunks
+            connection.on("StreamChunk", function(chunk) {
+                if (currentMessageDiv) {
+                    const content = currentMessageDiv.find('.message-content');
+                    const currentText = content.data('raw-content') || '';
+                    const newText = currentText + chunk;
+                    content.data('raw-content', newText);
+                    content.html(marked.parse(newText));
+                    scrollToBottom();
+                }
+            });
+            
+            // Handle stream completion
+            connection.on("StreamCompleted", function(metrics) {
+                if (currentMessageDiv && metrics.tokensPerSecond) {
+                    const timeDiv = currentMessageDiv.find('.message-time');
+                    const currentTime = timeDiv.html();
+                    timeDiv.html(currentTime + ` <span class="ml-2">(${metrics.tokensPerSecond.toFixed(1)} tokens/s)</span>`);
+                }
+                currentMessageDiv = null;
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            });
+            
+            // Handle errors
+            connection.on("Error", function(error) {
+                console.error('SignalR Error:', error);
+                addMessage('system', 'Došlo k chybě: ' + error);
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            });
+            
+            // Handle generation cancelled
+            connection.on("GenerationCancelled", function() {
+                console.log('Generation cancelled');
+                if (currentMessageDiv) {
+                    const content = currentMessageDiv.find('.message-content');
+                    const currentText = content.data('raw-content') || '';
+                    if (currentText.trim()) {
+                        content.append('<div class="text-muted"><em>(Zrušeno)</em></div>');
+                    } else {
+                        currentMessageDiv.remove();
+                    }
+                }
+                currentMessageDiv = null;
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            });
+            
+            // Handle generation stopped
+            connection.on("GenerationStopped", function() {
+                console.log('Generation stopped');
+            });
+            
+            // Handle recent chats update
+            connection.on("UpdateRecentChats", function() {
+                loadRecentChats();
+            });
+            
+            // Start connection
+            connection.start().then(function() {
+                console.log('SignalR Connected successfully');
+                console.log('Connection state:', connection.state);
+                console.log('Connection ID:', connection.connectionId);
+            }).catch(function(err) {
+                console.error('SignalR Connection Error:', err);
+                alert('Chyba při připojení k serveru. Zkuste obnovit stránku.');
+            });
+        }
+        
+        async function sendMessage(message) {
+            console.log('Sending message:', message);
+            isProcessing = true;
+            $('#send-button').prop('disabled', true)
+                .html('<i class="fas fa-stop"></i> Zrušit');
+            $('#message-input').prop('disabled', true);
+            
+            // Add user message to UI
+            addMessage('user', message);
+            $('#message-input').val('');
+            
+            // Show typing indicator
+            $('#typing-indicator').show();
+            scrollToBottom();
+            
+            try {
+                // Create conversation if needed
+                if (!conversationId) {
+                    const createResponse = await $.ajax({
+                        url: '/Chat/CreateConversation',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            title: message.substring(0, 50),
+                            model: $('#model-select').val()
+                        })
+                    });
+                    
+                    if (createResponse.success) {
+                        conversationId = createResponse.conversationId;
+                        console.log('Conversation created with ID:', conversationId);
+                        // Update URL without reload
+                        window.history.replaceState({}, '', '/Chat/Conversation/' + conversationId);
+                        // Join conversation room
+                        console.log('Joining conversation room:', conversationId);
+                        await connection.invoke("JoinConversation", conversationId);
+                        console.log('Joined conversation room successfully');
+                    } else {
+                        console.error('Failed to create conversation:', createResponse);
+                    }
+                }
+                
+                // Create placeholder for assistant message
+                currentMessageDiv = createMessageElement('assistant', '');
+                $('#messages-container').append(currentMessageDiv);
+                
+                // Send message via SignalR for streaming
+                console.log('Invoking SendMessage with:', { conversationId, message, model: $('#model-select').val() });
+                await connection.invoke("SendMessage", conversationId, message, $('#model-select').val());
+                console.log('SendMessage invoked successfully');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                if (currentMessageDiv) {
+                    currentMessageDiv.remove();
+                    currentMessageDiv = null;
+                }
+                addMessage('system', 'Došlo k chybě při komunikaci s AI. Zkuste to prosím znovu.');
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            }
+        }
+        
+        function addMessage(role, content) {
+            const messagesContainer = $('#messages-container');
+            
+            // Clear initial message if exists
+            if (messagesContainer.find('.text-center:contains("Začněte konverzaci")').length > 0) {
+                messagesContainer.empty();
+            }
+            
+            const messageElement = createMessageElement(role, content);
+            messagesContainer.append(messageElement);
+            scrollToBottom();
+        }
+        
+        function createMessageElement(role, content) {
+            const iconClass = role === 'user' ? 'fa-user' : role === 'assistant' ? 'fa-robot' : 'fa-info-circle';
+            const processedContent = role === 'assistant' ? marked.parse(content) : escapeHtml(content);
+            const time = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+            
+            const messageDiv = $('<div>')
+                .addClass(`message message-${role}`);
+            
+            const iconDiv = $('<div>')
+                .addClass('message-icon')
+                .html(`<i class="fas ${iconClass}"></i>`);
+            
+            const contentDiv = $('<div>')
+                .addClass('message-content')
+                .html(processedContent);
+            
+            if (role === 'assistant') {
+                contentDiv.data('raw-content', content);
+            }
+            
+            const timeDiv = $('<div>')
+                .addClass('message-time')
+                .html(time);
+            
+            contentDiv.append(timeDiv);
+            messageDiv.append(iconDiv, contentDiv);
+            
+            return messageDiv;
+        }
+        
+        function scrollToBottom() {
+            const container = document.getElementById('messages-container');
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+}

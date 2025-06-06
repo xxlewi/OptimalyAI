@@ -1,0 +1,471 @@
+@model OAI.Core.Entities.Conversation
+@{
+    ViewData["Title"] = Model.Title ?? "Chat";
+    var availableModels = ViewBag.AvailableModels as List<string> ?? new List<string>();
+    var currentModel = ViewBag.CurrentModel as string ?? "llama3.2";
+}
+
+@section Styles {
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f4f6f9;
+        }
+        
+        .dark-mode .messages-container {
+            background-color: #1f2937;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .message-user {
+            justify-content: flex-end;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 10px;
+            word-wrap: break-word;
+        }
+        
+        .message-user .message-content {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .message-assistant .message-content {
+            background-color: white;
+            color: #333;
+            border: 1px solid #dee2e6;
+        }
+        
+        .dark-mode .message-assistant .message-content {
+            background-color: #374151;
+            color: #e5e7eb;
+            border-color: #4b5563;
+        }
+        
+        .message-icon {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 10px;
+            flex-shrink: 0;
+        }
+        
+        .message-user .message-icon {
+            background-color: #6c757d;
+            color: white;
+            order: 1;
+        }
+        
+        .message-assistant .message-icon {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .message-system .message-icon {
+            background-color: #17a2b8;
+            color: white;
+        }
+        
+        .input-container {
+            padding: 20px;
+            background-color: white;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .dark-mode .input-container {
+            background-color: #1f2937;
+            border-top-color: #374151;
+        }
+        
+        .typing-indicator {
+            display: none;
+            padding: 10px;
+            font-style: italic;
+            color: #6c757d;
+        }
+        
+        .model-selector {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        
+        .dark-mode pre {
+            background-color: #374151;
+        }
+        
+        code {
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Chat" asp-action="List">Chaty</a></li>
+                    <li class="breadcrumb-item active">@ViewData["Title"]</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (ViewBag.OllamaOffline == true)
+{
+    <div class="container-fluid">
+        <div class="alert alert-warning alert-dismissible">
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+            <h5><i class="icon fas fa-exclamation-triangle"></i> Ollama server není dostupný!</h5>
+            Ollama server neběží. Prosím spusťte Ollama server pomocí příkazu <code>ollama serve</code> nebo přejděte do sekce <a href="/Ollama" class="alert-link">Ollama Server</a>.
+        </div>
+    </div>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card card-primary card-outline chat-container">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-comments"></i> @Model.Title
+                </h3>
+                <div class="card-tools">
+                    <div class="input-group input-group-sm model-selector">
+                        <select id="model-select" class="form-control">
+                            @foreach (var modelName in availableModels)
+                            {
+                                @if (modelName == currentModel)
+                                {
+                                    <option value="@modelName" selected>@modelName</option>
+                                }
+                                else
+                                {
+                                    <option value="@modelName">@modelName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="messages-container" id="messages-container">
+                @if (Model.Messages.Any())
+                {
+                    @foreach (var message in Model.Messages.OrderBy(m => m.CreatedAt))
+                    {
+                        <div class="message message-@message.Role">
+                            <div class="message-icon">
+                                <i class="fas @(message.Role == "user" ? "fa-user" : message.Role == "assistant" ? "fa-robot" : "fa-info-circle")"></i>
+                            </div>
+                            <div class="message-content">
+                                @if (message.Role == "assistant")
+                                {
+                                    @Html.Raw(Markdig.Markdown.ToHtml(message.Content))
+                                }
+                                else
+                                {
+                                    @message.Content
+                                }
+                                <div class="message-time">
+                                    @message.CreatedAt.ToLocalTime().ToString("HH:mm")
+                                    @if (message.TokensPerSecond.HasValue)
+                                    {
+                                        <span class="ml-2">(@message.TokensPerSecond.Value.ToString("F1") tokens/s)</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center text-muted">
+                        <i class="fas fa-comments fa-3x mb-3"></i>
+                        <p>Pokračujte v konverzaci napsáním zprávy níže</p>
+                    </div>
+                }
+            </div>
+            
+            <div class="typing-indicator" id="typing-indicator">
+                <i class="fas fa-ellipsis-h"></i> AI píše...
+            </div>
+            
+            <div class="input-container">
+                <form id="chat-form">
+                    <div class="input-group">
+                        <textarea id="message-input" class="form-control" rows="2" placeholder="Napište zprávu..." required></textarea>
+                        <div class="input-group-append">
+                            <button type="submit" class="btn btn-primary" id="send-button">
+                                <i class="fas fa-paper-plane"></i> Odeslat
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@7.0.0/dist/browser/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        const conversationId = @Model.Id;
+        let isProcessing = false;
+        let connection = null;
+        let currentMessageDiv = null;
+        
+        $(document).ready(function() {
+            scrollToBottom();
+            $('#message-input').focus();
+            
+            // Initialize SignalR connection
+            initializeSignalR();
+            
+            // Handle form submission
+            $('#chat-form').on('submit', async function(e) {
+                e.preventDefault();
+                
+                if (isProcessing) {
+                    // Cancel message generation
+                    if (connection && connection.state === signalR.HubConnectionState.Connected) {
+                        connection.invoke("StopGeneration").catch(function(err) {
+                            console.error('Error stopping generation:', err);
+                        });
+                    }
+                    return;
+                }
+                
+                const message = $('#message-input').val().trim();
+                if (!message) return;
+                
+                await sendMessage(message);
+            });
+            
+            // Handle Enter/Ctrl+Enter
+            $('#message-input').on('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    $('#chat-form').submit();
+                }
+            });
+        });
+        
+        function initializeSignalR() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/chatHub")
+                .withAutomaticReconnect()
+                .build();
+            
+            // Handle streaming chunks
+            connection.on("StreamChunk", function(chunk) {
+                if (currentMessageDiv) {
+                    const content = currentMessageDiv.find('.message-content');
+                    const currentText = content.data('raw-content') || '';
+                    const newText = currentText + chunk;
+                    content.data('raw-content', newText);
+                    content.html(marked.parse(newText) + content.find('.message-time')[0].outerHTML);
+                    scrollToBottom();
+                }
+            });
+            
+            // Handle stream completion
+            connection.on("StreamCompleted", function(metrics) {
+                if (currentMessageDiv && metrics.tokensPerSecond) {
+                    const timeDiv = currentMessageDiv.find('.message-time');
+                    const currentTime = timeDiv.html();
+                    timeDiv.html(currentTime + ` <span class="ml-2">(${metrics.tokensPerSecond.toFixed(1)} tokens/s)</span>`);
+                }
+                currentMessageDiv = null;
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            });
+            
+            // Handle errors
+            connection.on("Error", function(error) {
+                console.error('SignalR Error:', error);
+                addMessage('system', 'Došlo k chybě: ' + error);
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            });
+            
+            // Handle generation cancelled
+            connection.on("GenerationCancelled", function() {
+                console.log('Generation cancelled');
+                if (currentMessageDiv) {
+                    const content = currentMessageDiv.find('.message-content');
+                    const currentText = content.data('raw-content') || '';
+                    if (currentText.trim()) {
+                        content.append('<div class="text-muted"><em>(Zrušeno)</em></div>');
+                    } else {
+                        currentMessageDiv.remove();
+                    }
+                }
+                currentMessageDiv = null;
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            });
+            
+            // Handle generation stopped
+            connection.on("GenerationStopped", function() {
+                console.log('Generation stopped');
+            });
+            
+            // Handle recent chats update
+            connection.on("UpdateRecentChats", function() {
+                loadRecentChats();
+            });
+            
+            // Start connection and join conversation
+            connection.start().then(function() {
+                console.log('SignalR Connected');
+                return connection.invoke("JoinConversation", conversationId);
+            }).catch(function(err) {
+                console.error('SignalR Connection Error:', err);
+            });
+        }
+        
+        async function sendMessage(message) {
+            isProcessing = true;
+            $('#send-button').prop('disabled', true)
+                .html('<i class="fas fa-stop"></i> Zrušit');
+            $('#message-input').prop('disabled', true);
+            
+            // Clear empty state if exists
+            if ($('#messages-container').find('.text-center').length > 0) {
+                $('#messages-container').empty();
+            }
+            
+            // Add user message to UI
+            addMessage('user', message);
+            $('#message-input').val('');
+            
+            // Show typing indicator
+            $('#typing-indicator').show();
+            scrollToBottom();
+            
+            try {
+                // Create placeholder for assistant message
+                currentMessageDiv = createMessageElement('assistant', '');
+                $('#messages-container').append(currentMessageDiv);
+                
+                // Send message via SignalR for streaming
+                await connection.invoke("SendMessage", conversationId, message, $('#model-select').val());
+                
+            } catch (error) {
+                console.error('Error:', error);
+                if (currentMessageDiv) {
+                    currentMessageDiv.remove();
+                    currentMessageDiv = null;
+                }
+                addMessage('system', 'Došlo k chybě při komunikaci s AI. Zkuste to prosím znovu.');
+                $('#typing-indicator').hide();
+                $('#send-button').prop('disabled', false)
+                    .html('<i class="fas fa-paper-plane"></i> Odeslat');
+                $('#message-input').prop('disabled', false).focus();
+                isProcessing = false;
+            }
+        }
+        
+        function addMessage(role, content, tokensPerSecond) {
+            const messagesContainer = $('#messages-container');
+            const messageElement = createMessageElement(role, content, tokensPerSecond);
+            messagesContainer.append(messageElement);
+            scrollToBottom();
+        }
+        
+        function createMessageElement(role, content, tokensPerSecond) {
+            const iconClass = role === 'user' ? 'fa-user' : role === 'assistant' ? 'fa-robot' : 'fa-info-circle';
+            const processedContent = role === 'assistant' ? marked.parse(content) : escapeHtml(content);
+            const time = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+            
+            let timeInfo = time;
+            if (tokensPerSecond) {
+                timeInfo += ` <span class="ml-2">(${tokensPerSecond.toFixed(1)} tokens/s)</span>`;
+            }
+            
+            const messageDiv = $('<div>')
+                .addClass(`message message-${role}`);
+            
+            const iconDiv = $('<div>')
+                .addClass('message-icon')
+                .html(`<i class="fas ${iconClass}"></i>`);
+            
+            const contentDiv = $('<div>')
+                .addClass('message-content')
+                .html(processedContent);
+            
+            if (role === 'assistant') {
+                contentDiv.data('raw-content', content);
+            }
+            
+            const timeDiv = $('<div>')
+                .addClass('message-time')
+                .html(timeInfo);
+            
+            contentDiv.append(timeDiv);
+            messageDiv.append(iconDiv, contentDiv);
+            
+            return messageDiv;
+        }
+        
+        function scrollToBottom() {
+            const container = document.getElementById('messages-container');
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+}

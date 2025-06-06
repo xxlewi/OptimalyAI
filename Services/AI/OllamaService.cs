@@ -113,6 +113,85 @@ public class OllamaService : IOllamaService
         }
     }
 
+    public async Task<OllamaChatResponse> ChatWithMetricsAsync(string model, List<(string role, string content)> messages, string? systemPrompt = null)
+    {
+        var ollamaMessages = new List<OllamaChatMessage>();
+        
+        if (!string.IsNullOrEmpty(systemPrompt))
+        {
+            ollamaMessages.Add(new OllamaChatMessage { Role = "system", Content = systemPrompt });
+        }
+        
+        ollamaMessages.AddRange(messages.Select(m => new OllamaChatMessage { Role = m.role, Content = m.content }));
+        
+        return await ChatWithMetricsAsync(model, ollamaMessages);
+    }
+
+    public async IAsyncEnumerable<string> ChatStreamAsync(string model, List<OllamaChatMessage> messages, OllamaOptions? options = null)
+    {
+        var request = new OllamaChatRequest
+        {
+            Model = model,
+            Messages = messages,
+            Stream = true,
+            Options = options
+        };
+
+        var json = JsonSerializer.Serialize(request, _jsonOptions);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/chat") { Content = content };
+        using var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        
+        using var stream = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream);
+        
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync();
+            if (string.IsNullOrEmpty(line)) continue;
+            
+            OllamaChatStreamResponse? streamResponse = null;
+            try
+            {
+                streamResponse = JsonSerializer.Deserialize<OllamaChatStreamResponse>(line, _jsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse streaming response: {Line}", line);
+                continue;
+            }
+            
+            if (streamResponse?.Message?.Content != null)
+            {
+                yield return streamResponse.Message.Content;
+            }
+            
+            if (streamResponse?.Done == true)
+            {
+                break;
+            }
+        }
+    }
+
+    public async IAsyncEnumerable<string> ChatStreamAsync(string model, List<(string role, string content)> messages, string? systemPrompt = null)
+    {
+        var ollamaMessages = new List<OllamaChatMessage>();
+        
+        if (!string.IsNullOrEmpty(systemPrompt))
+        {
+            ollamaMessages.Add(new OllamaChatMessage { Role = "system", Content = systemPrompt });
+        }
+        
+        ollamaMessages.AddRange(messages.Select(m => new OllamaChatMessage { Role = m.role, Content = m.content }));
+        
+        await foreach (var chunk in ChatStreamAsync(model, ollamaMessages))
+        {
+            yield return chunk;
+        }
+    }
+
     public async Task<double[]> GetEmbeddingAsync(string model, string text)
     {
         var request = new OllamaEmbeddingRequest

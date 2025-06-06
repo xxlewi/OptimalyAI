@@ -46,6 +46,13 @@ public class AppDbContext : DbContext
         // modelBuilder.Entity<User>()
         //     .HasIndex(u => u.Email)
         //     .IsUnique();
+        
+        // Configure Conversation and Message relationship
+        modelBuilder.Entity<Conversation>()
+            .HasMany(c => c.Messages)
+            .WithOne(m => m.Conversation)
+            .HasForeignKey(m => m.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

@@ -1,0 +1,188 @@
+@model List<OAI.Core.Entities.Conversation>
+@{
+    ViewData["Title"] = "Historie chatů";
+}
+
+@section Styles {
+    <style>
+        .chat-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .chat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .dark-mode .chat-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .chat-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .chat-preview {
+            color: #6c757d;
+            font-size: 0.9rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        
+        .chat-meta {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            color: #dee2e6;
+            margin-bottom: 1rem;
+        }
+        
+        .dark-mode .empty-state i {
+            color: #4b5563;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item active">@ViewData["Title"]</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12">
+                <a asp-controller="Chat" asp-action="New" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Nový chat
+                </a>
+            </div>
+        </div>
+        
+        @if (Model.Any())
+        {
+            <div class="row">
+                @foreach (var conversation in Model)
+                {
+                    var lastMessage = conversation.Messages.OrderByDescending(m => m.CreatedAt).FirstOrDefault();
+                    var preview = lastMessage?.Content ?? "Žádné zprávy";
+                    if (preview.Length > 150)
+                    {
+                        preview = preview.Substring(0, 150) + "...";
+                    }
+                    
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <div class="card chat-card" onclick="window.location.href='@Url.Action("Conversation", "Chat", new { id = conversation.Id })'">
+                            <div class="card-body">
+                                <h5 class="chat-title">
+                                    <i class="fas fa-comments text-primary"></i>
+                                    @(conversation.Title ?? "Chat bez názvu")
+                                </h5>
+                                <p class="chat-preview">@preview</p>
+                                <div class="chat-meta">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <i class="far fa-clock"></i>
+                                            @conversation.LastMessageAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                        </span>
+                                        <span>
+                                            <i class="far fa-comment"></i>
+                                            @conversation.Messages.Count zpráv
+                                        </span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(conversation.Model))
+                                    {
+                                        <div class="mt-1">
+                                            <span class="badge badge-info">@conversation.Model</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="@Url.Action("Conversation", "Chat", new { id = conversation.Id })" 
+                                       class="btn btn-outline-primary" 
+                                       onclick="event.stopPropagation();">
+                                        <i class="fas fa-eye"></i> Zobrazit
+                                    </a>
+                                    <button type="button" 
+                                            class="btn btn-outline-danger delete-chat" 
+                                            data-id="@conversation.Id"
+                                            data-title="@conversation.Title"
+                                            onclick="event.stopPropagation();">
+                                        <i class="fas fa-trash"></i> Smazat
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body empty-state">
+                    <i class="fas fa-comments"></i>
+                    <h4>Zatím nemáte žádné chaty</h4>
+                    <p class="text-muted">Začněte nový chat kliknutím na tlačítko výše</p>
+                    <a asp-controller="Chat" asp-action="New" class="btn btn-primary mt-3">
+                        <i class="fas fa-plus"></i> Začít nový chat
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('.delete-chat').click(function() {
+                const chatId = $(this).data('id');
+                const chatTitle = $(this).data('title') || 'tento chat';
+                
+                if (confirm(`Opravdu chcete smazat ${chatTitle}?`)) {
+                    $.ajax({
+                        url: '/Chat/DeleteConversation',
+                        method: 'POST',
+                        data: { id: chatId },
+                        success: function(result) {
+                            if (result.success) {
+                                window.location.reload();
+                            } else {
+                                alert('Chyba při mazání chatu: ' + result.error);
+                            }
+                        },
+                        error: function() {
+                            alert('Došlo k chybě při mazání chatu.');
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+}

@@ -41,8 +41,9 @@ try
     app.MapStaticAssets();
     app.UseApiRouting();
     
-    // Map SignalR hub
+    // Map SignalR hubs
     app.MapHub<MonitoringHub>("/monitoringHub");
+    app.MapHub<ChatHub>("/chatHub");
 
     Log.Information("OptimalyAI application started successfully");
     app.Run();

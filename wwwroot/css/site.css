@@ -209,3 +209,49 @@ body {
 .dark-mode ::-webkit-scrollbar-thumb:hover {
   background: #666;
 }
+
+/* Chat Menu Styles */
+.nav-divider {
+  height: 1px;
+  margin: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .nav-divider {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#recent-chats-container {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+#recent-chats-container .nav-link {
+  padding: 0.3rem 1rem;
+  font-size: 0.875rem;
+}
+
+#recent-chats-container .nav-link p {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.nav-header.ml-3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05rem;
+}
+
+/* Chat Message Time Styles */
+.message-time {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-top: 5px;
+}
+
+.dark-mode .message-time {
+  color: #9ca3af;
+}

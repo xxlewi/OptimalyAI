@@ -171,16 +171,27 @@ def main():
         
         if choice == 'k':
             print("🛑 Ukončuji procesy na portu...")
-            # Najdeme a ukončíme process na portu
+            # Najdeme a ukončíme process na portu - ale pouze dotnet procesy
             result = subprocess.run(['lsof', '-ti', f':{runner.port}'], capture_output=True, text=True)
             if result.stdout:
                 pids = result.stdout.strip().split('\n')
                 for pid in pids:
-                    subprocess.run(['kill', '-9', pid])
-                    print(f"   Ukončen proces PID: {pid}")
+                    # Zkontrolujeme jestli je to dotnet proces
+                    proc_check = subprocess.run(['ps', '-p', pid, '-o', 'comm='], capture_output=True, text=True)
+                    if 'dotnet' in proc_check.stdout.lower():
+                        subprocess.run(['kill', '-15', pid])  # Graceful termination first
+                        print(f"   Ukončen dotnet proces PID: {pid}")
+                        time.sleep(2)
+                        # Force kill only if still running
+                        proc_check2 = subprocess.run(['ps', '-p', pid], capture_output=True)
+                        if proc_check2.returncode == 0:
+                            subprocess.run(['kill', '-9', pid])
+                            print(f"   Force killed PID: {pid}")
+                    else:
+                        print(f"   Přeskakuji ne-dotnet proces PID: {pid}")
             
-            subprocess.run(['pkill', '-f', 'dotnet.*watch.*run'], capture_output=True)
-            subprocess.run(['pkill', '-f', 'OptimalyAI'], capture_output=True)
+            # Pouze dotnet watch procesy
+            subprocess.run(['pkill', '-f', 'dotnet.*watch.*run.*OptimalyAI'], capture_output=True)
             time.sleep(2)
             if not runner.is_port_in_use():
                 print("✅ Port uvolněn, spouštím aplikaci...")

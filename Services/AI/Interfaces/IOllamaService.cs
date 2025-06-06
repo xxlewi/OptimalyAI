@@ -11,6 +11,9 @@ public interface IOllamaService
     // Chat (konverzace)
     Task<string> ChatAsync(string model, List<OllamaChatMessage> messages, OllamaOptions? options = null);
     Task<OllamaChatResponse> ChatWithMetricsAsync(string model, List<OllamaChatMessage> messages, OllamaOptions? options = null);
+    Task<OllamaChatResponse> ChatWithMetricsAsync(string model, List<(string role, string content)> messages, string? systemPrompt = null);
+    IAsyncEnumerable<string> ChatStreamAsync(string model, List<OllamaChatMessage> messages, OllamaOptions? options = null);
+    IAsyncEnumerable<string> ChatStreamAsync(string model, List<(string role, string content)> messages, string? systemPrompt = null);
     
     // Embeddings
     Task<double[]> GetEmbeddingAsync(string model, string text);
