@@ -1,5 +1,7 @@
 using OptimalyAI.Extensions;
 using OptimalyAI.Configuration;
+using OptimalyAI.Hubs;
+using OptimalyAI.Services.Monitoring;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +19,16 @@ try
 
     // Add OptimalyAI services - automatická registrace všech služeb
     builder.Services.AddOptimalyAI(builder.Configuration);
+    
+    // Add Ollama AI services
+    builder.Services.AddOllamaServices(builder.Configuration);
+    
+    // Add SignalR
+    builder.Services.AddSignalR();
+    
+    // Add Monitoring services
+    builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
+    builder.Services.AddHostedService<MetricsBackgroundService>();
 
     var app = builder.Build();
 
@@ -28,6 +40,9 @@ try
 
     app.MapStaticAssets();
     app.UseApiRouting();
+    
+    // Map SignalR hub
+    app.MapHub<MonitoringHub>("/monitoringHub");
 
     Log.Information("OptimalyAI application started successfully");
     app.Run();

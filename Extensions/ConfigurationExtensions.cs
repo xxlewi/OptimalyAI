@@ -2,7 +2,7 @@ namespace OptimalyAI.Extensions;
 
 public static class ConfigurationExtensions
 {
-    public static string GetConnectionString(this IConfiguration configuration, string name = "DefaultConnection")
+    public static string GetRequiredConnectionString(this IConfiguration configuration, string name = "DefaultConnection")
     {
         return configuration.GetConnectionString(name) 
                ?? throw new InvalidOperationException($"Connection string '{name}' not found");

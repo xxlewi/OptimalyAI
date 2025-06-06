@@ -1,0 +1,328 @@
+@{
+    ViewData["Title"] = "AI Models";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1><i class="fas fa-robot"></i> AI Models</h1>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <!-- Settings Card -->
+        <div class="card card-warning collapsed-card mb-3">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-cog"></i> Model Settings</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <form id="settingsForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Keep Alive Time</label>
+                                <div class="input-group">
+                                    <input type="number" id="keepAlive" class="form-control" value="5" min="0">
+                                    <div class="input-group-append">
+                                        <span class="input-group-text">minutes</span>
+                                    </div>
+                                </div>
+                                <small class="text-muted">0 = never unload, -1 = unload immediately</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Context Window Size</label>
+                                <input type="number" id="contextSize" class="form-control" value="2048" min="128" max="32768">
+                                <small class="text-muted">Number of tokens in context window</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Number of Threads</label>
+                                <input type="number" id="numThreads" class="form-control" value="4" min="1" max="32">
+                                <small class="text-muted">CPU threads for inference</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Temperature</label>
+                                <input type="number" id="temperature" class="form-control" value="0.8" min="0" max="2" step="0.1">
+                                <small class="text-muted">Higher = more creative, Lower = more deterministic</small>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-save"></i> Apply Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Download New Model Card -->
+        <div class="card card-success collapsed-card mb-3">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-download"></i> Download New Model</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <form id="downloadForm">
+                    <div class="form-group">
+                        <label>Model Name</label>
+                        <input type="text" id="modelName" class="form-control" placeholder="e.g., llama3.2:3b, phi3.5, gemma2:2b">
+                        <small class="text-muted">
+                            Browse available models at <a href="https://ollama.com/library" target="_blank">ollama.com/library</a>
+                        </small>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-download"></i> Download Model
+                    </button>
+                </form>
+                <div id="downloadProgress" style="display:none;" class="mt-3">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted" id="downloadStatus">Downloading...</small>
+                </div>
+            </div>
+        </div>
+        @if (ViewBag.Models != null && ViewBag.Models.Count > 0)
+        {
+            <div class="row">
+                @foreach (var modelInfo in ViewBag.Models)
+                {
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card @(modelInfo.IsDefault ? "card-primary" : "")">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    @modelInfo.Model.Name
+                                    @if (modelInfo.IsDefault)
+                                    {
+                                        <span class="badge badge-warning ml-2">Default</span>
+                                    }
+                                </h3>
+                                <div class="card-tools">
+                                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <dl class="row">
+                                    <dt class="col-sm-5">Size:</dt>
+                                    <dd class="col-sm-7">@((modelInfo.Model.Size / 1024.0 / 1024.0 / 1024.0).ToString("F2")) GB</dd>
+                                    
+                                    <dt class="col-sm-5">Family:</dt>
+                                    <dd class="col-sm-7">@modelInfo.Model.Details.Family</dd>
+                                    
+                                    <dt class="col-sm-5">Parameters:</dt>
+                                    <dd class="col-sm-7">@modelInfo.Model.Details.ParameterSize</dd>
+                                    
+                                    <dt class="col-sm-5">Quantization:</dt>
+                                    <dd class="col-sm-7">@modelInfo.Model.Details.QuantizationLevel</dd>
+                                </dl>
+                                
+                                @if (modelInfo.Metrics.TotalRequests > 0)
+                                {
+                                    <hr />
+                                    <h6>Performance Metrics:</h6>
+                                    <dl class="row">
+                                        <dt class="col-sm-7">Avg Response Time:</dt>
+                                        <dd class="col-sm-5">@modelInfo.Metrics.AverageResponseTime.ToString("F0") ms</dd>
+                                        
+                                        <dt class="col-sm-7">Tokens/Second:</dt>
+                                        <dd class="col-sm-5">@modelInfo.Metrics.AverageTokensPerSecond.ToString("F1")</dd>
+                                        
+                                        <dt class="col-sm-7">Total Requests:</dt>
+                                        <dd class="col-sm-5">@modelInfo.Metrics.TotalRequests</dd>
+                                    </dl>
+                                }
+                            </div>
+                            <div class="card-footer">
+                                <button class="btn btn-sm btn-primary" onclick="testModel('@modelInfo.Model.Name')">
+                                    <i class="fas fa-vial"></i> Test
+                                </button>
+                                <button class="btn btn-sm btn-info" onclick="warmupModel('@modelInfo.Model.Name')">
+                                    <i class="fas fa-fire"></i> Warmup
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteModel('@modelInfo.Model.Name')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i> No models available. 
+                Please ensure Ollama is running and models are loaded.
+            </div>
+        }
+        
+        <!-- Test Modal -->
+        <div class="modal fade" id="testModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Test Model: <span id="testModelName"></span></h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="testForm">
+                            <div class="form-group">
+                                <label>Prompt:</label>
+                                <textarea class="form-control" id="testPrompt" rows="3">Hello! Can you introduce yourself and tell me what you're capable of?</textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i> Send
+                            </button>
+                        </form>
+                        
+                        <div id="testResult" class="mt-3" style="display:none;">
+                            <hr />
+                            <h6>Response:</h6>
+                            <div class="card">
+                                <div class="card-body">
+                                    <pre id="responseText" style="white-space: pre-wrap;"></pre>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    Response Time: <span id="responseTime"></span> ms | 
+                                    Tokens/Second: <span id="tokensPerSecond"></span>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        let currentModel = '';
+        
+        function testModel(modelName) {
+            currentModel = modelName;
+            $('#testModelName').text(modelName);
+            $('#testResult').hide();
+            $('#testModal').modal('show');
+        }
+        
+        function warmupModel(modelName) {
+            $.post('@Url.Action("WarmupModel")', { model: modelName }, function(data) {
+                if (data.success) {
+                    toastr.success(data.message);
+                } else {
+                    toastr.error(data.error);
+                }
+            });
+        }
+        
+        $('#testForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            const prompt = $('#testPrompt').val();
+            $('#testResult').hide();
+            
+            $.post('@Url.Action("TestModel")', { 
+                model: currentModel, 
+                prompt: prompt 
+            }, function(data) {
+                if (data.success) {
+                    $('#responseText').text(data.response);
+                    $('#responseTime').text(data.metrics.totalDurationMs.toFixed(0));
+                    $('#tokensPerSecond').text(data.metrics.tokensPerSecond.toFixed(1));
+                    $('#testResult').show();
+                } else {
+                    toastr.error(data.error);
+                }
+            });
+        });
+        
+        // Include toastr if not already included
+        if (typeof toastr === 'undefined') {
+            $('head').append('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">');
+            $.getScript('https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js');
+        }
+        
+        function deleteModel(modelName) {
+            if (confirm('Are you sure you want to delete ' + modelName + '?')) {
+                $.post('@Url.Action("DeleteModel")', { model: modelName }, function(data) {
+                    if (data.success) {
+                        toastr.success(data.message);
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        toastr.error(data.error);
+                    }
+                });
+            }
+        }
+        
+        $('#settingsForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            const settings = {
+                keepAlive: $('#keepAlive').val() + 'm',
+                contextSize: $('#contextSize').val(),
+                numThreads: $('#numThreads').val(),
+                temperature: $('#temperature').val()
+            };
+            
+            $.post('@Url.Action("UpdateSettings")', settings, function(data) {
+                if (data.success) {
+                    toastr.success('Settings updated successfully');
+                } else {
+                    toastr.error(data.error || 'Failed to update settings');
+                }
+            });
+        });
+        
+        $('#downloadForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            const modelName = $('#modelName').val();
+            if (!modelName) {
+                toastr.error('Please enter a model name');
+                return;
+            }
+            
+            $('#downloadProgress').show();
+            
+            $.post('@Url.Action("DownloadModel")', { model: modelName }, function(data) {
+                if (data.success) {
+                    toastr.success('Model downloaded successfully');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    toastr.error(data.error || 'Failed to download model');
+                }
+                $('#downloadProgress').hide();
+            }).fail(function() {
+                toastr.error('Failed to download model');
+                $('#downloadProgress').hide();
+            });
+        });
+    </script>
+}

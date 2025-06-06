@@ -30,6 +30,7 @@ public static class ApplicationBuilderExtensions
         app.UseHttpsRedirection();
         app.UseStaticFiles();
         app.UseRouting();
+        app.UseSession(); // Add session middleware
         app.UseAuthorization();
 
         return app;

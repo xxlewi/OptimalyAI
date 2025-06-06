@@ -1,0 +1,298 @@
+@{
+    ViewData["Title"] = "Live Monitoring Dashboard";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1><i class="fas fa-chart-line"></i> Live Monitoring Dashboard</h1>
+            </div>
+            <div class="col-sm-6 text-right">
+                <span class="badge badge-success" id="connectionStatus">
+                    <i class="fas fa-circle"></i> Disconnected
+                </span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <!-- System Metrics Row -->
+        <div class="row">
+            <div class="col-md-3 col-sm-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-info"><i class="fas fa-microchip"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">CPU Usage</span>
+                        <span class="info-box-number" id="cpuUsage">0%</span>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" id="cpuProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 col-sm-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-warning"><i class="fas fa-memory"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Memory Usage</span>
+                        <span class="info-box-number" id="memoryUsage">0 MB</span>
+                        <div class="progress">
+                            <div class="progress-bar bg-warning" id="memoryProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 col-sm-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-success"><i class="fas fa-tachometer-alt"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Active Requests</span>
+                        <span class="info-box-number" id="activeRequests">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 col-sm-6">
+                <div class="info-box">
+                    <span class="info-box-icon bg-danger"><i class="fas fa-clock"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Queued Requests</span>
+                        <span class="info-box-number" id="queuedRequests">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Response Time (ms)</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="responseTimeChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Tokens Per Second</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="tokensChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Performance Table -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Model Performance</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="modelMetricsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Model</th>
+                                        <th>Avg Response Time</th>
+                                        <th>Avg Tokens/Sec</th>
+                                        <th>Total Requests</th>
+                                        <th>Success Rate</th>
+                                        <th>Last Used</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="6" class="text-center">No data available</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <script src="~/plugins/chart.js/Chart.min.js"></script>
+    <script>
+        // SignalR Connection
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/monitoringHub")
+            .withAutomaticReconnect()
+            .build();
+
+        // Chart configuration
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    display: false
+                },
+                y: {
+                    beginAtZero: true
+                }
+            },
+            animation: {
+                duration: 0
+            }
+        };
+
+        // Response Time Chart
+        const responseTimeCtx = document.getElementById('responseTimeChart').getContext('2d');
+        const responseTimeChart = new Chart(responseTimeCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Response Time (ms)',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: chartOptions
+        });
+
+        // Tokens Chart
+        const tokensCtx = document.getElementById('tokensChart').getContext('2d');
+        const tokensChart = new Chart(tokensCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Tokens/Second',
+                    data: [],
+                    borderColor: 'rgb(153, 102, 255)',
+                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: chartOptions
+        });
+
+        // Data storage
+        const maxDataPoints = 30;
+        const responseTimeData = [];
+        const tokensData = [];
+        const modelMetrics = {};
+
+        // Update functions
+        function updateSystemMetrics(metrics) {
+            document.getElementById('cpuUsage').textContent = metrics.cpuUsagePercent.toFixed(1) + '%';
+            document.getElementById('cpuProgressBar').style.width = metrics.cpuUsagePercent + '%';
+            
+            document.getElementById('memoryUsage').textContent = metrics.memoryUsageMB.toFixed(0) + ' MB';
+            document.getElementById('memoryProgressBar').style.width = metrics.memoryUsagePercent + '%';
+            
+            document.getElementById('activeRequests').textContent = metrics.activeRequests;
+            document.getElementById('queuedRequests').textContent = metrics.queuedRequests;
+        }
+
+        function updateModelMetrics(metrics) {
+            modelMetrics[metrics.modelName] = metrics;
+            updateModelTable();
+            
+            // Update charts if we have recent data
+            if (metrics.recentResponseTimes && metrics.recentResponseTimes.length > 0) {
+                const latest = metrics.recentResponseTimes[metrics.recentResponseTimes.length - 1];
+                addChartData(responseTimeChart, responseTimeData, latest.responseTimeMs);
+                addChartData(tokensChart, tokensData, latest.tokensPerSecond);
+            }
+        }
+
+        function addChartData(chart, dataArray, value) {
+            const now = new Date().toLocaleTimeString();
+            dataArray.push(value);
+            
+            if (dataArray.length > maxDataPoints) {
+                dataArray.shift();
+                chart.data.labels.shift();
+            }
+            
+            chart.data.labels.push(now);
+            chart.data.datasets[0].data = [...dataArray];
+            chart.update('none');
+        }
+
+        function updateModelTable() {
+            const tbody = document.querySelector('#modelMetricsTable tbody');
+            const rows = Object.values(modelMetrics).map(m => `
+                <tr>
+                    <td>${m.modelName}</td>
+                    <td>${m.averageResponseTimeMs.toFixed(0)} ms</td>
+                    <td>${m.averageTokensPerSecond.toFixed(1)}</td>
+                    <td>${m.totalRequests}</td>
+                    <td>${m.totalRequests > 0 ? ((m.successfulRequests / m.totalRequests) * 100).toFixed(1) : 0}%</td>
+                    <td>${m.lastUsed ? new Date(m.lastUsed).toLocaleString() : 'Never'}</td>
+                </tr>
+            `).join('');
+            
+            tbody.innerHTML = rows || '<tr><td colspan="6" class="text-center">No data available</td></tr>';
+        }
+
+        // SignalR event handlers
+        connection.on("Connected", function (connectionId) {
+            console.log("Connected with ID:", connectionId);
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-circle"></i> Connected';
+            
+            // Subscribe to metrics
+            connection.invoke("Subscribe", "system");
+        });
+
+        connection.on("SystemMetrics", function (metrics) {
+            updateSystemMetrics(metrics);
+        });
+
+        connection.on("ModelMetrics", function (metrics) {
+            updateModelMetrics(metrics);
+        });
+
+        // Connection state handlers
+        connection.onreconnecting(() => {
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Reconnecting...';
+            document.getElementById('connectionStatus').className = 'badge badge-warning';
+        });
+
+        connection.onreconnected(() => {
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-circle"></i> Connected';
+            document.getElementById('connectionStatus').className = 'badge badge-success';
+        });
+
+        connection.onclose(() => {
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-circle"></i> Disconnected';
+            document.getElementById('connectionStatus').className = 'badge badge-danger';
+        });
+
+        // Start connection
+        async function start() {
+            try {
+                await connection.start();
+            } catch (err) {
+                console.error(err);
+                setTimeout(start, 5000);
+            }
+        }
+
+        start();
+    </script>
+}

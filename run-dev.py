@@ -12,6 +12,7 @@ import os
 import time
 import socket
 import signal
+import threading
 
 class DevRunner:
     def __init__(self):
@@ -104,7 +105,23 @@ class DevRunner:
                 'dotnet', 'watch', 'run', 
                 '--project', 'OptimalyAI.csproj',
                 '--urls', f'https://localhost:{self.port}'
-            ], cwd=os.getcwd())
+            ], cwd=os.getcwd(), 
+               stdout=subprocess.PIPE, 
+               stderr=subprocess.STDOUT,
+               universal_newlines=True,
+               bufsize=1)
+            
+            # Thread pro čtení výstupu
+            def read_output():
+                try:
+                    for line in iter(self.process.stdout.readline, ''):
+                        if line:
+                            print(f"   {line.rstrip()}")
+                except:
+                    pass
+            
+            output_thread = threading.Thread(target=read_output, daemon=True)
+            output_thread.start()
             
             # Počkáme až aplikace naběhne
             print("⏳ Čekám na spuštění aplikace...")

@@ -1,0 +1,87 @@
+@{
+    ViewData["Title"] = "Model Management";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>Model Management</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Available Models</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Model Name</th>
+                                    <th>Size</th>
+                                    <th>Parameters</th>
+                                    <th>Quantization</th>
+                                    <th>Performance</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (ViewBag.Models != null)
+                                {
+                                    @for (int i = 0; i < ViewBag.Models.Count; i++)
+                                    {
+                                        var ollModel = ViewBag.Models[i];
+                                        var metrics = ViewBag.Metrics[i];
+                                        <tr>
+                                            <td>
+                                                <strong>@ollModel.Name</strong><br/>
+                                                <small class="text-muted">Modified: @ollModel.ModifiedAt.ToString("g")</small>
+                                            </td>
+                                            <td>@((ollModel.Size / 1_000_000_000.0).ToString("F2")) GB</td>
+                                            <td>@ollModel.Details.ParameterSize</td>
+                                            <td>@ollModel.Details.QuantizationLevel</td>
+                                            <td>
+                                                @if (metrics.TotalRequests > 0)
+                                                {
+                                                    <small>
+                                                        Requests: @metrics.TotalRequests<br/>
+                                                        Avg Response: @metrics.AverageResponseTime.ToString("F2")s<br/>
+                                                        Tokens/s: @metrics.AverageTokensPerSecond.ToString("F1")<br/>
+                                                        @if (metrics.IsLoaded)
+                                                        {
+                                                            <span class="badge badge-success">Loaded</span>
+                                                        }
+                                                    </small>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No data</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <form asp-action="WarmupModel" method="post" style="display: inline;">
+                                                    <input type="hidden" name="model" value="@ollModel.Name" />
+                                                    <button type="submit" class="btn btn-sm btn-primary">Warm Up</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer">
+                        <a asp-action="Index" class="btn btn-primary">Back to Test</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

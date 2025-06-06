@@ -1,0 +1,51 @@
+@{
+    ViewData["Title"] = "AI Generation Result";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>Generation Result</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Response from @ViewBag.Model</h3>
+                    </div>
+                    <div class="card-body">
+                        <h5>Prompt:</h5>
+                        <p class="text-muted">@ViewBag.Prompt</p>
+                        
+                        <h5>Response:</h5>
+                        <div class="bg-light p-3 rounded">
+                            <pre style="white-space: pre-wrap;">@ViewBag.Response</pre>
+                        </div>
+                        
+                        @if (ViewBag.Metrics != null)
+                        {
+                            <h5 class="mt-4">Performance Metrics:</h5>
+                            <ul>
+                                <li>Total Duration: @($"{ViewBag.Metrics.TotalDuration:F2}") ms</li>
+                                <li>Model Load Time: @($"{ViewBag.Metrics.LoadDuration:F2}") ms</li>
+                                <li>Prompt Processing: @($"{ViewBag.Metrics.PromptEvalDuration:F2}") ms</li>
+                                <li>Generation Time: @($"{ViewBag.Metrics.EvalDuration:F2}") ms</li>
+                                <li>Tokens/Second: @($"{ViewBag.Metrics.TokensPerSecond:F1}")</li>
+                            </ul>
+                        }
+                    </div>
+                    <div class="card-footer">
+                        <a asp-action="Index" class="btn btn-primary">Test Again</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

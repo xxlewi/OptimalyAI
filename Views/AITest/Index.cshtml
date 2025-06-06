@@ -1,0 +1,105 @@
+@{
+    ViewData["Title"] = "AI Test - Ollama Integration";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>Ollama AI Test</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <!-- Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Ollama Status</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>
+                            <strong>Server Status:</strong> 
+                            @if (ViewBag.IsHealthy)
+                            {
+                                <span class="badge badge-success">Online</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-danger">Offline</span>
+                            }
+                        </p>
+                        <p>
+                            <strong>Default Model:</strong> @ViewBag.DefaultModel
+                        </p>
+                        <p>
+                            <strong>Available Models:</strong>
+                            @if (ViewBag.Models != null && ViewBag.Models.Count > 0)
+                            {
+                                <ul>
+                                    @foreach (var ollModel in ViewBag.Models)
+                                    {
+                                        <li>
+                                            @ollModel.Name 
+                                            <span class="text-muted">
+                                                (@((ollModel.Size / 1_000_000_000.0).ToString("F1")) GB, 
+                                                @ollModel.Details.ParameterSize, 
+                                                @ollModel.Details.QuantizationLevel)
+                                            </span>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <span class="text-muted">No models found</span>
+                            }
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Test Form -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Test Generation</h3>
+                    </div>
+                    <form asp-action="TestGenerate" method="post">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="model">Model:</label>
+                                <select name="model" class="form-control">
+                                    @if (ViewBag.Models != null)
+                                    {
+                                        @foreach (var ollModel in ViewBag.Models)
+                                        {
+                                            @if (ollModel.Name == ViewBag.DefaultModel)
+                                            {
+                                                <option value="@ollModel.Name" selected>@ollModel.Name</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@ollModel.Name">@ollModel.Name</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prompt">Prompt:</label>
+                                <textarea name="prompt" class="form-control" rows="3" required>Write a haiku about programming</textarea>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">Generate</button>
+                            <a asp-action="Models" class="btn btn-info">Model Management</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

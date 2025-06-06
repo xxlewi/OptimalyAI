@@ -5,6 +5,8 @@ using System.Reflection;
 using FluentValidation;
 using OptimalyAI.Configuration;
 using OptimalyAI.Validation;
+using OptimalyAI.Services.AI;
+using OptimalyAI.Services.AI.Interfaces;
 
 namespace OptimalyAI.Extensions;
 
@@ -13,9 +15,20 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<Infrastructure.AppDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseInMemoryDatabase("OptimalyAI_InMemory"));
         
         services.AddScoped<DbContext>(provider => provider.GetService<Infrastructure.AppDbContext>()!);
+        
+        // Add distributed memory cache for sessions
+        services.AddDistributedMemoryCache();
+        
+        // Add session support
+        services.AddSession(options =>
+        {
+            options.IdleTimeout = TimeSpan.FromMinutes(30);
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+        });
         
         return services;
     }
@@ -155,6 +168,27 @@ public static class ServiceCollectionExtensions
         services.AddSwaggerDocumentation();
         services.AddSecurity(configuration);
 
+        return services;
+    }
+
+    public static IServiceCollection AddOllamaServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Configure Ollama settings
+        services.Configure<OllamaSettings>(configuration.GetSection("OllamaSettings"));
+        
+        // Register HttpClient for OllamaService
+        services.AddHttpClient<IOllamaService, OllamaService>((serviceProvider, client) =>
+        {
+            var settings = configuration.GetSection("OllamaSettings").Get<OllamaSettings>() 
+                ?? new OllamaSettings();
+            
+            client.BaseAddress = new Uri(settings.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(settings.DefaultTimeout);
+        });
+        
+        // Register Conversation Manager
+        services.AddSingleton<IConversationManager, ConversationManager>();
+        
         return services;
     }
 }

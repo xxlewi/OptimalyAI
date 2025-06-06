@@ -11,12 +11,14 @@
     <link rel="stylesheet" href="~/plugins/fontawesome-free/css/all.min.css">
     <!-- Theme style -->
     <link rel="stylesheet" href="~/css/adminlte.min.css">
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="~/css/site.css">
 </head>
-<body class="hold-transition sidebar-mini">
+<body class="hold-transition sidebar-mini dark-mode" id="body-element">
     <!-- Site wrapper -->
     <div class="wrapper">
         <!-- Navbar -->
-        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+        <nav class="main-header navbar navbar-expand navbar-dark navbar-dark">
             <!-- Left navbar links -->
             <ul class="navbar-nav">
                 <li class="nav-item">
@@ -52,6 +54,13 @@
                 <li class="nav-item">
                     <a class="nav-link" data-widget="fullscreen" href="#" role="button">
                         <i class="fas fa-expand-arrows-alt"></i>
+                    </a>
+                </li>
+                
+                <!-- Dark Mode Toggle -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#" role="button" id="dark-mode-toggle">
+                        <i class="fas fa-moon" id="dark-mode-icon"></i>
                     </a>
                 </li>
             </ul>
@@ -99,45 +108,23 @@
                                 <p>Dashboard</p>
                             </a>
                         </li>
+                        <li class="nav-header">AI ORCHESTRATOR</li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link">
+                            <a asp-controller="Ollama" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-server"></i>
+                                <p>Ollama Server</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Models" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-robot"></i>
-                                <p>
-                                    AI Optimalizace
-                                    <i class="fas fa-angle-left right"></i>
-                                </p>
+                                <p>AI Models</p>
                             </a>
-                            <ul class="nav nav-treeview">
-                                <li class="nav-item">
-                                    <a href="#" class="nav-link">
-                                        <i class="far fa-circle nav-icon"></i>
-                                        <p>Návrhy optimalizací</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a href="#" class="nav-link">
-                                        <i class="far fa-circle nav-icon"></i>
-                                        <p>Historie optimalizací</p>
-                                    </a>
-                                </li>
-                            </ul>
                         </li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link">
+                            <a asp-controller="Monitoring" asp-action="Dashboard" class="nav-link">
                                 <i class="nav-icon fas fa-chart-line"></i>
-                                <p>Analytika</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon fas fa-cogs"></i>
-                                <p>Nastavení</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Home" asp-action="Privacy" class="nav-link">
-                                <i class="nav-icon fas fa-shield-alt"></i>
-                                <p>Ochrana soukromí</p>
+                                <p>Live Monitoring</p>
                             </a>
                         </li>
                     </ul>
@@ -174,6 +161,50 @@
     <script src="~/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
     <!-- AdminLTE App -->
     <script src="~/js/adminlte.min.js"></script>
+    
+    <!-- Dark Mode Script -->
+    <script>
+        $(document).ready(function() {
+            // Check for saved dark mode preference or default to dark mode
+            const darkMode = localStorage.getItem('darkMode');
+            const $body = $('#body-element');
+            const $navbar = $('.main-header.navbar');
+            const $icon = $('#dark-mode-icon');
+            
+            // Initialize based on saved preference
+            if (darkMode === 'disabled') {
+                $body.removeClass('dark-mode');
+                $navbar.removeClass('navbar-dark').addClass('navbar-white navbar-light');
+                $icon.removeClass('fa-sun').addClass('fa-moon');
+            } else {
+                // Default to dark mode
+                $body.addClass('dark-mode');
+                $navbar.removeClass('navbar-white navbar-light').addClass('navbar-dark');
+                $icon.removeClass('fa-moon').addClass('fa-sun');
+                localStorage.setItem('darkMode', 'enabled');
+            }
+            
+            // Toggle dark mode
+            $('#dark-mode-toggle').click(function(e) {
+                e.preventDefault();
+                
+                if ($body.hasClass('dark-mode')) {
+                    // Switch to light mode
+                    $body.removeClass('dark-mode');
+                    $navbar.removeClass('navbar-dark').addClass('navbar-white navbar-light');
+                    $icon.removeClass('fa-sun').addClass('fa-moon');
+                    localStorage.setItem('darkMode', 'disabled');
+                } else {
+                    // Switch to dark mode
+                    $body.addClass('dark-mode');
+                    $navbar.removeClass('navbar-white navbar-light').addClass('navbar-dark');
+                    $icon.removeClass('fa-moon').addClass('fa-sun');
+                    localStorage.setItem('darkMode', 'enabled');
+                }
+            });
+        });
+    </script>
+    
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

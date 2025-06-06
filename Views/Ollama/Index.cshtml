@@ -1,0 +1,325 @@
+@{
+    ViewData["Title"] = "Ollama Server";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1><i class="fas fa-server"></i> Ollama Server</h1>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Server Status -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Server Status</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="checkHealth()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                @if (ViewBag.IsHealthy)
+                                {
+                                    <span class="badge badge-success">Online</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-danger">Offline</span>
+                                }
+                            </dd>
+                            <dt class="col-sm-4">URL:</dt>
+                            <dd class="col-sm-8">@ViewBag.ServerInfo.Url</dd>
+                            <dt class="col-sm-4">Models:</dt>
+                            <dd class="col-sm-8">
+                                @if (ViewBag.Models != null)
+                                {
+                                    <span class="badge badge-info">@ViewBag.Models.Count loaded</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Unknown</span>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Quick Actions</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (!ViewBag.IsOllamaInstalled)
+                        {
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> Ollama is not installed. Please install it first.
+                                <br/>
+                                <a href="https://ollama.ai/download" target="_blank" class="btn btn-sm btn-primary mt-2">
+                                    <i class="fas fa-download"></i> Download Ollama
+                                </a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-3">
+                                @if (!ViewBag.IsHealthy)
+                                {
+                                    <button class="btn btn-success btn-block" onclick="startServer()">
+                                        <i class="fas fa-play"></i> Start Ollama Server
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-info btn-block" onclick="checkHealth()">
+                                        <i class="fas fa-sync-alt"></i> Refresh Status
+                                    </button>
+                                }
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label>Pull Model:</label>
+                                <div class="input-group">
+                                    <select class="form-control" id="modelToPull">
+                                        <option value="phi3.5">phi3.5 (3.8GB)</option>
+                                        <option value="llama3.2">llama3.2 (2GB)</option>
+                                        <option value="mistral">mistral (4.1GB)</option>
+                                        <option value="qwen2.5-coder">qwen2.5-coder (4.7GB)</option>
+                                        <option value="gemma2:2b">gemma2:2b (1.6GB)</option>
+                                        <option value="tinyllama">tinyllama (638MB)</option>
+                                    </select>
+                                    <div class="input-group-append">
+                                        <button class="btn btn-primary" onclick="pullModel()" @(!ViewBag.IsHealthy ? "disabled" : "")>
+                                            <i class="fas fa-download"></i> Pull
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label>Custom Model:</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="customModelName" placeholder="e.g., codellama:7b">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-primary" onclick="pullCustomModel()" @(!ViewBag.IsHealthy ? "disabled" : "")>
+                                            <i class="fas fa-download"></i> Pull
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loaded Models -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Loaded Models</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (ViewBag.Models != null && ViewBag.Models.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Model Name</th>
+                                            <th>Size</th>
+                                            <th>Modified</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in ViewBag.Models)
+                                        {
+                                            <tr>
+                                                <td>@item.Name</td>
+                                                <td>@((item.Size / 1024.0 / 1024.0 / 1024.0).ToString("F2")) GB</td>
+                                                <td>@item.ModifiedAt.ToString("g")</td>
+                                                <td>
+                                                    <a href="@Url.Action("RunModel", new { modelName = item.Name })" class="btn btn-sm btn-success" title="Run this model">
+                                                        <i class="fas fa-play"></i> Run
+                                                    </a>
+                                                    <button onclick="deleteModel('@item.Name')" class="btn btn-sm btn-danger" title="Delete this model">
+                                                        <i class="fas fa-trash"></i> Delete
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> No models loaded. Use <code>ollama pull</code> to download models.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        function checkHealth() {
+            showLoading('Checking server status...');
+            $.post('@Url.Action("CheckHealth")', function(data) {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    showError('Error checking health: ' + data.error);
+                }
+            }).fail(function() {
+                showError('Failed to check server status');
+            }).always(function() {
+                hideLoading();
+            });
+        }
+        
+        function startServer() {
+            showLoading('Starting Ollama server...');
+            $.post('@Url.Action("StartServer")', function(data) {
+                if (data.success) {
+                    showSuccess(data.message);
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showError(data.error);
+                }
+            }).fail(function() {
+                showError('Failed to start server');
+            }).always(function() {
+                hideLoading();
+            });
+        }
+        
+        function pullModel() {
+            var modelName = $('#modelToPull').val();
+            if (!modelName) {
+                showError('Please select a model');
+                return;
+            }
+            
+            showLoading('Pulling model ' + modelName + '...');
+            $.post('@Url.Action("PullModel")', { modelName: modelName }, function(data) {
+                if (data.success) {
+                    showSuccess(data.message);
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showError(data.error);
+                }
+            }).fail(function() {
+                showError('Failed to pull model');
+            }).always(function() {
+                hideLoading();
+            });
+        }
+        
+        function pullCustomModel() {
+            var modelName = $('#customModelName').val();
+            if (!modelName) {
+                showError('Please enter a model name');
+                return;
+            }
+            
+            showLoading('Pulling model ' + modelName + '...');
+            $.post('@Url.Action("PullModel")', { modelName: modelName }, function(data) {
+                if (data.success) {
+                    showSuccess(data.message);
+                    $('#customModelName').val('');
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showError(data.error);
+                }
+            }).fail(function() {
+                showError('Failed to pull model');
+            }).always(function() {
+                hideLoading();
+            });
+        }
+        
+        function deleteModel(modelName) {
+            if (!confirm('Are you sure you want to delete ' + modelName + '?')) {
+                return;
+            }
+            
+            showLoading('Deleting model ' + modelName + '...');
+            $.post('@Url.Action("DeleteModel")', { modelName: modelName }, function(data) {
+                if (data.success) {
+                    showSuccess(data.message);
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    showError(data.error);
+                }
+            }).fail(function() {
+                showError('Failed to delete model');
+            }).always(function() {
+                hideLoading();
+            });
+        }
+        
+        function showLoading(message) {
+            Swal.fire({
+                title: message,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+        }
+        
+        function hideLoading() {
+            Swal.close();
+        }
+        
+        function showSuccess(message) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Success',
+                text: message,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+        
+        function showError(message) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: message
+            });
+        }
+    </script>
+}
