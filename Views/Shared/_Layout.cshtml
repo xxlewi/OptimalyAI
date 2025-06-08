@@ -155,15 +155,15 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a asp-controller="Monitoring" asp-action="Dashboard" class="nav-link">
-                                <i class="nav-icon fas fa-chart-line"></i>
-                                <p>Live Monitoring</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
                             <a asp-controller="Tools" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-tools"></i>
                                 <p>AI Tools</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Monitoring" asp-action="Dashboard" class="nav-link">
+                                <i class="nav-icon fas fa-chart-line"></i>
+                                <p>Live Monitoring</p>
                             </a>
                         </li>
                         <li class="nav-header">SYSTEM</li>
@@ -213,13 +213,6 @@
             @RenderBody()
         </div>
         <!-- /.content-wrapper -->
-
-        <footer class="main-footer">
-            <div class="float-right d-none d-sm-block">
-                <b>Verze</b> 1.0.0
-            </div>
-            <strong>&copy; 2025 <a href="#">OptimalyAI</a>.</strong> Všechna práva vyhrazena.
-        </footer>
 
         <!-- Control Sidebar -->
         <aside class="control-sidebar control-sidebar-dark">

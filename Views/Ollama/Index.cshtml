@@ -45,7 +45,7 @@
                                 }
                             </dd>
                             <dt class="col-sm-4">URL:</dt>
-                            <dd class="col-sm-8">@ViewBag.ServerInfo.Url</dd>
+                            <dd class="col-sm-8">@ViewBag.ServerUrl</dd>
                             <dt class="col-sm-4">Models:</dt>
                             <dd class="col-sm-8">
                                 @if (ViewBag.Models != null)
@@ -102,51 +102,18 @@
                         }
                         else
                         {
-                            <div class="mb-3">
-                                @if (!ViewBag.IsHealthy)
-                                {
-                                    <button class="btn btn-success btn-block" onclick="startServer()">
-                                        <i class="fas fa-play"></i> Start Ollama Server
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-info btn-block" onclick="checkHealth()">
-                                        <i class="fas fa-sync-alt"></i> Refresh Status
-                                    </button>
-                                }
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label>Pull Model:</label>
-                                <div class="input-group">
-                                    <select class="form-control" id="modelToPull">
-                                        <option value="phi3.5">phi3.5 (3.8GB)</option>
-                                        <option value="llama3.2">llama3.2 (2GB)</option>
-                                        <option value="mistral">mistral (4.1GB)</option>
-                                        <option value="qwen2.5-coder">qwen2.5-coder (4.7GB)</option>
-                                        <option value="gemma2:2b">gemma2:2b (1.6GB)</option>
-                                        <option value="tinyllama">tinyllama (638MB)</option>
-                                    </select>
-                                    <div class="input-group-append">
-                                        <button class="btn btn-primary" onclick="pullModel()" @(!ViewBag.IsHealthy ? "disabled" : "")>
-                                            <i class="fas fa-download"></i> Pull
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label>Custom Model:</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="customModelName" placeholder="e.g., codellama:7b">
-                                    <div class="input-group-append">
-                                        <button class="btn btn-primary" onclick="pullCustomModel()" @(!ViewBag.IsHealthy ? "disabled" : "")>
-                                            <i class="fas fa-download"></i> Pull
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                            @if (!ViewBag.IsHealthy)
+                            {
+                                <button class="btn btn-success btn-block" onclick="startServer()">
+                                    <i class="fas fa-play"></i> Start Ollama Server
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-info btn-block" onclick="checkHealth()">
+                                    <i class="fas fa-sync-alt"></i> Refresh Status
+                                </button>
+                            }
                         }
                     </div>
                 </div>
@@ -159,6 +126,11 @@
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Loaded Models</h3>
+                        <div class="card-tools">
+                            <a asp-controller="Models" asp-action="Index" class="btn btn-sm btn-primary">
+                                <i class="fas fa-robot"></i> Manage Models
+                            </a>
+                        </div>
                     </div>
                     <div class="card-body">
                         @if (ViewBag.Models != null && ViewBag.Models.Count > 0)
@@ -204,6 +176,78 @@
                 </div>
             </div>
         </div>
+
+        <!-- Loaded AI Tools -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Loaded AI Tools</h3>
+                        <div class="card-tools">
+                            <a asp-controller="Tools" asp-action="Index" class="btn btn-sm btn-primary">
+                                <i class="fas fa-tools"></i> Manage Tools
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (ViewBag.Tools != null && ViewBag.Tools.Count > 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Tool Name</th>
+                                            <th>Description</th>
+                                            <th>Category</th>
+                                            <th>Version</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var tool in ViewBag.Tools)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@tool.Name</strong>
+                                                    <br/>
+                                                    <small class="text-muted">ID: @tool.Id</small>
+                                                </td>
+                                                <td>@tool.Description</td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@tool.Category</span>
+                                                </td>
+                                                <td>@tool.Version</td>
+                                                <td>
+                                                    @if (tool.IsEnabled)
+                                                    {
+                                                        <span class="badge badge-success">Enabled</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-danger">Disabled</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> Total: @ViewBag.Tools.Count tools loaded
+                                </small>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> No AI Tools are currently loaded.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -240,55 +284,6 @@
             }).fail(function(xhr, status, error) {
                 console.error('Server start failed:', status, error);
                 showError('Failed to start server: ' + error);
-            }).always(function() {
-                hideLoading();
-            });
-        }
-        
-        function pullModel() {
-            var modelName = $('#modelToPull').val();
-            if (!modelName) {
-                showError('Please select a model');
-                return;
-            }
-            
-            showLoading('Pulling model ' + modelName + '...');
-            $.post('@Url.Action("PullModel")', { modelName: modelName }, function(data) {
-                if (data.success) {
-                    showSuccess(data.message);
-                    setTimeout(function() {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    showError(data.error);
-                }
-            }).fail(function() {
-                showError('Failed to pull model');
-            }).always(function() {
-                hideLoading();
-            });
-        }
-        
-        function pullCustomModel() {
-            var modelName = $('#customModelName').val();
-            if (!modelName) {
-                showError('Please enter a model name');
-                return;
-            }
-            
-            showLoading('Pulling model ' + modelName + '...');
-            $.post('@Url.Action("PullModel")', { modelName: modelName }, function(data) {
-                if (data.success) {
-                    showSuccess(data.message);
-                    $('#customModelName').val('');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    showError(data.error);
-                }
-            }).fail(function() {
-                showError('Failed to pull model');
             }).always(function() {
                 hideLoading();
             });

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using OptimalyAI.Services.AI.Interfaces;
 using OptimalyAI.ViewModels;
 using System.Diagnostics;
+using OAI.Core.Interfaces.Tools;
 
 namespace OptimalyAI.Controllers;
 
@@ -9,11 +10,13 @@ public class OllamaController : Controller
 {
     private readonly IOllamaService _ollamaService;
     private readonly ILogger<OllamaController> _logger;
+    private readonly IToolRegistry _toolRegistry;
 
-    public OllamaController(IOllamaService ollamaService, ILogger<OllamaController> logger)
+    public OllamaController(IOllamaService ollamaService, ILogger<OllamaController> logger, IToolRegistry toolRegistry)
     {
         _ollamaService = ollamaService;
         _logger = logger;
+        _toolRegistry = toolRegistry;
     }
 
     public async Task<IActionResult> Index()
@@ -25,11 +28,28 @@ public class OllamaController : Controller
             ViewBag.IsOllamaInstalled = IsOllamaInstalled();
             
             // Get Ollama version info if available
-            ViewBag.ServerInfo = new
+            ViewBag.ServerStatus = ViewBag.IsHealthy ? "Online" : "Offline";
+            ViewBag.ServerUrl = _ollamaService.GetType().GetProperty("BaseUrl")?.GetValue(_ollamaService)?.ToString() ?? "http://localhost:11434";
+            
+            // Get loaded AI Tools
+            try
             {
-                Status = ViewBag.IsHealthy ? "Online" : "Offline",
-                Url = _ollamaService.GetType().GetProperty("BaseUrl")?.GetValue(_ollamaService)?.ToString() ?? "http://localhost:11434"
-            };
+                var tools = await _toolRegistry.GetAllToolsAsync();
+                ViewBag.Tools = tools.Select(t => new
+                {
+                    Id = t.Id,
+                    Name = t.Name,
+                    Description = t.Description,
+                    Category = t.Category,
+                    Version = t.Version,
+                    IsEnabled = t.IsEnabled
+                }).ToList();
+            }
+            catch (Exception toolEx)
+            {
+                _logger.LogError(toolEx, "Error loading AI Tools");
+                ViewBag.Tools = new List<object>();
+            }
             
             return View();
         }
@@ -38,7 +58,9 @@ public class OllamaController : Controller
             _logger.LogError(ex, "Error loading Ollama status");
             ViewBag.IsHealthy = false;
             ViewBag.IsOllamaInstalled = IsOllamaInstalled();
-            ViewBag.ServerInfo = new { Status = "Error", Url = "http://localhost:11434" };
+            ViewBag.ServerStatus = "Error";
+            ViewBag.ServerUrl = "http://localhost:11434";
+            ViewBag.Tools = new List<object>();
             return View();
         }
     }
