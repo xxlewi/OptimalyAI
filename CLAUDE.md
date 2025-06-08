@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Key URLs and Pages
+
+- **Dashboard**: `https://localhost:5005/`
+- **AI Tools UI**: `https://localhost:5005/Tools` - Interactive testing of AI tools
+- **AI Tools API**: `https://localhost:5005/api/tools` - REST API for tools
+- **Swagger Docs**: `https://localhost:5005/api/docs` - API documentation
+- **Ollama Models**: `https://localhost:5005/Models` - AI model management
+- **Chat Interface**: `https://localhost:5005/Chat` - AI chat conversations
+
 ## Development Commands
 
 ### Build and Run
@@ -120,6 +129,8 @@ When adding new functionality, follow this pattern:
 - **Always throw specific exceptions** that map to HTTP status codes
 - **Always use DTOs** for API input/output, never expose entities directly
 - **Test framework not configured** - ask user for test commands if needed
+- **AI Tools are auto-registered** - classes implementing `ITool` are registered automatically
+- **Tool names must be unique** - use descriptive IDs like "web_search", "code_analyzer"
 
 ## Security Features
 
@@ -129,3 +140,65 @@ The application includes:
 - Security headers automatically applied
 - Structured logging with Serilog
 - Global exception handling
+
+## AI Tools Development
+
+### Creating a New AI Tool
+
+1. **Implement ITool interface** in `OAI.ServiceLayer/Services/Tools/Implementations/`
+```csharp
+public class MyNewTool : ITool
+{
+    public string Id => "my_new_tool";
+    public string Name => "My New Tool";
+    public string Category => "Custom";
+    
+    // Define parameters
+    public IReadOnlyList<IToolParameter> Parameters => new[]
+    {
+        new SimpleToolParameter
+        {
+            Name = "input",
+            Type = ToolParameterType.String,
+            IsRequired = true
+        }
+    };
+    
+    // Execute logic
+    public async Task<IToolResult> ExecuteAsync(
+        Dictionary<string, object> parameters,
+        CancellationToken cancellationToken)
+    {
+        // Implementation
+    }
+}
+```
+
+2. **Tool will be auto-registered** - no manual registration needed
+3. **Test via UI** at `https://localhost:5005/Tools`
+4. **Test via API** at `POST /api/tools/execute`
+
+### Tool Parameter Types
+- `String` - text input
+- `Integer` - whole numbers
+- `Decimal` - decimal numbers
+- `Boolean` - true/false
+- `DateTime` - date and time
+- `Json` - JSON objects
+- `File` - file uploads
+
+### Tool Categories
+- `Information` - search, lookup tools
+- `Analysis` - data analysis tools
+- `Generation` - content generation
+- `Transformation` - data transformation
+- `Integration` - external service integration
+- `Utility` - helper tools
+
+### Important Tool Patterns
+- Always validate parameters in `ValidateParametersAsync`
+- Use structured `ToolResult` for responses
+- Handle cancellation tokens properly
+- Log operations with structured logging
+- Return meaningful error messages
+- Support parameter conversion from JsonElement

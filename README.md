@@ -287,6 +287,165 @@ Profesionální admin rozhraní s:
 - České lokalizace
 - AdminLTE v3.2.0 (nejnovější verze)
 
+### ✅ **12. AI Tools Infrastructure**
+Robustní systém pro integraci a správu AI nástrojů:
+
+#### **Architektura AI Tools**
+```csharp
+// Automatická registrace nástrojů při startu
+public class SimpleWebSearchTool : ITool
+{
+    public string Id => "web_search";
+    public string Name => "Web Search";
+    public string Category => "Information";
+    
+    public async Task<IToolResult> ExecuteAsync(
+        Dictionary<string, object> parameters, 
+        CancellationToken cancellationToken)
+    {
+        // Implementace nástroje
+    }
+}
+```
+
+**Klíčové komponenty:**
+- **Tool Registry** - Centrální registr všech AI nástrojů
+- **Tool Executor** - Bezpečné spouštění nástrojů s validací
+- **Tool Parameters** - Typované parametry s validací
+- **Tool Security** - Autorizace a bezpečnostní kontroly
+- **Tool UI** - Automaticky generované UI pro testování
+
+#### **Vytvoření vlastního AI Tool**
+
+```csharp
+// 1. Implementujte ITool interface
+public class MyCustomTool : ITool
+{
+    public string Id => "my_custom_tool";
+    public string Name => "My Custom Tool";
+    public string Description => "Popis nástroje";
+    public string Category => "Custom";
+    public string Version => "1.0.0";
+    public bool IsEnabled => true;
+    
+    // Definice parametrů
+    public IReadOnlyList<IToolParameter> Parameters => new[]
+    {
+        new SimpleToolParameter
+        {
+            Name = "input",
+            DisplayName = "Vstupní text",
+            Description = "Text ke zpracování",
+            Type = ToolParameterType.String,
+            IsRequired = true,
+            UIHints = new ParameterUIHints
+            {
+                InputType = ParameterInputType.TextArea,
+                Placeholder = "Zadejte text..."
+            }
+        }
+    };
+    
+    // Implementace ExecuteAsync
+    public async Task<IToolResult> ExecuteAsync(
+        Dictionary<string, object> parameters, 
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var input = parameters["input"].ToString();
+            // Zpracování...
+            
+            return new ToolResult
+            {
+                IsSuccess = true,
+                Data = new { processed = input.ToUpper() }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult
+            {
+                IsSuccess = false,
+                Error = new ToolError
+                {
+                    Message = ex.Message,
+                    Type = ToolErrorType.InternalError
+                }
+            };
+        }
+    }
+}
+
+// 2. Registrace v DI (automatická při dodržení konvence *Tool)
+// Nástroj bude automaticky zaregistrován a dostupný!
+```
+
+#### **AI Tools API Endpoints**
+```http
+# Získání všech nástrojů
+GET /api/tools
+
+# Získání konkrétního nástroje
+GET /api/tools/{toolId}
+
+# Spuštění nástroje
+POST /api/tools/execute
+{
+    "toolId": "web_search",
+    "parameters": {
+        "query": "ASP.NET Core best practices",
+        "maxResults": 5
+    }
+}
+
+# Test nástroje s ukázkovými daty
+POST /api/tools/{toolId}/test
+
+# Statistiky nástrojů
+GET /api/tools/statistics
+```
+
+#### **Integrovaný Web Search Tool**
+Příklad implementovaného nástroje pro vyhledávání:
+- **DuckDuckGo API** integrace
+- Instant odpovědi, definice, kalkulace
+- Bezpečné vyhledávání (SafeSearch)
+- Konfigurovatelný počet výsledků
+- Automatické zpracování chyb a timeoutů
+
+```csharp
+// Použití v kódu
+var result = await _toolExecutor.ExecuteToolAsync(
+    "web_search",
+    new Dictionary<string, object>
+    {
+        ["query"] = "co je ASP.NET Core",
+        ["maxResults"] = 3
+    },
+    new ToolExecutionContext
+    {
+        UserId = "user123",
+        ExecutionTimeout = TimeSpan.FromSeconds(30)
+    }
+);
+```
+
+#### **Tool Security & Validation**
+- Automatická validace parametrů před spuštěním
+- Typová kontrola a konverze (včetně JsonElement)
+- Bezpečnostní kontext pro každé spuštění
+- Audit log všech exekucí
+- Rate limiting per nástroj
+
+#### **UI pro správu nástrojů**
+Dostupné na `/Tools`:
+- Seznam všech registrovaných nástrojů
+- Interaktivní testování s formuláři
+- Real-time výsledky exekuce
+- Historie spuštění
+- Monitoring a statistiky
+
 ## 🛠️ Vývoj s AI (Claude Code)
 
 ### Jak vytvořit novou funkcionalitu
@@ -622,6 +781,8 @@ OAI.ServiceLayer/
 10. ✅ **Extension Methods** - modulární konfigurace
 11. ✅ **Automatické testy** - připraveno pro testování
 12. ✅ **Clean Architecture** - jasně oddělené vrstvy
+13. ✅ **AI Tools Infrastructure** - rozšiřitelný systém pro AI nástroje
+14. ✅ **Web Search Integration** - DuckDuckGo API pro vyhledávání
 
 ### 🔄 **Připraveno k implementaci**
 - Health Checks pro monitoring
