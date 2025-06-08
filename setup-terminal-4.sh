@@ -1,0 +1,15 @@
+#!/bin/bash
+cd /Users/lewi/Documents/Vyvoj/OptimalyAI
+echo "TERMINAL 4: API & UI"
+echo "===================="
+echo ""
+echo "⏳ WAIT for Terminal 1 to complete Phase 3"
+echo ""
+echo "When Terminal 1 is ready, run these commands:"
+echo ""
+echo "git checkout -b feature/ai-tools-api-ui"
+echo "git pull origin feature/ai-tools-infrastructure"
+echo "code ."
+echo ""
+echo "Then tell Claude:"
+echo "I am working on Terminal 4 from AI_TOOLS_PARALLEL_IMPLEMENTATION.md"
