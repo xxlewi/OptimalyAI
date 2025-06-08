@@ -28,6 +28,12 @@ public interface IOllamaService
     // Performance
     Task<ModelPerformanceMetrics> GetModelMetricsAsync(string model);
     Task WarmupModelAsync(string model);
+    
+    // Tool calling
+    Task<ToolCallingChatResponse> ChatWithToolsAsync(string model, List<OllamaChatMessage> messages, List<OllamaTool> tools, OllamaOptions? options = null, object? toolChoice = null);
+    Task<List<ToolResult>> ExecuteToolCallsAsync(List<OllamaToolCall> toolCalls, ToolExecutionContext context);
+    Task<string> FormatToolResultsAsync(List<ToolResult> toolResults);
+    Task<OllamaChatResponse> HandleToolConversationAsync(string model, List<OllamaChatMessage> messages, List<OllamaTool> tools, ToolExecutionContext context, OllamaOptions? options = null);
 }
 
 public interface IConversationManager

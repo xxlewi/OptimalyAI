@@ -113,6 +113,71 @@ public class OllamaEmbeddingResponse
     public double[] Embedding { get; set; } = Array.Empty<double>();
 }
 
+// Tool calling support
+public class OllamaTool
+{
+    public string Type { get; set; } = "function";
+    public OllamaToolFunction Function { get; set; } = new();
+}
+
+public class OllamaToolFunction
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public Dictionary<string, object> Parameters { get; set; } = new();
+}
+
+public class OllamaToolCall
+{
+    public string Id { get; set; } = string.Empty;
+    public string Type { get; set; } = "function";
+    public OllamaToolCallFunction Function { get; set; } = new();
+}
+
+public class OllamaToolCallFunction
+{
+    public string Name { get; set; } = string.Empty;
+    public string Arguments { get; set; } = string.Empty;
+}
+
+public class OllamaToolMessage : OllamaChatMessage
+{
+    public List<OllamaToolCall>? ToolCalls { get; set; }
+    public string? ToolCallId { get; set; }
+}
+
+public class ToolCallingChatRequest : OllamaChatRequest
+{
+    public List<OllamaTool>? Tools { get; set; }
+    public object? ToolChoice { get; set; } // "auto", "none", or specific tool
+}
+
+public class ToolCallingChatResponse : OllamaChatResponse
+{
+    public new OllamaToolMessage Message { get; set; } = new();
+    public string? FinishReason { get; set; } // "stop", "tool_calls", "length"
+}
+
+public class ToolResult
+{
+    public string ToolCallId { get; set; } = string.Empty;
+    public string ToolName { get; set; } = string.Empty;
+    public object? Result { get; set; }
+    public bool IsSuccess { get; set; }
+    public string? Error { get; set; }
+    public Dictionary<string, object> Metadata { get; set; } = new();
+}
+
+public class ToolExecutionContext
+{
+    public string ConversationId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public Dictionary<string, object> UserPermissions { get; set; } = new();
+    public Dictionary<string, object> CustomContext { get; set; } = new();
+    public TimeSpan? ExecutionTimeout { get; set; }
+}
+
 // Performance tracking
 public class ModelPerformanceMetrics
 {
@@ -124,4 +189,7 @@ public class ModelPerformanceMetrics
     public long TotalTokensGenerated { get; set; }
     public DateTime LastUsed { get; set; }
     public bool IsLoaded { get; set; }
+    public int ToolCallsExecuted { get; set; }
+    public int SuccessfulToolCalls { get; set; }
+    public double AverageToolExecutionTime { get; set; }
 }

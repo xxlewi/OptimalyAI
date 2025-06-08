@@ -3,6 +3,7 @@ using System.Text.Json;
 using OptimalyAI.Services.AI.Interfaces;
 using OptimalyAI.Services.AI.Models;
 using System.Collections.Concurrent;
+using OAI.Core.Interfaces.Tools;
 
 namespace OptimalyAI.Services.AI;
 
@@ -10,13 +11,21 @@ public class OllamaService : IOllamaService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<OllamaService> _logger;
+    private readonly IToolRegistry _toolRegistry;
+    private readonly IToolExecutor _toolExecutor;
     private readonly ConcurrentDictionary<string, ModelPerformanceMetrics> _performanceMetrics = new();
     private readonly JsonSerializerOptions _jsonOptions;
 
-    public OllamaService(HttpClient httpClient, ILogger<OllamaService> logger)
+    public OllamaService(
+        HttpClient httpClient, 
+        ILogger<OllamaService> logger,
+        IToolRegistry toolRegistry,
+        IToolExecutor toolExecutor)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+        _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
         // BaseAddress is set by the HttpClient factory in ServiceCollectionExtensions
         
         _jsonOptions = new JsonSerializerOptions
@@ -339,6 +348,277 @@ public class OllamaService : IOllamaService
             }
             
             metrics.TotalTokensGenerated += response.EvalCount;
+        }
+    }
+
+    private void UpdateToolMetrics(string model, TimeSpan toolExecutionTime, bool success)
+    {
+        var metrics = _performanceMetrics.GetOrAdd(model, new ModelPerformanceMetrics { ModelName = model });
+        
+        metrics.ToolCallsExecuted++;
+        if (success) metrics.SuccessfulToolCalls++;
+        
+        // Update average tool execution time
+        if (success)
+        {
+            metrics.AverageToolExecutionTime = 
+                (metrics.AverageToolExecutionTime * (metrics.SuccessfulToolCalls - 1) + toolExecutionTime.TotalSeconds) / metrics.SuccessfulToolCalls;
+        }
+    }
+
+    // Tool calling implementation
+    public async Task<ToolCallingChatResponse> ChatWithToolsAsync(
+        string model, 
+        List<OllamaChatMessage> messages, 
+        List<OllamaTool> tools, 
+        OllamaOptions? options = null, 
+        object? toolChoice = null)
+    {
+        var request = new ToolCallingChatRequest
+        {
+            Model = model,
+            Messages = messages,
+            Tools = tools,
+            ToolChoice = toolChoice,
+            Stream = false,
+            Options = options
+        };
+
+        var startTime = DateTime.UtcNow;
+        
+        try
+        {
+            var json = JsonSerializer.Serialize(request, _jsonOptions);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            
+            var httpResponse = await _httpClient.PostAsync("/api/chat", content);
+            httpResponse.EnsureSuccessStatusCode();
+            
+            var responseJson = await httpResponse.Content.ReadAsStringAsync();
+            
+            // Try to deserialize as tool calling response first, fall back to regular chat response
+            ToolCallingChatResponse? response = null;
+            try
+            {
+                response = JsonSerializer.Deserialize<ToolCallingChatResponse>(responseJson, _jsonOptions);
+            }
+            catch
+            {
+                // Fall back to regular chat response and convert
+                var regularResponse = JsonSerializer.Deserialize<OllamaChatResponse>(responseJson, _jsonOptions);
+                if (regularResponse != null)
+                {
+                    response = new ToolCallingChatResponse
+                    {
+                        Model = regularResponse.Model,
+                        Message = new OllamaToolMessage
+                        {
+                            Role = regularResponse.Message.Role,
+                            Content = regularResponse.Message.Content
+                        },
+                        Done = regularResponse.Done,
+                        TotalDuration = regularResponse.TotalDuration,
+                        LoadDuration = regularResponse.LoadDuration,
+                        PromptEvalCount = regularResponse.PromptEvalCount,
+                        EvalCount = regularResponse.EvalCount,
+                        FinishReason = "stop"
+                    };
+                }
+            }
+            
+            if (response == null)
+                throw new InvalidOperationException("Failed to deserialize tool calling response");
+            
+            // Update metrics
+            UpdateMetrics(model, null, DateTime.UtcNow - startTime, true);
+            
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in tool calling chat with model {Model}", model);
+            UpdateMetrics(model, null, DateTime.UtcNow - startTime, false);
+            throw;
+        }
+    }
+
+    public async Task<List<ToolResult>> ExecuteToolCallsAsync(List<OllamaToolCall> toolCalls, OptimalyAI.Services.AI.Models.ToolExecutionContext context)
+    {
+        var results = new List<ToolResult>();
+        
+        foreach (var toolCall in toolCalls)
+        {
+            var startTime = DateTime.UtcNow;
+            var result = new ToolResult
+            {
+                ToolCallId = toolCall.Id,
+                ToolName = toolCall.Function.Name
+            };
+            
+            try
+            {
+                _logger.LogInformation("Executing tool call: {ToolName} with ID: {ToolCallId}", 
+                    toolCall.Function.Name, toolCall.Id);
+                
+                // Parse arguments from JSON string
+                var parameters = new Dictionary<string, object>();
+                if (!string.IsNullOrEmpty(toolCall.Function.Arguments))
+                {
+                    try
+                    {
+                        parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(toolCall.Function.Arguments) 
+                                   ?? new Dictionary<string, object>();
+                    }
+                    catch (JsonException ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to parse tool arguments: {Arguments}", toolCall.Function.Arguments);
+                        throw new ArgumentException($"Invalid tool arguments: {ex.Message}");
+                    }
+                }
+                
+                // Create execution context for the tool
+                var toolExecutionContext = new OAI.Core.Interfaces.Tools.ToolExecutionContext
+                {
+                    UserId = context.UserId,
+                    SessionId = context.SessionId,
+                    ConversationId = context.ConversationId,
+                    ExecutionTimeout = context.ExecutionTimeout
+                };
+                
+                // Execute the tool
+                var toolResult = await _toolExecutor.ExecuteToolAsync(
+                    toolCall.Function.Name, 
+                    parameters, 
+                    toolExecutionContext);
+                
+                result.IsSuccess = toolResult.IsSuccess;
+                result.Result = toolResult.Data;
+                result.Metadata = toolResult.Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                
+                if (!toolResult.IsSuccess && toolResult.Error != null)
+                {
+                    result.Error = $"{toolResult.Error.Message}: {toolResult.Error.Details}";
+                }
+                
+                UpdateToolMetrics("tool_execution", DateTime.UtcNow - startTime, toolResult.IsSuccess);
+                
+                _logger.LogInformation("Tool call {ToolCallId} executed successfully: {Success}", 
+                    toolCall.Id, toolResult.IsSuccess);
+            }
+            catch (Exception ex)
+            {
+                result.IsSuccess = false;
+                result.Error = ex.Message;
+                UpdateToolMetrics("tool_execution", DateTime.UtcNow - startTime, false);
+                
+                _logger.LogError(ex, "Error executing tool call {ToolCallId} for tool {ToolName}", 
+                    toolCall.Id, toolCall.Function.Name);
+            }
+            
+            results.Add(result);
+        }
+        
+        return results;
+    }
+
+    public async Task<string> FormatToolResultsAsync(List<ToolResult> toolResults)
+    {
+        try
+        {
+            var formattedResults = toolResults.Select(result => new
+            {
+                tool_call_id = result.ToolCallId,
+                tool_name = result.ToolName,
+                success = result.IsSuccess,
+                result = result.Result,
+                error = result.Error,
+                metadata = result.Metadata
+            });
+            
+            return JsonSerializer.Serialize(formattedResults, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error formatting tool results");
+            return JsonSerializer.Serialize(new { error = "Failed to format tool results", details = ex.Message });
+        }
+    }
+
+    public async Task<OllamaChatResponse> HandleToolConversationAsync(
+        string model, 
+        List<OllamaChatMessage> messages, 
+        List<OllamaTool> tools, 
+        OptimalyAI.Services.AI.Models.ToolExecutionContext context, 
+        OllamaOptions? options = null)
+    {
+        try
+        {
+            _logger.LogInformation("Starting tool-aware conversation with model {Model}", model);
+            
+            // Step 1: Send initial request with tools
+            var toolResponse = await ChatWithToolsAsync(model, messages, tools, options);
+            
+            // Step 2: Check if the model wants to use tools
+            if (toolResponse.Message.ToolCalls != null && toolResponse.Message.ToolCalls.Any())
+            {
+                _logger.LogInformation("Model requested {ToolCallCount} tool calls", toolResponse.Message.ToolCalls.Count);
+                
+                // Step 3: Execute the tool calls
+                var toolResults = await ExecuteToolCallsAsync(toolResponse.Message.ToolCalls, context);
+                
+                // Step 4: Add tool results to conversation
+                var updatedMessages = new List<OllamaChatMessage>(messages);
+                
+                // Add the assistant's message with tool calls
+                updatedMessages.Add(new OllamaToolMessage
+                {
+                    Role = "assistant",
+                    Content = toolResponse.Message.Content,
+                    ToolCalls = toolResponse.Message.ToolCalls
+                });
+                
+                // Add tool results as tool messages
+                foreach (var toolResult in toolResults)
+                {
+                    var toolResultMessage = new OllamaToolMessage
+                    {
+                        Role = "tool",
+                        Content = await FormatToolResultsAsync(new List<ToolResult> { toolResult }),
+                        ToolCallId = toolResult.ToolCallId
+                    };
+                    updatedMessages.Add(toolResultMessage);
+                }
+                
+                // Step 5: Get final response from model with tool results
+                var finalResponse = await ChatWithMetricsAsync(model, updatedMessages, options);
+                
+                _logger.LogInformation("Tool conversation completed successfully");
+                return finalResponse;
+            }
+            else
+            {
+                // No tool calls requested, return the response as-is
+                _logger.LogInformation("No tool calls requested by model");
+                return new OllamaChatResponse
+                {
+                    Model = toolResponse.Model,
+                    Message = new OllamaChatMessage
+                    {
+                        Role = toolResponse.Message.Role,
+                        Content = toolResponse.Message.Content
+                    },
+                    Done = toolResponse.Done,
+                    TotalDuration = toolResponse.TotalDuration,
+                    LoadDuration = toolResponse.LoadDuration,
+                    PromptEvalCount = toolResponse.PromptEvalCount,
+                    EvalCount = toolResponse.EvalCount
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in tool conversation handling");
+            throw;
         }
     }
 }

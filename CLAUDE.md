@@ -15,6 +15,9 @@ dotnet run --project OptimalyAI.csproj         # Run the web application
 dotnet watch run --project OptimalyAI.csproj   # Run with hot reload
 ```
 
+### Build Guidance
+- dělej buil výhradně přes pytho (always build exclusively through Python)
+
 ### Ports and URLs
 - Application runs on `https://localhost:5005`
 - Swagger documentation: `https://localhost:5005/api/docs`

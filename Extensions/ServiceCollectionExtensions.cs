@@ -95,6 +95,9 @@ public static class ServiceCollectionExtensions
         // Registrace hlavního mapping service
         services.AddScoped<OAI.Core.Mapping.IMappingService, OAI.ServiceLayer.Mapping.MappingService>();
         
+        // Explicitní registrace ToolDefinitionMapper
+        services.AddScoped<OAI.ServiceLayer.Mapping.IToolDefinitionMapper, OAI.ServiceLayer.Mapping.ToolDefinitionMapper>();
+        
         // Auto-registrace všech mapperů z ServiceLayer
         var serviceLayerAssembly = Assembly.Load("OAI.ServiceLayer");
         
@@ -188,6 +191,11 @@ public static class ServiceCollectionExtensions
         
         // Register Conversation Manager
         services.AddSingleton<IConversationManager, ConversationManager>();
+        
+        // Register Tool services
+        services.AddScoped<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
+        services.AddScoped<OAI.Core.Interfaces.Tools.IToolExecutor, OAI.ServiceLayer.Services.Tools.ToolExecutorService>();
+        services.AddScoped<OAI.Core.Interfaces.Tools.IToolSecurity, OAI.ServiceLayer.Services.Tools.ToolSecurityService>();
         
         return services;
     }
