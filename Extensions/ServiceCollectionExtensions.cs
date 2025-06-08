@@ -192,10 +192,16 @@ public static class ServiceCollectionExtensions
         // Register Conversation Manager
         services.AddSingleton<IConversationManager, ConversationManager>();
         
-        // Register Tool services
-        services.AddScoped<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
+        // Register Tool services - Registry must be Singleton to persist registered tools
+        services.AddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
         services.AddScoped<OAI.Core.Interfaces.Tools.IToolExecutor, OAI.ServiceLayer.Services.Tools.ToolExecutorService>();
         services.AddScoped<OAI.Core.Interfaces.Tools.IToolSecurity, OAI.ServiceLayer.Services.Tools.ToolSecurityService>();
+        
+        // Register Web Search services
+        services.AddHttpClient<OAI.ServiceLayer.Services.WebSearch.IWebSearchService, OAI.ServiceLayer.Services.WebSearch.DuckDuckGoSearchService>();
+        
+        // Register concrete tool implementations
+        services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.SimpleWebSearchTool>();
         
         return services;
     }

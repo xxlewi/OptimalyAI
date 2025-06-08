@@ -190,8 +190,19 @@ def main():
                     else:
                         print(f"   Přeskakuji ne-dotnet proces PID: {pid}")
             
-            # Pouze dotnet watch procesy
-            subprocess.run(['pkill', '-f', 'dotnet.*watch.*run.*OptimalyAI'], capture_output=True)
+            # Ukončíme pouze dotnet procesy, které běží na našem portu
+            # Nepoužíváme pkill -f, protože to může zabít i Ollama server
+            dotnet_procs = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
+            if dotnet_procs.stdout:
+                lines = dotnet_procs.stdout.split('\n')
+                for line in lines:
+                    # Hledáme pouze dotnet watch run procesy s naším projektem
+                    if 'dotnet' in line and 'watch' in line and 'run' in line and 'OptimalyAI.csproj' in line:
+                        parts = line.split()
+                        if len(parts) > 1:
+                            pid = parts[1]
+                            subprocess.run(['kill', '-15', pid])
+                            print(f"   Ukončen dotnet watch proces PID: {pid}")
             time.sleep(2)
             if not runner.is_port_in_use():
                 print("✅ Port uvolněn, spouštím aplikaci...")

@@ -19,7 +19,6 @@ namespace OAI.ServiceLayer.Services.Tools
     {
         private readonly ILogger<ToolRegistryService> _logger;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IRepository<ToolDefinition> _toolDefinitionRepository;
         private readonly ConcurrentDictionary<string, ITool> _registeredTools = new();
         private readonly ConcurrentDictionary<string, ToolMetadata> _toolMetadata = new();
 
@@ -29,12 +28,24 @@ namespace OAI.ServiceLayer.Services.Tools
 
         public ToolRegistryService(
             ILogger<ToolRegistryService> logger,
-            IServiceProvider serviceProvider,
-            IRepository<ToolDefinition> toolDefinitionRepository)
+            IServiceProvider serviceProvider)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-            _toolDefinitionRepository = toolDefinitionRepository ?? throw new ArgumentNullException(nameof(toolDefinitionRepository));
+        }
+
+        private async Task<T> ExecuteWithRepositoryAsync<T>(Func<IRepository<ToolDefinition>, Task<T>> action)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IRepository<ToolDefinition>>();
+            return await action(repository);
+        }
+
+        private async Task ExecuteWithRepositoryAsync(Func<IRepository<ToolDefinition>, Task> action)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IRepository<ToolDefinition>>();
+            await action(repository);
         }
 
         public async Task<bool> RegisterToolAsync(ITool tool)
@@ -114,13 +125,16 @@ namespace OAI.ServiceLayer.Services.Tools
                 _toolMetadata.TryRemove(toolId, out _);
 
                 // Remove from database
-                var toolDefinitions = await _toolDefinitionRepository.FindAsync(td => td.ToolId == toolId);
-                var toolDefinition = toolDefinitions.FirstOrDefault();
-                if (toolDefinition != null)
+                await ExecuteWithRepositoryAsync(async repository =>
                 {
-                    toolDefinition.IsEnabled = false;
-                    await _toolDefinitionRepository.UpdateAsync(toolDefinition);
-                }
+                    var toolDefinitions = await repository.FindAsync(td => td.ToolId == toolId);
+                    var toolDefinition = toolDefinitions.FirstOrDefault();
+                    if (toolDefinition != null)
+                    {
+                        toolDefinition.IsEnabled = false;
+                        await repository.UpdateAsync(toolDefinition);
+                    }
+                });
 
                 _logger.LogInformation("Tool '{ToolId}' unregistered successfully", toolId);
 
@@ -221,13 +235,16 @@ namespace OAI.ServiceLayer.Services.Tools
                 }
 
                 // Update in database
-                var toolDefinitions = await _toolDefinitionRepository.FindAsync(td => td.ToolId == toolId);
-                var toolDefinition = toolDefinitions.FirstOrDefault();
-                if (toolDefinition != null)
+                await ExecuteWithRepositoryAsync(async repository =>
                 {
-                    toolDefinition.IsEnabled = enabled;
-                    await _toolDefinitionRepository.UpdateAsync(toolDefinition);
-                }
+                    var toolDefinitions = await repository.FindAsync(td => td.ToolId == toolId);
+                    var toolDefinition = toolDefinitions.FirstOrDefault();
+                    if (toolDefinition != null)
+                    {
+                        toolDefinition.IsEnabled = enabled;
+                        await repository.UpdateAsync(toolDefinition);
+                    }
+                });
 
                 // Update metadata
                 if (_toolMetadata.TryGetValue(toolId, out var metadata))
@@ -333,7 +350,7 @@ namespace OAI.ServiceLayer.Services.Tools
         {
             try
             {
-                var toolDefinitions = await _toolDefinitionRepository.GetAllAsync();
+                var toolDefinitions = await ExecuteWithRepositoryAsync(async repository => await repository.GetAllAsync());
                 
                 foreach (var definition in toolDefinitions.Where(td => td.IsEnabled))
                 {
@@ -359,41 +376,44 @@ namespace OAI.ServiceLayer.Services.Tools
         {
             try
             {
-                var existingDefinitions = await _toolDefinitionRepository.FindAsync(td => td.ToolId == tool.Id);
-                var existingDefinition = existingDefinitions.FirstOrDefault();
-                
-                if (existingDefinition == null)
+                await ExecuteWithRepositoryAsync(async repository =>
                 {
-                    var newDefinition = new ToolDefinition
+                    var existingDefinitions = await repository.FindAsync(td => td.ToolId == tool.Id);
+                    var existingDefinition = existingDefinitions.FirstOrDefault();
+                    
+                    if (existingDefinition == null)
                     {
-                        ToolId = tool.Id,
-                        Name = tool.Name,
-                        Description = tool.Description,
-                        Category = tool.Category,
-                        Version = tool.Version,
-                        IsEnabled = tool.IsEnabled,
-                        IsSystemTool = true,
-                        ParametersJson = SerializeParameters(tool.Parameters),
-                        CapabilitiesJson = SerializeCapabilities(tool.GetCapabilities()),
-                        MaxExecutionTimeSeconds = tool.GetCapabilities().MaxExecutionTimeSeconds,
-                        ImplementationClass = tool.GetType().FullName ?? string.Empty
-                    };
+                        var newDefinition = new ToolDefinition
+                        {
+                            ToolId = tool.Id,
+                            Name = tool.Name,
+                            Description = tool.Description,
+                            Category = tool.Category,
+                            Version = tool.Version,
+                            IsEnabled = tool.IsEnabled,
+                            IsSystemTool = true,
+                            ParametersJson = SerializeParameters(tool.Parameters),
+                            CapabilitiesJson = SerializeCapabilities(tool.GetCapabilities()),
+                            MaxExecutionTimeSeconds = tool.GetCapabilities().MaxExecutionTimeSeconds,
+                            ImplementationClass = tool.GetType().FullName ?? string.Empty
+                        };
 
-                    await _toolDefinitionRepository.CreateAsync(newDefinition);
-                }
-                else
-                {
-                    // Update existing definition
-                    existingDefinition.Name = tool.Name;
-                    existingDefinition.Description = tool.Description;
-                    existingDefinition.Category = tool.Category;
-                    existingDefinition.Version = tool.Version;
-                    existingDefinition.IsEnabled = tool.IsEnabled;
-                    existingDefinition.ParametersJson = SerializeParameters(tool.Parameters);
-                    existingDefinition.CapabilitiesJson = SerializeCapabilities(tool.GetCapabilities());
+                        await repository.CreateAsync(newDefinition);
+                    }
+                    else
+                    {
+                        // Update existing definition
+                        existingDefinition.Name = tool.Name;
+                        existingDefinition.Description = tool.Description;
+                        existingDefinition.Category = tool.Category;
+                        existingDefinition.Version = tool.Version;
+                        existingDefinition.IsEnabled = tool.IsEnabled;
+                        existingDefinition.ParametersJson = SerializeParameters(tool.Parameters);
+                        existingDefinition.CapabilitiesJson = SerializeCapabilities(tool.GetCapabilities());
 
-                    await _toolDefinitionRepository.UpdateAsync(existingDefinition);
-                }
+                        await repository.UpdateAsync(existingDefinition);
+                    }
+                });
             }
             catch (Exception ex)
             {

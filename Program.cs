@@ -2,6 +2,7 @@ using OptimalyAI.Extensions;
 using OptimalyAI.Configuration;
 using OptimalyAI.Hubs;
 using OptimalyAI.Services.Monitoring;
+using OptimalyAI.Services.Tools;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +30,9 @@ try
     // Add Monitoring services
     builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
     builder.Services.AddHostedService<MetricsBackgroundService>();
+    
+    // Add Tool initializer
+    builder.Services.AddHostedService<ToolInitializer>();
 
     var app = builder.Build();
 
