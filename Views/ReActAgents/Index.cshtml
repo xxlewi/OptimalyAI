@@ -1,0 +1,327 @@
+@model OptimalyAI.Controllers.ReActAgentsDashboardViewModel
+@{
+    ViewData["Title"] = "ReAct Agenti";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-robot"></i> ReAct Agenti
+                    <small class="text-muted">Správa a monitoring</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">ReAct Agenti</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <!-- Current Status -->
+        <div class="row">
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="info-box @(Model.CurrentSettings.Enabled ? "bg-success" : "bg-danger")">
+                    <span class="info-box-icon"><i class="fas fa-power-off"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">ReAct Status</span>
+                        <span class="info-box-number">@(Model.CurrentSettings.Enabled ? "Aktivní" : "Neaktivní")</span>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: @(Model.CurrentSettings.Enabled ? "100" : "0")%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="info-box bg-info">
+                    <span class="info-box-icon"><i class="fas fa-cogs"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Max Iterací</span>
+                        <span class="info-box-number">@Model.CurrentSettings.MaxIterations</span>
+                        <span class="progress-description">kroků na dotaz</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="info-box bg-warning">
+                    <span class="info-box-icon"><i class="fas fa-brain"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Výchozí Model</span>
+                        <span class="info-box-number">@Model.CurrentSettings.DefaultModel</span>
+                        <span class="progress-description">LLM pro myšlení</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="info-box bg-primary">
+                    <span class="info-box-icon"><i class="fas fa-magic"></i></span>
+                    <div class="info-box-content">
+                        <span class="info-box-text">Auto-aktivace</span>
+                        <span class="info-box-number">@(Model.CurrentSettings.AutoEnableForComplexQueries ? "Zapnuta" : "Vypnuta")</span>
+                        <span class="progress-description">pro složité dotazy</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.Metrics != null)
+        {
+            <!-- Metrics Row -->
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="small-box bg-gradient-primary">
+                        <div class="inner">
+                            <h3>@Model.Metrics.TotalExecutions</h3>
+                            <p>Celkem spuštění</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-play-circle"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="small-box bg-gradient-success">
+                        <div class="inner">
+                            <h3>@Model.Metrics.SuccessRate.ToString("P0")</h3>
+                            <p>Úspěšnost</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="small-box bg-gradient-warning">
+                        <div class="inner">
+                            <h3>@Model.Metrics.AverageExecutionTime.TotalSeconds.ToString("F1")s</h3>
+                            <p>Průměrný čas</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="small-box bg-gradient-info">
+                        <div class="inner">
+                            <h3>@Model.Metrics.ToolUsageRate.ToString("P0")</h3>
+                            <p>Využití nástrojů</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-tools"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+            <!-- Available Agents -->
+            <div class="col-md-6">
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-robot"></i> Dostupní agenti
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var agent in Model.AvailableAgents)
+                        {
+                            <div class="agent-card mb-3 p-3 border rounded">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h5 class="mb-1">
+                                            <i class="fas fa-robot text-primary"></i> @agent.Name
+                                            <span class="badge badge-success ml-2">@agent.Status</span>
+                                        </h5>
+                                        <p class="text-muted mb-2">@agent.Description</p>
+                                        <div class="agent-capabilities">
+                                            @foreach (var capability in agent.Capabilities)
+                                            {
+                                                <span class="badge badge-info mr-1">@capability</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-primary" onclick="monitorAgent('@agent.Id')">
+                                            <i class="fas fa-chart-line"></i> Monitor
+                                        </button>
+                                        <button class="btn btn-sm btn-secondary" onclick="configureAgent('@agent.Id')">
+                                            <i class="fas fa-cog"></i> Nastavit
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="text-center mt-3">
+                            <button class="btn btn-outline-primary" disabled>
+                                <i class="fas fa-plus"></i> Přidat nového agenta
+                                <small class="d-block text-muted">Brzy dostupné</small>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Profiles -->
+            <div class="col-md-6">
+                <div class="card card-info card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-sliders-h"></i> Konfigurační profily
+                        </h3>
+                        <div class="card-tools">
+                            <a href="/ReActAgents/Configure" class="btn btn-sm btn-info">
+                                <i class="fas fa-edit"></i> Upravit
+                            </a>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var profile in Model.Profiles)
+                        {
+                            <div class="profile-card mb-3 p-3 border rounded @(profile.Key == "default" ? "border-primary" : "")">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-layer-group"></i> @profile.Value.Name
+                                    @if (profile.Key == "default")
+                                    {
+                                        <span class="badge badge-primary float-right">Výchozí</span>
+                                    }
+                                </h6>
+                                <p class="text-muted small mb-2">@profile.Value.Description</p>
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <small class="text-muted">Max iterací</small>
+                                        <p class="mb-0"><strong>@profile.Value.MaxIterations</strong></p>
+                                    </div>
+                                    <div class="col-4">
+                                        <small class="text-muted">Model</small>
+                                        <p class="mb-0"><strong>@profile.Value.Model</strong></p>
+                                    </div>
+                                    <div class="col-4">
+                                        <small class="text-muted">Temperature</small>
+                                        <p class="mb-0"><strong>@profile.Value.Temperature</strong></p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Executions -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card card-outline card-success">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-history"></i> Nedávná spuštění
+                        </h3>
+                        <div class="card-tools">
+                            <a href="/ReActAgents/Monitor" class="btn btn-sm btn-success">
+                                <i class="fas fa-chart-line"></i> Live Monitor
+                            </a>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.RecentExecutions.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Čas</th>
+                                            <th>Vstup</th>
+                                            <th>Kroky</th>
+                                            <th>Nástroje</th>
+                                            <th>Trvání</th>
+                                            <th>Status</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var execution in Model.RecentExecutions)
+                                        {
+                                            <tr>
+                                                <td>@execution.StartedAt.ToString("HH:mm:ss")</td>
+                                                <td>
+                                                    <span class="text-truncate d-inline-block" style="max-width: 300px;">
+                                                        @execution.Input
+                                                    </span>
+                                                </td>
+                                                <td><span class="badge badge-info">@execution.Steps</span></td>
+                                                <td><span class="badge badge-warning">@execution.ToolsUsed</span></td>
+                                                <td>@execution.Duration.TotalSeconds.ToString("F1")s</td>
+                                                <td>
+                                                    @if (execution.Success)
+                                                    {
+                                                        <span class="badge badge-success">Úspěch</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-danger">Chyba</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a href="/ReActAgents/ExecutionDetails/@execution.ExecutionId" 
+                                                       class="btn btn-xs btn-primary">
+                                                        <i class="fas fa-eye"></i> Detail
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Zatím žádná spuštění ReAct agentů</p>
+                                <p class="text-muted small">
+                                    Spuštění se zobrazí zde po prvním použití ReAct agenta v chatu
+                                </p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        function monitorAgent(agentId) {
+            window.location.href = '/ReActAgents/Monitor?agentId=' + agentId;
+        }
+        
+        function configureAgent(agentId) {
+            window.location.href = '/ReActAgents/Configure?agentId=' + agentId;
+        }
+    </script>
+}

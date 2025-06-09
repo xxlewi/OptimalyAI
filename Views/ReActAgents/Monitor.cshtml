@@ -1,0 +1,405 @@
+@{
+    ViewData["Title"] = "ReAct Monitor";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-satellite-dish"></i> Live Monitor
+                    <small class="text-muted">ReAct procesy v reálném čase</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/ReActAgents">ReAct Agenti</a></li>
+                    <li class="breadcrumb-item active">Monitor</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <!-- Connection Status -->
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-info" id="connection-status">
+                    <i class="fas fa-sync fa-spin"></i> Připojování k real-time monitoru...
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Executions -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-running"></i> Aktivní ReAct procesy
+                        </h3>
+                        <div class="card-tools">
+                            <span class="badge badge-primary" id="active-count">0</span>
+                            <button type="button" class="btn btn-tool" data-card-widget="refresh">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="active-executions">
+                            <div class="text-center py-5 text-muted">
+                                <i class="fas fa-satellite-dish fa-3x mb-3"></i>
+                                <p>Čekám na aktivní ReAct procesy...</p>
+                                <p class="small">Když někdo použije ReAct v chatu, zobrazí se zde živé sledování</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution Details Modal Template -->
+        <div id="execution-template" style="display: none;">
+            <div class="execution-card mb-3" data-execution-id="{executionId}">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-brain"></i> Execution: <code>{executionId}</code>
+                        </h5>
+                        <div class="card-tools">
+                            <span class="badge badge-warning">Krok {currentStep}</span>
+                            <button type="button" class="btn btn-tool" onclick="collapseExecution('{executionId}')">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <p class="mb-2"><strong>Vstup:</strong> {input}</p>
+                                <div class="progress mb-3" style="height: 25px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
+                                         role="progressbar" 
+                                         style="width: {progress}%">
+                                        {currentPhase}
+                                    </div>
+                                </div>
+                                
+                                <!-- Live Steps -->
+                                <div class="live-steps">
+                                    <h6>Živý průběh:</h6>
+                                    <div class="steps-container" style="max-height: 300px; overflow-y: auto;">
+                                        <!-- Steps will be added here dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="info-box bg-info">
+                                    <span class="info-box-icon"><i class="fas fa-clock"></i></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Čas běhu</span>
+                                        <span class="info-box-number timer" data-start="{startTime}">0s</span>
+                                    </div>
+                                </div>
+                                <div class="text-center mt-3">
+                                    <button class="btn btn-sm btn-primary" onclick="viewDetails('{executionId}')">
+                                        <i class="fas fa-eye"></i> Zobrazit detaily
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step Template -->
+        <div id="step-template" style="display: none;">
+            <div class="step-item mb-2 animated fadeIn">
+                <div class="d-flex align-items-start">
+                    <div class="step-icon mr-2">
+                        <i class="{icon} {color}"></i>
+                    </div>
+                    <div class="step-content flex-grow-1">
+                        <small class="text-muted">{timestamp}</small>
+                        <p class="mb-1"><strong>{title}</strong></p>
+                        <pre class="small mb-0" style="white-space: pre-wrap; max-height: 100px; overflow-y: auto;">{content}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/lib/microsoft-signalr/dist/browser/signalr.js"></script>
+    <script>
+        let connection = null;
+        let activeExecutions = new Map();
+        let timers = new Map();
+
+        $(document).ready(function() {
+            initializeSignalR();
+            startTimers();
+        });
+
+        function initializeSignalR() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/monitoringHub")
+                .configureLogging(signalR.LogLevel.Information)
+                .build();
+
+            // Connection events
+            connection.on("Connected", function() {
+                $('#connection-status')
+                    .removeClass('alert-info alert-danger')
+                    .addClass('alert-success')
+                    .html('<i class="fas fa-check-circle"></i> Připojeno k real-time monitoru');
+            });
+
+            // ReAct execution events
+            connection.on("ReActExecutionStarted", function(data) {
+                addExecution(data);
+            });
+
+            connection.on("ReActThoughtGenerated", function(data) {
+                addStep(data.executionId, {
+                    type: 'thought',
+                    icon: 'fas fa-brain',
+                    color: 'text-info',
+                    title: 'Myšlení - Krok ' + data.stepNumber,
+                    content: data.thought,
+                    timestamp: new Date().toLocaleTimeString()
+                });
+                updateProgress(data.executionId, data.stepNumber, 'Přemýšlím...');
+            });
+
+            connection.on("ReActActionExecuted", function(data) {
+                addStep(data.executionId, {
+                    type: 'action',
+                    icon: 'fas fa-tools',
+                    color: 'text-warning',
+                    title: 'Akce: ' + data.toolName,
+                    content: 'Parametry: ' + JSON.stringify(data.parameters),
+                    timestamp: new Date().toLocaleTimeString()
+                });
+                updateProgress(data.executionId, data.stepNumber, 'Vykonávám akci...');
+            });
+
+            connection.on("ReActObservationReceived", function(data) {
+                addStep(data.executionId, {
+                    type: 'observation',
+                    icon: data.success ? 'fas fa-check-circle' : 'fas fa-times-circle',
+                    color: data.success ? 'text-success' : 'text-danger',
+                    title: 'Výsledek: ' + data.toolName,
+                    content: data.observation,
+                    timestamp: new Date().toLocaleTimeString()
+                });
+                updateProgress(data.executionId, data.stepNumber, 'Zpracovávám výsledek...');
+            });
+
+            connection.on("ReActExecutionCompleted", function(data) {
+                completeExecution(data.executionId, data.finalAnswer, data.success);
+            });
+
+            // Start connection
+            connection.start().then(function() {
+                console.log("SignalR Connected");
+                // Request current active executions
+                loadActiveExecutions();
+            }).catch(function(err) {
+                console.error(err);
+                $('#connection-status')
+                    .removeClass('alert-info alert-success')
+                    .addClass('alert-danger')
+                    .html('<i class="fas fa-exclamation-triangle"></i> Chyba připojení: ' + err);
+            });
+
+            // Reconnect on disconnect
+            connection.onclose(async () => {
+                $('#connection-status')
+                    .removeClass('alert-success')
+                    .addClass('alert-warning')
+                    .html('<i class="fas fa-sync fa-spin"></i> Znovu se připojuji...');
+                await start();
+            });
+        }
+
+        function addExecution(data) {
+            const template = $('#execution-template').html();
+            const html = template
+                .replace(/{executionId}/g, data.executionId)
+                .replace(/{input}/g, data.input)
+                .replace(/{currentStep}/g, '1')
+                .replace(/{progress}/g, '10')
+                .replace(/{currentPhase}/g, 'Inicializace...')
+                .replace(/{startTime}/g, new Date().getTime());
+
+            $('#active-executions').find('.text-center').remove();
+            $('#active-executions').append(html);
+            
+            activeExecutions.set(data.executionId, {
+                startTime: new Date(),
+                currentStep: 1
+            });
+
+            updateActiveCount();
+        }
+
+        function addStep(executionId, step) {
+            const container = $(`.execution-card[data-execution-id="${executionId}"] .steps-container`);
+            const template = $('#step-template').html();
+            const html = template
+                .replace(/{icon}/g, step.icon)
+                .replace(/{color}/g, step.color)
+                .replace(/{title}/g, step.title)
+                .replace(/{content}/g, step.content)
+                .replace(/{timestamp}/g, step.timestamp);
+
+            container.append(html);
+            container.scrollTop(container[0].scrollHeight);
+        }
+
+        function updateProgress(executionId, step, phase) {
+            const execution = activeExecutions.get(executionId);
+            if (execution) {
+                execution.currentStep = step;
+                const progress = Math.min(step * 20, 90); // Max 90% until completion
+                
+                $(`.execution-card[data-execution-id="${executionId}"]`)
+                    .find('.badge').text('Krok ' + step).end()
+                    .find('.progress-bar')
+                        .css('width', progress + '%')
+                        .text(phase);
+            }
+        }
+
+        function completeExecution(executionId, finalAnswer, success) {
+            const card = $(`.execution-card[data-execution-id="${executionId}"]`);
+            
+            // Update progress to 100%
+            card.find('.progress-bar')
+                .removeClass('progress-bar-animated bg-info')
+                .addClass(success ? 'bg-success' : 'bg-danger')
+                .css('width', '100%')
+                .text('Dokončeno');
+
+            // Add final answer
+            addStep(executionId, {
+                type: 'final',
+                icon: 'fas fa-flag-checkered',
+                color: success ? 'text-success' : 'text-danger',
+                title: 'Finální odpověď',
+                content: finalAnswer,
+                timestamp: new Date().toLocaleTimeString()
+            });
+
+            // Remove from active executions after delay
+            setTimeout(() => {
+                card.fadeOut(() => {
+                    card.remove();
+                    activeExecutions.delete(executionId);
+                    updateActiveCount();
+                });
+            }, 10000); // Keep for 10 seconds after completion
+        }
+
+        function updateActiveCount() {
+            $('#active-count').text(activeExecutions.size);
+        }
+
+        function startTimers() {
+            setInterval(() => {
+                $('.timer').each(function() {
+                    const start = parseInt($(this).data('start'));
+                    const elapsed = Math.floor((new Date().getTime() - start) / 1000);
+                    $(this).text(elapsed + 's');
+                });
+            }, 1000);
+        }
+
+        function loadActiveExecutions() {
+            $.get('/api/react/executions/active', function(data) {
+                data.forEach(execution => addExecution(execution));
+            });
+        }
+
+        function viewDetails(executionId) {
+            window.open('/ReActAgents/ExecutionDetails/' + executionId, '_blank');
+        }
+
+        function collapseExecution(executionId) {
+            $(`.execution-card[data-execution-id="${executionId}"] .card-body`).slideToggle();
+        }
+    </script>
+}
+
+@section Styles {
+    <style>
+        .execution-card {
+            transition: all 0.3s ease;
+        }
+
+        .step-item {
+            border-left: 3px solid #dee2e6;
+            padding-left: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .step-item:hover {
+            background-color: rgba(0, 123, 255, 0.05);
+        }
+
+        .step-icon {
+            width: 30px;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        .animated {
+            animation-duration: 0.5s;
+            animation-fill-mode: both;
+        }
+
+        .fadeIn {
+            animation-name: fadeIn;
+        }
+
+        @@keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 0;
+        }
+
+        .dark-mode pre {
+            background-color: #2c3338;
+            border-color: #444;
+        }
+
+        .progress {
+            background-color: #e9ecef;
+        }
+
+        .dark-mode .progress {
+            background-color: #454d55;
+        }
+    </style>
+}

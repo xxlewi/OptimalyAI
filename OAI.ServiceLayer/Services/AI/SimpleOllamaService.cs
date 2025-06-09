@@ -62,7 +62,7 @@ namespace OAI.ServiceLayer.Services.AI
                     PropertyNameCaseInsensitive = true
                 };
                 
-                var result = JsonSerializer.Deserialize<OpenAIChatResponse>(responseContent, options);
+                var result = JsonSerializer.Deserialize<OpenAICompatibleResponse>(responseContent, options);
                 
                 if (result?.Choices?.FirstOrDefault()?.Message?.Content == null)
                 {
@@ -213,6 +213,51 @@ namespace OAI.ServiceLayer.Services.AI
             
             [JsonPropertyName("modified_at")]
             public DateTime ModifiedAt { get; set; }
+        }
+
+        private class OpenAICompatibleResponse
+        {
+            [JsonPropertyName("id")]
+            public string Id { get; set; } = string.Empty;
+            
+            [JsonPropertyName("object")]
+            public string Object { get; set; } = string.Empty;
+            
+            [JsonPropertyName("created")]
+            public long Created { get; set; }
+            
+            [JsonPropertyName("model")]
+            public string Model { get; set; } = string.Empty;
+            
+            [JsonPropertyName("choices")]
+            public List<Choice> Choices { get; set; } = new();
+            
+            [JsonPropertyName("usage")]
+            public Usage Usage { get; set; }
+        }
+        
+        private class Choice
+        {
+            [JsonPropertyName("index")]
+            public int Index { get; set; }
+            
+            [JsonPropertyName("message")]
+            public ChatMessage Message { get; set; }
+            
+            [JsonPropertyName("finish_reason")]
+            public string FinishReason { get; set; } = string.Empty;
+        }
+        
+        private class Usage
+        {
+            [JsonPropertyName("prompt_tokens")]
+            public int PromptTokens { get; set; }
+            
+            [JsonPropertyName("completion_tokens")]
+            public int CompletionTokens { get; set; }
+            
+            [JsonPropertyName("total_tokens")]
+            public int TotalTokens { get; set; }
         }
     }
 }
