@@ -21,7 +21,9 @@ class DevRunner:
         self.port = 5005
         self.url = f"https://localhost:{self.port}"
         self.process = None
-        self.log_file = f"dev-runner-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+        self.logs_dir = "logs"
+        os.makedirs(self.logs_dir, exist_ok=True)
+        self.log_file = os.path.join(self.logs_dir, f"dev-runner-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log")
         
     def is_port_in_use(self):
         """Kontrola jestli port není obsazený"""
@@ -157,8 +159,8 @@ class DevRunner:
     
     def show_logs(self, lines=50):
         """Zobrazí posledních N řádků logů"""
-        # Najdeme nejnovější log soubor
-        result = subprocess.run("ls -t dev-runner-*.log 2>/dev/null | head -1", 
+        # Najdeme nejnovější log soubor ve složce logs
+        result = subprocess.run(f"ls -t {self.logs_dir}/dev-runner-*.log 2>/dev/null | head -1", 
                                shell=True, capture_output=True, text=True)
         if result.stdout:
             log_file = result.stdout.strip()
