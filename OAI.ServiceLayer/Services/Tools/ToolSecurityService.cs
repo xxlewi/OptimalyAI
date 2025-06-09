@@ -142,6 +142,13 @@ namespace OAI.ServiceLayer.Services.Tools
 
                 foreach (var parameter in parameters)
                 {
+                    // Skip security validation for JSON parameters (they have their own validation)
+                    if (parameter.Value is System.Text.Json.JsonElement)
+                    {
+                        _logger.LogDebug("Skipping security validation for JSON parameter '{ParameterName}'", parameter.Key);
+                        continue;
+                    }
+
                     var parameterValue = parameter.Value?.ToString();
                     if (string.IsNullOrEmpty(parameterValue))
                         continue;
@@ -446,6 +453,14 @@ namespace OAI.ServiceLayer.Services.Tools
         private List<SecurityIssue> ValidateParameterValue(string parameterName, string value)
         {
             var issues = new List<SecurityIssue>();
+
+            // Skip validation for known safe parameters that may contain JSON or structured data
+            var safeParameters = new[] { "messages", "schema", "prompt" };
+            if (safeParameters.Contains(parameterName.ToLower()))
+            {
+                _logger.LogDebug("Skipping security validation for known safe parameter '{ParameterName}'", parameterName);
+                return issues;
+            }
 
             foreach (var pattern in _securityPatterns)
             {

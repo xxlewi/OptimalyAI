@@ -302,7 +302,7 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                 success = true,
                 model = model,
                 structured_data = mockData,
-                schema_used = schemaJson,
+                schema_used = schemaJson.ToString(), // Convert JsonElement to string for serialization
                 note = "Mock structured output generated"
             };
         }
