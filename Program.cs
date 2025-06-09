@@ -21,8 +21,8 @@ try
     // Add OptimalyAI services - automatická registrace všech služeb
     builder.Services.AddOptimalyAI(builder.Configuration);
     
-    // Add Ollama AI services
-    builder.Services.AddOllamaServices(builder.Configuration);
+    // Add Ollama AI services (merged into AddOptimalyAI > AddOrchestratorServices)
+    // builder.Services.AddOllamaServices(builder.Configuration);
     
     // Add SignalR
     builder.Services.AddSignalR();

@@ -1,0 +1,315 @@
+@using OptimalyAI.Controllers
+@model List<ProjectOrchestratorViewModel>
+@{
+    ViewData["Title"] = "Project Orchestrators";
+}
+
+@section Styles {
+    <style>
+        .project-card {
+            border-left: 5px solid #007bff;
+            transition: all 0.3s ease;
+        }
+        
+        .project-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .project-card.active {
+            border-left-color: #28a745;
+        }
+        
+        .project-card.paused {
+            border-left-color: #ffc107;
+        }
+        
+        .project-card.failed {
+            border-left-color: #dc3545;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            position: relative;
+        }
+        
+        .status-indicator.active {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.paused {
+            background-color: #ffc107;
+        }
+        
+        .status-indicator.failed {
+            background-color: #dc3545;
+        }
+        
+        @@keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+            }
+        }
+        
+        .step-list {
+            counter-reset: step-counter;
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .step-list li {
+            counter-increment: step-counter;
+            position: relative;
+            padding-left: 40px;
+            margin-bottom: 15px;
+        }
+        
+        .step-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: #007bff;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .schedule-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-family: monospace;
+        }
+        
+        .dark-mode .schedule-badge {
+            background-color: #495057;
+            color: #e9ecef;
+        }
+        
+        .project-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/Orchestrators">Orchestrators</a></li>
+                    <li class="breadcrumb-item active">Projects</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Project Header -->
+        <div class="project-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="mb-3">Project-Based Orchestrators</h2>
+                    <p class="mb-0">Vytvářejte komplexní automatizované workflow pro vaše specifické business potřeby. Každý projekt může obsahovat více orchestrátorů pracujících společně.</p>
+                </div>
+                <div class="col-md-4 text-md-right">
+                    <a href="/Orchestrators/Projects/Create" class="btn btn-light btn-lg">
+                        <i class="fas fa-plus-circle"></i> Nový Projekt
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Example Use Cases -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-lightbulb"></i> Příklady použití
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <h5><i class="fas fa-search text-primary"></i> Analyzátor poptávek</h5>
+                                <p class="text-sm">Automatické vyhledávání a analýza poptávek z různých zdrojů s exportem do CRM</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h5><i class="fas fa-chart-line text-success"></i> Market Monitor</h5>
+                                <p class="text-sm">Sledování konkurence a trendů na trhu s generováním reportů</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h5><i class="fas fa-robot text-info"></i> Customer Support Bot</h5>
+                                <p class="text-sm">Automatické zpracování a kategorizace zákaznických dotazů</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h5><i class="fas fa-file-alt text-warning"></i> Content Generator</h5>
+                                <p class="text-sm">Generování obsahu na základě aktuálních trendů a keywords</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Projects List -->
+        <div class="row">
+            @foreach (var project in Model)
+            {
+                <div class="col-lg-6">
+                    <div class="card project-card @project.Status.ToString().ToLower()">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <span class="status-indicator @project.Status.ToString().ToLower()"></span>
+                                @project.Name
+                            </h3>
+                            <div class="card-tools">
+                                <span class="schedule-badge">
+                                    <i class="far fa-clock"></i> @project.Schedule
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">@project.Description</p>
+                            
+                            <h5 class="mb-3">Workflow kroky:</h5>
+                            <ol class="step-list">
+                                @foreach (var step in project.Steps)
+                                {
+                                    <li>@step</li>
+                                }
+                            </ol>
+                            
+                            <div class="row mt-3">
+                                <div class="col-6">
+                                    @if (project.LastRun.HasValue)
+                                    {
+                                        <small class="text-muted">
+                                            <i class="fas fa-history"></i> 
+                                            Poslední běh: @project.LastRun.Value.ToLocalTime().ToString("g")
+                                        </small>
+                                    }
+                                </div>
+                                <div class="col-6 text-right">
+                                    @if (project.NextRun.HasValue)
+                                    {
+                                        <small class="text-muted">
+                                            <i class="fas fa-forward"></i> 
+                                            Další běh: @project.NextRun.Value.ToLocalTime().ToString("g")
+                                        </small>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-info" onclick="viewProjectDetails('@project.Id')">
+                                    <i class="fas fa-info-circle"></i> Detaily
+                                </button>
+                                <button class="btn btn-primary" onclick="configureProject('@project.Id')">
+                                    <i class="fas fa-cog"></i> Konfigurace
+                                </button>
+                                @if (project.Status == ProjectStatus.Active)
+                                {
+                                    <button class="btn btn-warning" onclick="pauseProject('@project.Id')">
+                                        <i class="fas fa-pause"></i> Pozastavit
+                                    </button>
+                                }
+                                else if (project.Status == ProjectStatus.Paused)
+                                {
+                                    <button class="btn btn-success" onclick="resumeProject('@project.Id')">
+                                        <i class="fas fa-play"></i> Spustit
+                                    </button>
+                                }
+                                <button class="btn btn-secondary" onclick="viewLogs('@project.Id')">
+                                    <i class="fas fa-file-alt"></i> Logy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (!Model.Any())
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-project-diagram fa-4x text-muted mb-3"></i>
+                            <h4>Zatím nemáte žádné projekty</h4>
+                            <p class="text-muted">Vytvořte svůj první projekt orchestrátor pro automatizaci vašich business procesů.</p>
+                            <a href="/Orchestrators/Projects/Create" class="btn btn-primary btn-lg mt-3">
+                                <i class="fas fa-plus"></i> Vytvořit První Projekt
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        function viewProjectDetails(projectId) {
+            window.location.href = '/Orchestrators/Projects/Details/' + projectId;
+        }
+        
+        function configureProject(projectId) {
+            window.location.href = '/Orchestrators/Projects/Configure/' + projectId;
+        }
+        
+        function pauseProject(projectId) {
+            if (confirm('Opravdu chcete pozastavit tento projekt?')) {
+                // TODO: API call to pause project
+                alert('Projekt byl pozastaven');
+                location.reload();
+            }
+        }
+        
+        function resumeProject(projectId) {
+            if (confirm('Opravdu chcete spustit tento projekt?')) {
+                // TODO: API call to resume project
+                alert('Projekt byl spuštěn');
+                location.reload();
+            }
+        }
+        
+        function viewLogs(projectId) {
+            window.location.href = '/Orchestrators/Projects/Logs/' + projectId;
+        }
+    </script>
+}

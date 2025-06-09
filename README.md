@@ -1,6 +1,6 @@
 # OptimalyAI
 
-Moderní **production-ready** ASP.NET Core aplikace s 3-vrstvou architekturou, Repository pattern, automatickou registrací služeb, AdminLTE UI a enterprise-grade funkcemi.
+Moderní **production-ready** ASP.NET Core aplikace s 3-vrstvou architekturou, Repository pattern, automatickou registrací služeb, AdminLTE UI, enterprise-grade funkcemi a pokročilou AI orchestrací s ReAct pattern.
 
 ## 🏗️ Architektura
 
@@ -287,7 +287,54 @@ Profesionální admin rozhraní s:
 - České lokalizace
 - AdminLTE v3.2.0 (nejnovější verze)
 
-### ✅ **12. AI Tools Infrastructure**
+### ✅ **12. AI Orchestration s ReAct Pattern**
+Pokročilá AI orchestrace s multi-step reasoning:
+
+#### **ReAct (Reasoning + Acting) Pattern**
+Implementace ReAct patternu umožňuje AI systému:
+- **Myšlení** - Generování thought procesů před akcemi
+- **Akce** - Vykonávání akcí pomocí registrovaných nástrojů
+- **Pozorování** - Zpracování výsledků a rozhodování o dalších krocích
+- **Iterativní zpracování** - Opakování cyklu až do vyřešení úlohy
+
+```csharp
+// Automatická aktivace ReAct patternu
+var request = new ConversationOrchestratorRequestDto
+{
+    Message = "Najdi informace o počasí v Praze a porovnej s Brnem",
+    EnableTools = true,
+    Metadata = new Dictionary<string, object>
+    {
+        ["enable_react"] = true  // Aktivuje ReAct pattern
+    }
+};
+
+// ReAct provede:
+// 1. Thought: "Potřebuji získat počasí pro Prahu"
+// 2. Action: web_search("počasí Praha")
+// 3. Observation: "Praha: 15°C, oblačno"
+// 4. Thought: "Teď potřebuji počasí pro Brno"
+// 5. Action: web_search("počasí Brno")
+// 6. Observation: "Brno: 17°C, slunečno"
+// 7. Thought: "Mohu porovnat obě města"
+// 8. Final Answer: "V Praze je 15°C a oblačno, zatímco v Brně je tepleji..."
+```
+
+**Konfigurace ReAct:**
+```json
+// appsettings.json
+{
+  "ReActSettings": {
+    "Enabled": true,
+    "MaxIterations": 5,
+    "ThoughtVisibility": "Full",
+    "EnableParallelTools": false,
+    "AutoEnableForComplexQueries": true
+  }
+}
+```
+
+### ✅ **13. AI Tools Infrastructure**
 Robustní systém pro integraci a správu AI nástrojů:
 
 #### **Architektura AI Tools**
@@ -689,7 +736,11 @@ public class ProductsController : BaseApiController
 ### Development
 ```bash
 # Pomocí Python scriptu (doporučeno)
-python run-dev.py
+python run-dev.py          # Restartuje a spustí aplikaci v pozadí
+python run-dev.py status   # Zobrazí status aplikace
+python run-dev.py logs     # Zobrazí logy
+python run-dev.py stop     # Zastaví aplikaci
+python run-dev.py restart  # Restartuje aplikaci
 
 # Nebo přímo
 dotnet run
@@ -697,6 +748,9 @@ dotnet run
 
 ### Důležité URL adresy
 - 🏠 **Dashboard**: `https://localhost:5005/`
+- 🤖 **AI Chat**: `https://localhost:5005/Chat`
+- 🛠️ **AI Tools**: `https://localhost:5005/Tools`
+- 🎯 **Orchestrators**: `https://localhost:5005/Orchestrators`
 - 📊 **API Documentation**: `https://localhost:5005/api/docs`
 - 📝 **Logs**: `logs/optimaly-ai-{date}.log`
 
@@ -711,7 +765,13 @@ dotnet build
 OptimalyAI/
 ├── Controllers/
 │   ├── BaseApiController.cs          # Základní API controller s helper metodami
-│   └── HomeController.cs             # MVC controller pro dashboard
+│   ├── HomeController.cs             # MVC controller pro dashboard
+│   ├── ChatController.cs             # AI Chat interface
+│   ├── ToolsController.cs            # AI Tools management
+│   └── OrchestratorsController.cs    # Orchestrator monitoring
+├── Hubs/
+│   ├── ChatHub.cs                    # SignalR hub pro real-time chat
+│   └── MonitoringHub.cs              # Monitoring a metriky
 ├── Extensions/
 │   ├── ServiceCollectionExtensions.cs    # Automatická DI registrace
 │   ├── ApplicationBuilderExtensions.cs   # Middleware pipeline
@@ -734,6 +794,9 @@ OptimalyAI/
 │   └── ErrorViewModel.cs            # Error handling
 ├── Views/                           # Razor views s AdminLTE
 ├── wwwroot/                         # AdminLTE + statické soubory
+├── Documentation/
+│   └── Implementation/              # Implementační plány a dokumentace
+├── Test/                            # Testovací skripty
 └── Program.cs                       # Aplikace entry point
 
 OAI.Core/
@@ -754,7 +817,18 @@ OAI.Core/
 
 OAI.ServiceLayer/
 ├── Services/
-│   └── BaseService.cs              # Základní service s CRUD operacemi
+│   ├── BaseService.cs              # Základní service s CRUD operacemi
+│   ├── AI/                         # AI služby
+│   │   ├── ConversationManagerService.cs
+│   │   └── SimpleOllamaService.cs
+│   ├── Orchestration/              # Orchestrátory
+│   │   ├── Base/                   # Base classes
+│   │   ├── Implementations/        # ConversationOrchestrator, ToolChainOrchestrator
+│   │   ├── ReAct/                  # ReAct pattern implementace
+│   │   └── Strategies/             # Execution strategies
+│   └── Tools/                      # AI nástroje
+│       ├── Base/                   # Base classes pro tools
+│       └── Implementations/        # WebSearch, LLMTornado
 ├── Infrastructure/
 │   ├── Repository.cs               # Repository implementace
 │   └── UnitOfWork.cs              # UoW implementace
@@ -781,8 +855,10 @@ OAI.ServiceLayer/
 10. ✅ **Extension Methods** - modulární konfigurace
 11. ✅ **Automatické testy** - připraveno pro testování
 12. ✅ **Clean Architecture** - jasně oddělené vrstvy
-13. ✅ **AI Tools Infrastructure** - rozšiřitelný systém pro AI nástroje
-14. ✅ **Web Search Integration** - DuckDuckGo API pro vyhledávání
+13. ✅ **AI Orchestration** - ConversationOrchestrator s ReAct pattern
+14. ✅ **AI Tools Infrastructure** - rozšiřitelný systém pro AI nástroje
+15. ✅ **Web Search Integration** - DuckDuckGo API pro vyhledávání
+16. ✅ **LLM Tornado Tool** - Unifikovaný přístup k různým LLM poskytovatelům
 
 ### 🔄 **Připraveno k implementaci**
 - Health Checks pro monitoring
@@ -791,6 +867,7 @@ OAI.ServiceLayer/
 - Authentication/Authorization (JWT)
 - Performance monitoring
 - Unit a Integration testy
+- ReAct Debug UI pro vizualizaci thought procesů
 
 ## 🚀 **Deployment Ready**
 

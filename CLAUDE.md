@@ -202,3 +202,31 @@ public class MyNewTool : ITool
 - Log operations with structured logging
 - Return meaningful error messages
 - Support parameter conversion from JsonElement
+
+## AI Orchestrators
+
+The application includes a powerful AI Orchestrator system that coordinates between Ollama models and AI Tools:
+
+### ConversationOrchestrator
+- Automatically detects when to use tools based on keywords and intent
+- Integrates seamlessly with chat interface via ChatHub
+- Supports tool confidence scoring and parameter extraction
+- Keywords: "search", "find", "vyhledej", "najdi", "lookup", etc.
+
+### Using Orchestrators in Code
+```csharp
+// Orchestrators are automatically injected
+public ChatHub(IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator)
+{
+    _orchestrator = orchestrator;
+}
+
+// Execute orchestration
+var result = await _orchestrator.ExecuteAsync(request, context, cancellationToken);
+```
+
+### UI Features
+- Real-time tool usage indicators in chat
+- Animated progress indicators during tool execution
+- Tool confidence display
+- SignalR events for tool status updates

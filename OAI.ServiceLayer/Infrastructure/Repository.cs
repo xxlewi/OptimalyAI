@@ -39,8 +39,20 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
 
     public virtual async Task<T> UpdateAsync(T entity)
     {
-        _dbSet.Update(entity);
-        return await Task.FromResult(entity);
+        // Check if entity is already being tracked
+        var local = _dbSet.Local.FirstOrDefault(e => e.Id == entity.Id);
+        if (local != null)
+        {
+            // Entity is already being tracked, update its values
+            _context.Entry(local).CurrentValues.SetValues(entity);
+            return await Task.FromResult(local);
+        }
+        else
+        {
+            // Entity is not being tracked, attach and mark as modified
+            _dbSet.Update(entity);
+            return await Task.FromResult(entity);
+        }
     }
 
     public virtual async Task DeleteAsync(int id)

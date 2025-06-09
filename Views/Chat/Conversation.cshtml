@@ -104,6 +104,111 @@
             color: #6c757d;
         }
         
+        .tool-execution-indicator {
+            display: inline-flex;
+            align-items: center;
+            background-color: #17a2b8;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 0.9em;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @@keyframes pulse {
+            0% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 0.8; transform: scale(1); }
+        }
+        
+        .tool-indicator {
+            background-color: #17a2b8;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 0.9em;
+            display: inline-block;
+        }
+        
+        .tool-results {
+            margin: 15px 0;
+        }
+        
+        .tool-result-item {
+            margin-bottom: 10px;
+        }
+        
+        .tool-result-header {
+            background-color: #e3f2fd;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .tool-result-header:hover {
+            background-color: #bbdefb;
+        }
+        
+        .dark-mode .tool-result-header {
+            background-color: #2d3e50;
+            color: #e5e7eb;
+        }
+        
+        .dark-mode .tool-result-header:hover {
+            background-color: #34495e;
+        }
+        
+        .tool-result-body {
+            background-color: #f8f9fa;
+            border-left: 3px solid #17a2b8;
+            padding: 10px;
+            margin-top: 5px;
+            border-radius: 0 5px 5px 0;
+            font-size: 0.9em;
+        }
+        
+        .dark-mode .tool-result-body {
+            background-color: #2d3748;
+            border-left-color: #17a2b8;
+            color: #e5e7eb;
+        }
+        
+        .toggle-icon {
+            transition: transform 0.2s ease;
+        }
+        
+        .cursor-pointer {
+            cursor: pointer;
+        }
+        
+        .tool-confidence-badge {
+            display: inline-block;
+            background-color: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            margin-left: 8px;
+        }
+        
+        .tool-execution-progress {
+            height: 3px;
+            background-color: #17a2b8;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            animation: progress 2s ease-in-out infinite;
+        }
+        
+        @@keyframes progress {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+        
         .model-selector {
             position: absolute;
             top: 10px;
@@ -296,6 +401,22 @@
                 .withAutomaticReconnect()
                 .build();
             
+            // Handle processing started
+            connection.on("ProcessingStarted", function() {
+                console.log('Processing started');
+            });
+            
+            // Handle stream started
+            connection.on("StreamStarted", function() {
+                console.log('Stream started');
+                // Remove tool execution indicator if exists
+                if (currentMessageDiv) {
+                    currentMessageDiv.find('.tool-execution-indicator').fadeOut(300, function() {
+                        $(this).remove();
+                    });
+                }
+            });
+            
             // Handle streaming chunks
             connection.on("StreamChunk", function(chunk) {
                 if (currentMessageDiv) {
@@ -303,17 +424,66 @@
                     const currentText = content.data('raw-content') || '';
                     const newText = currentText + chunk;
                     content.data('raw-content', newText);
-                    content.html(marked.parse(newText) + content.find('.message-time')[0].outerHTML);
+                    
+                    // Parse markdown and preserve time element
+                    const timeElement = content.find('.message-time');
+                    content.html(marked.parse(newText));
+                    
+                    // Re-append time element if it exists
+                    if (timeElement.length > 0) {
+                        content.append(timeElement);
+                    } else {
+                        // Create time element if it doesn't exist
+                        const time = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+                        const timeDiv = $('<div>')
+                            .addClass('message-time')
+                            .html(time);
+                        content.append(timeDiv);
+                    }
+                    
                     scrollToBottom();
                 }
             });
             
             // Handle stream completion
             connection.on("StreamCompleted", function(metrics) {
-                if (currentMessageDiv && metrics.tokensPerSecond) {
-                    const timeDiv = currentMessageDiv.find('.message-time');
-                    const currentTime = timeDiv.html();
-                    timeDiv.html(currentTime + ` <span class="ml-2">(${metrics.tokensPerSecond.toFixed(1)} tokens/s)</span>`);
+                if (currentMessageDiv) {
+                    // Add final tool summary if tools were used
+                    const toolInfo = currentMessageDiv.data('toolInfo');
+                    if (toolInfo && toolInfo.toolsDetected) {
+                        const content = currentMessageDiv.find('.message-content');
+                        
+                        // Remove any remaining execution indicators
+                        content.find('.tool-execution-indicator').fadeOut(300, function() {
+                            $(this).remove();
+                        });
+                        
+                        // Add tool summary badge at the bottom
+                        const toolSummary = $('<div>')
+                            .addClass('tool-summary mt-3')
+                            .css({
+                                'font-size': '0.85em',
+                                'color': '#6c757d'
+                            });
+                        
+                        const toolBadge = $('<span>')
+                            .addClass('badge badge-info')
+                            .html(`<i class="fas fa-tools"></i> Použité nástroje: ${toolInfo.toolsConsidered.length}`);
+                        
+                        if (toolInfo.toolConfidence > 0.7) {
+                            toolBadge.append(` (${Math.round(toolInfo.toolConfidence * 100)}% jistota)`);
+                        }
+                        
+                        toolSummary.append(toolBadge);
+                        content.append(toolSummary);
+                    }
+                    
+                    // Update time with metrics
+                    if (metrics.tokensPerSecond) {
+                        const timeDiv = currentMessageDiv.find('.message-time');
+                        const currentTime = timeDiv.html();
+                        timeDiv.html(currentTime + ` <span class="ml-2">(${metrics.tokensPerSecond.toFixed(1)} tokens/s)</span>`);
+                    }
                 }
                 currentMessageDiv = null;
                 $('#typing-indicator').hide();
@@ -359,6 +529,118 @@
                 console.log('Generation stopped');
             });
             
+            // Handle tools usage notification
+            connection.on("ToolsUsed", function(toolInfo) {
+                console.log('Tools used:', toolInfo);
+                if (toolInfo.toolsDetected) {
+                    // Store tool info for later use
+                    if (currentMessageDiv) {
+                        currentMessageDiv.data('toolInfo', toolInfo);
+                    }
+                }
+            });
+            
+            // Handle tool execution start
+            connection.on("ToolExecutionStarted", function(toolExecution) {
+                console.log('Tool execution started:', toolExecution);
+                if (currentMessageDiv) {
+                    const content = currentMessageDiv.find('.message-content');
+                    
+                    // Update or add tool execution indicator
+                    let toolIndicator = content.find('.tool-execution-indicator');
+                    if (toolIndicator.length === 0) {
+                        toolIndicator = $('<div>').addClass('tool-execution-indicator');
+                        content.prepend(toolIndicator);
+                    }
+                    
+                    toolIndicator.html(`<i class="fas fa-cog fa-spin"></i>&nbsp;&nbsp;Používám ${toolExecution.toolName}...`);
+                    
+                    // Add tool progress if multiple tools
+                    if (toolExecution.toolIndex && toolExecution.totalTools > 1) {
+                        toolIndicator.append(` (${toolExecution.toolIndex}/${toolExecution.totalTools})`);
+                    }
+                }
+            });
+            
+            // Handle tool execution completed
+            connection.on("ToolExecutionCompleted", function(toolResult) {
+                console.log('Tool execution completed:', toolResult);
+                if (currentMessageDiv) {
+                    const content = currentMessageDiv.find('.message-content');
+                    
+                    // Create or update tool results section
+                    let toolResultsDiv = content.find('.tool-results');
+                    if (toolResultsDiv.length === 0) {
+                        toolResultsDiv = $('<div>').addClass('tool-results');
+                        // Insert after tool execution indicator but before message content
+                        const indicator = content.find('.tool-execution-indicator');
+                        if (indicator.length > 0) {
+                            indicator.after(toolResultsDiv);
+                        } else {
+                            content.prepend(toolResultsDiv);
+                        }
+                    }
+                    
+                    // Add tool result with collapsible details
+                    const resultDiv = $('<div>').addClass('tool-result-item mb-2');
+                    const resultHeader = $('<div>')
+                        .addClass('tool-result-header d-flex align-items-center cursor-pointer')
+                        .html(`
+                            <i class="fas fa-${getToolIcon(toolResult.toolId)} mr-2"></i>
+                            <span class="font-weight-bold">${toolResult.toolName}</span>
+                            <span class="ml-auto">
+                                <i class="fas fa-chevron-down toggle-icon"></i>
+                            </span>
+                        `)
+                        .css({
+                            'background-color': '#e3f2fd',
+                            'padding': '8px',
+                            'border-radius': '5px',
+                            'cursor': 'pointer'
+                        });
+                    
+                    const resultBody = $('<div>')
+                        .addClass('tool-result-body')
+                        .css({
+                            'display': 'none',
+                            'padding': '10px',
+                            'background-color': '#f8f9fa',
+                            'border-left': '3px solid #17a2b8',
+                            'margin-top': '5px',
+                            'border-radius': '0 5px 5px 0'
+                        });
+                    
+                    if (toolResult.isSuccess) {
+                        resultHeader.append(' <i class="fas fa-check-circle text-success ml-2"></i>');
+                        resultBody.html(`<small class="text-muted">Nástroj úspěšně dokončen za ${toolResult.duration}ms</small>`);
+                    } else {
+                        resultHeader.append(' <i class="fas fa-exclamation-circle text-danger ml-2"></i>');
+                        resultBody.html(`<small class="text-danger">Chyba: ${toolResult.error}</small>`);
+                    }
+                    
+                    // Toggle functionality
+                    resultHeader.on('click', function() {
+                        resultBody.slideToggle(200);
+                        $(this).find('.toggle-icon').toggleClass('fa-chevron-down fa-chevron-up');
+                    });
+                    
+                    resultDiv.append(resultHeader, resultBody);
+                    toolResultsDiv.append(resultDiv);
+                }
+            });
+            
+            // Helper function to get tool icon
+            function getToolIcon(toolId) {
+                const iconMap = {
+                    'web_search': 'search',
+                    'llm_tornado': 'tornado',
+                    'json_serialization': 'code',
+                    'calculator': 'calculator',
+                    'weather': 'cloud-sun'
+                };
+                return iconMap[toolId] || 'tools';
+            }
+            
             // Handle recent chats update
             connection.on("UpdateRecentChats", function() {
                 loadRecentChats();
@@ -397,6 +679,20 @@
                 currentMessageDiv = createMessageElement('assistant', '');
                 $('#messages-container').append(currentMessageDiv);
                 
+                // Check if message contains search keywords
+                const searchKeywords = ['search', 'find', 'vyhledej', 'najdi', 'hledej', 'lookup'];
+                const containsSearchKeyword = searchKeywords.some(keyword => 
+                    message.toLowerCase().includes(keyword)
+                );
+                
+                if (containsSearchKeyword) {
+                    // Add tool execution indicator
+                    const toolIndicator = $('<div>')
+                        .addClass('tool-execution-indicator')
+                        .html('<i class="fas fa-cog fa-spin"></i>&nbsp;&nbsp;AI analyzuje a hledá informace...');
+                    currentMessageDiv.find('.message-content').append(toolIndicator);
+                }
+                
                 // Send message via SignalR for streaming
                 await connection.invoke("SendMessage", conversationId, message, $('#model-select').val());
                 
@@ -424,7 +720,6 @@
         
         function createMessageElement(role, content, tokensPerSecond) {
             const iconClass = role === 'user' ? 'fa-user' : role === 'assistant' ? 'fa-robot' : 'fa-info-circle';
-            const processedContent = role === 'assistant' ? marked.parse(content) : escapeHtml(content);
             const time = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
             
             let timeInfo = time;
@@ -440,8 +735,13 @@
                 .html(`<i class="fas ${iconClass}"></i>`);
             
             const contentDiv = $('<div>')
-                .addClass('message-content')
-                .html(processedContent);
+                .addClass('message-content');
+            
+            // For assistant messages, we may receive empty content initially for streaming
+            if (content) {
+                const processedContent = role === 'assistant' ? marked.parse(content) : escapeHtml(content);
+                contentDiv.html(processedContent);
+            }
             
             if (role === 'assistant') {
                 contentDiv.data('raw-content', content);

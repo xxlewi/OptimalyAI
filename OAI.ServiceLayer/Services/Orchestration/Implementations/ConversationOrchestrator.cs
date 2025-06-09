@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration;
+using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Entities;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
@@ -26,6 +27,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         private readonly IToolExecutor _toolExecutor;
         private readonly IToolRegistry _toolRegistry;
         private readonly IConfiguration _configuration;
+        private readonly IReActAgent _reActAgent;
         
         // Tool detection keywords
         private readonly HashSet<string> _toolKeywords;
@@ -41,6 +43,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             IToolExecutor toolExecutor,
             IToolRegistry toolRegistry,
             IConfiguration configuration,
+            IReActAgent reActAgent,
             ILogger<ConversationOrchestrator> logger,
             IOrchestratorMetrics metrics)
             : base(logger, metrics)
@@ -50,6 +53,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
             _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _reActAgent = reActAgent ?? throw new ArgumentNullException(nameof(reActAgent));
             
             // Initialize tool detection keywords
             _toolKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -90,7 +94,16 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
 
             try
             {
-                // Step 1: Analyze message for tool needs
+                // Check if ReAct mode is enabled
+                var enableReAct = GetReActMode(request, context);
+                
+                if (enableReAct)
+                {
+                    // Use ReAct pattern for processing
+                    return await ExecuteWithReActAsync(request, context, result, response, cancellationToken);
+                }
+
+                // Step 1: Analyze message for tool needs (original logic)
                 var toolAnalysis = await AnalyzeMessageForTools(request.Message, request.EnableTools, context);
                 response.ToolsDetected = toolAnalysis.NeedsTools;
                 response.ToolsConsidered = toolAnalysis.ToolsConsidered;
@@ -358,12 +371,25 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         {
             var toolResults = new Dictionary<string, object>();
             var toolExecutionStart = DateTime.UtcNow;
+            var toolIndex = 1;
+            var totalTools = Math.Min(selectedTools.Count, request.MaxToolCalls);
             
             foreach (var (tool, parameters) in selectedTools.Take(request.MaxToolCalls))
             {
                 try
                 {
                     context.AddBreadcrumb($"Executing tool: {tool.Name}");
+                    
+                    // Raise tool execution started event
+                    if (context is OrchestratorContext orchestratorContext)
+                    {
+                        orchestratorContext.RaiseToolExecutionStarted(
+                            tool.Id, 
+                            tool.Name, 
+                            toolIndex, 
+                            totalTools, 
+                            parameters);
+                    }
                     
                     var toolStart = DateTime.UtcNow;
                     var toolResult = await _toolExecutor.ExecuteToolAsync(
@@ -392,6 +418,18 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                     AddToolUsage(result, tool.Id, tool.Name, toolStart, toolDuration,
                         toolResult.IsSuccess, parameters, toolResult.Data);
                     
+                    // Raise tool execution completed event
+                    if (context is OrchestratorContext orchestratorContext2)
+                    {
+                        orchestratorContext2.RaiseToolExecutionCompleted(
+                            tool.Id,
+                            tool.Name,
+                            toolResult.IsSuccess,
+                            toolDuration,
+                            toolResult.Data,
+                            toolResult.Error?.Message);
+                    }
+                    
                     if (toolResult.IsSuccess)
                     {
                         toolResults[tool.Id] = toolResult.Data;
@@ -402,6 +440,8 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                         context.AddLog($"Tool {tool.Name} failed: {toolResult.Error?.Message}", 
                             OrchestratorLogLevel.Warning);
                     }
+                    
+                    toolIndex++;
                 }
                 catch (Exception ex)
                 {
@@ -557,6 +597,203 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             }
 
             return health;
+        }
+
+        /// <summary>
+        /// Check if ReAct mode should be enabled for this request
+        /// </summary>
+        private bool GetReActMode(ConversationOrchestratorRequestDto request, IOrchestratorContext context)
+        {
+            // Check request-level setting
+            if (request.Metadata?.ContainsKey("enable_react") == true)
+            {
+                var requestReAct = Convert.ToBoolean(request.Metadata["enable_react"]);
+                _logger.LogInformation("ReAct mode from request metadata: {ReActMode}", requestReAct);
+                return requestReAct;
+            }
+            
+            // Check context-level setting
+            if (context.Metadata.ContainsKey("enable_react"))
+            {
+                var contextReAct = Convert.ToBoolean(context.Metadata["enable_react"]);
+                _logger.LogInformation("ReAct mode from context metadata: {ReActMode}", contextReAct);
+                return contextReAct;
+            }
+            
+            // Check configuration setting
+            var configValue = _configuration["ReActSettings:Enabled"];
+            _logger.LogInformation("Raw configuration value for ReActSettings:Enabled: '{ConfigValue}'", configValue);
+            
+            // Also check if we're in Development environment
+            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            _logger.LogInformation("Current environment: '{Environment}'", environment);
+            
+            var enableReAct = !string.IsNullOrEmpty(configValue) && bool.Parse(configValue);
+            _logger.LogInformation("ReAct mode from configuration: {ReActMode}", enableReAct);
+            
+            // Auto-enable ReAct for complex queries that likely need multi-step reasoning
+            if (!enableReAct && request.EnableTools)
+            {
+                enableReAct = IsComplexQuery(request.Message);
+                if (enableReAct)
+                {
+                    _logger.LogInformation("ReAct auto-enabled for complex query: {Message}", request.Message);
+                }
+            }
+            
+            _logger.LogInformation("Final ReAct mode decision: {ReActMode} for message: {Message}", enableReAct, request.Message);
+            return enableReAct;
+        }
+
+        /// <summary>
+        /// Check if a query is complex enough to benefit from ReAct pattern
+        /// </summary>
+        private bool IsComplexQuery(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return false;
+                
+            var lowerMessage = message.ToLowerInvariant();
+            
+            // Look for indicators of complex queries
+            var complexityIndicators = new[]
+            {
+                "compare", "porovnej", "analyze", "analyzuj",
+                "find and", "najdi a", "search for", "vyhledej",
+                "what is the difference", "jaký je rozdíl",
+                "both", "oba", "either", "buď",
+                "first", "then", "prvo", "potom",
+                "step by step", "krok za krokem"
+            };
+            
+            return complexityIndicators.Any(indicator => lowerMessage.Contains(indicator)) ||
+                   message.Count(c => c == '?') > 1 || // Multiple questions
+                   message.Split(' ').Length > 15; // Long queries
+        }
+
+        /// <summary>
+        /// Execute request using ReAct pattern
+        /// </summary>
+        private async Task<ConversationOrchestratorResponseDto> ExecuteWithReActAsync(
+            ConversationOrchestratorRequestDto request,
+            IOrchestratorContext context,
+            OrchestratorResult<ConversationOrchestratorResponseDto> result,
+            ConversationOrchestratorResponseDto response,
+            CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("Executing with ReAct pattern for message: {Message}", request.Message);
+            
+            try
+            {
+                // Store ReAct settings in context
+                var maxIterationsValue = _configuration.GetSection("ReActSettings:MaxIterations").Value;
+                context.Metadata["react_max_iterations"] = int.TryParse(maxIterationsValue, out var maxIter) ? maxIter : 5;
+                context.Metadata["react_execution_id"] = context.ExecutionId;
+                
+                var reActStartTime = DateTime.UtcNow;
+                
+                // Execute ReAct agent
+                var scratchpad = await _reActAgent.ExecuteAsync(request.Message, context, cancellationToken);
+                
+                var reActEndTime = DateTime.UtcNow;
+                result.PerformanceMetrics.ModelProcessingTime = reActEndTime - reActStartTime;
+                
+                // Record ReAct execution details
+                AddStepResult(result, "react_execution", "ReAct Execution", scratchpad.IsCompleted,
+                    reActStartTime, reActEndTime, request.Message, new
+                    {
+                        scratchpad.ExecutionId,
+                        scratchpad.IsCompleted,
+                        scratchpad.CurrentStep,
+                        ThoughtCount = scratchpad.Thoughts.Count,
+                        ActionCount = scratchpad.Actions.Count,
+                        ObservationCount = scratchpad.Observations.Count,
+                        scratchpad.FinalAnswer
+                    });
+
+                // Convert scratchpad to response format
+                response.Response = scratchpad.FinalAnswer ?? "Nepodařilo se dokončit zpracování požadavku.";
+                response.Success = scratchpad.IsCompleted;
+                response.ToolsDetected = scratchpad.Actions.Any(a => !a.IsFinalAnswer);
+                response.FinishReason = scratchpad.IsCompleted ? "stop" : "max_iterations";
+                
+                // Add ReAct-specific metadata
+                response.Metadata = new Dictionary<string, object>
+                {
+                    ["react_mode"] = true,
+                    ["react_steps"] = scratchpad.CurrentStep,
+                    ["react_thoughts"] = scratchpad.Thoughts.Count,
+                    ["react_actions"] = scratchpad.Actions.Count,
+                    ["react_observations"] = scratchpad.Observations.Count,
+                    ["react_execution_time"] = scratchpad.GetExecutionTime()?.TotalMilliseconds ?? 0
+                };
+
+                // Create tool considerations from ReAct actions
+                response.ToolsConsidered = scratchpad.Actions
+                    .Where(a => !a.IsFinalAnswer && !string.IsNullOrEmpty(a.ToolId))
+                    .Select(a => new ToolConsiderationDto
+                    {
+                        ToolId = a.ToolId,
+                        ToolName = a.ToolName,
+                        Confidence = a.Confidence,
+                        Reason = $"ReAct step {a.StepNumber}: {a.Reasoning}",
+                        WasUsed = true
+                    }).ToList();
+
+                response.DetectedIntents = scratchpad.Actions
+                    .Where(a => !string.IsNullOrEmpty(a.ToolId))
+                    .Select(a => $"{a.ToolId}_intent")
+                    .Distinct()
+                    .ToList();
+
+                response.ToolConfidence = scratchpad.Actions.Any() 
+                    ? scratchpad.Actions.Where(a => !a.IsFinalAnswer).Average(a => a.Confidence)
+                    : 0.0;
+
+                // Estimate tokens
+                var allContent = string.Join(" ", scratchpad.Thoughts.Select(t => t.Content)) + 
+                                string.Join(" ", scratchpad.Observations.Select(o => o.Content)) +
+                                (scratchpad.FinalAnswer ?? "");
+                response.TokensUsed = EstimateTokens(allContent);
+
+                // Record tool usage from ReAct observations
+                foreach (var observation in scratchpad.Observations)
+                {
+                    await _metrics.RecordToolExecutionAsync(
+                        Id,
+                        context.ExecutionId,
+                        observation.ToolId,
+                        observation.IsSuccess,
+                        observation.ExecutionTime);
+                    
+                    AddToolUsage(result, observation.ToolId, observation.ToolName, 
+                        observation.CreatedAt, observation.ExecutionTime,
+                        observation.IsSuccess, new Dictionary<string, object>(), observation.RawData);
+                }
+
+                result.PerformanceMetrics.ToolExecutions = scratchpad.Observations.Count;
+                result.PerformanceMetrics.ToolExecutionTime = scratchpad.Observations.Any()
+                    ? TimeSpan.FromMilliseconds(scratchpad.Observations.Sum(o => o.ExecutionTime.TotalMilliseconds))
+                    : TimeSpan.Zero;
+
+                _logger.LogInformation("ReAct execution completed: {Steps} steps, Final answer: {Answer}",
+                    scratchpad.CurrentStep, scratchpad.FinalAnswer?.Take(100));
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in ReAct execution");
+                
+                response.Success = false;
+                response.Response = $"Došlo k chybě při ReAct zpracování: {ex.Message}";
+                response.FinishReason = "error";
+                
+                AddStepResult(result, "react_error", "ReAct Error", false,
+                    DateTime.UtcNow, DateTime.UtcNow, request.Message, ex.Message);
+                
+                return response;
+            }
         }
 
         /// <summary>

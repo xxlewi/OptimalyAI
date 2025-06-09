@@ -1,0 +1,302 @@
+@model List<OptimalyAI.Controllers.OrchestratorViewModel>
+@{
+    ViewData["Title"] = "AI Orchestrators";
+}
+
+@section Styles {
+    <style>
+        .orchestrator-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .orchestrator-card.active {
+            border-left-color: #28a745;
+        }
+        
+        .orchestrator-card.inactive {
+            border-left-color: #dc3545;
+        }
+        
+        .orchestrator-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .metric-box {
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+        
+        .status-badge.active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .capabilities-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .capability-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+        
+        .dark-mode .capability-badge {
+            background-color: #495057;
+            color: #e9ecef;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Orchestrators</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Debug Info -->
+        @if (!Model.Any())
+        {
+            <div class="alert alert-warning">
+                <strong>Info:</strong> Žádné orchestrátory nebyly nalezeny. Zkontrolujte registraci v DI kontejneru.
+            </div>
+        }
+        
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-box">
+                    <div class="metric-value">@ViewBag.TotalOrchestrators</div>
+                    <div class="metric-label">Total Orchestrators</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-box" style="background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);">
+                    <div class="metric-value">@ViewBag.ActiveOrchestrators</div>
+                    <div class="metric-label">Active</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-box" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                    <div class="metric-value">@ViewBag.TotalExecutions</div>
+                    <div class="metric-label">Total Executions</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-box" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);">
+                    <div class="metric-value">
+                        @if (Model.Any())
+                        {
+                            @Math.Round(Model.Average(o => o.SuccessRate), 1)<text>%</text>
+                        }
+                        else
+                        {
+                            <text>0%</text>
+                        }
+                    </div>
+                    <div class="metric-label">Average Success Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions Bar -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <a href="/Orchestrators/Projects" class="btn btn-primary">
+                            <i class="fas fa-project-diagram"></i> Project Orchestrators
+                        </a>
+                        <a href="/Orchestrators/Projects/Create" class="btn btn-success">
+                            <i class="fas fa-plus"></i> Create New Project
+                        </a>
+                        <button class="btn btn-info float-right" onclick="refreshMetrics()">
+                            <i class="fas fa-sync"></i> Refresh Metrics
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Orchestrators Grid -->
+        <div class="row">
+            @foreach (var orchestrator in Model)
+            {
+                <div class="col-lg-6 col-xl-4">
+                    <div class="card orchestrator-card @(orchestrator.IsActive ? "active" : "inactive")">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-robot mr-2"></i>@orchestrator.Name
+                            </h3>
+                            <div class="card-tools">
+                                <span class="status-badge @(orchestrator.IsActive ? "active" : "inactive")">
+                                    <i class="fas fa-circle mr-1" style="font-size: 0.5rem;"></i>
+                                    @(orchestrator.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">@orchestrator.Description</p>
+                            
+                            <div class="row text-center mb-3">
+                                <div class="col-4">
+                                    <div class="description-block">
+                                        <h5 class="description-header">@orchestrator.TotalExecutions</h5>
+                                        <span class="description-text">Executions</span>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="description-block">
+                                        <h5 class="description-header text-success">@orchestrator.SuccessRate.ToString("F1")%</h5>
+                                        <span class="description-text">Success Rate</span>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="description-block">
+                                        <h5 class="description-header">@orchestrator.AverageExecutionTime.TotalMilliseconds.ToString("F0")ms</h5>
+                                        <span class="description-text">Avg Time</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (orchestrator.LastExecutionTime.HasValue)
+                            {
+                                <p class="text-sm text-muted">
+                                    <i class="far fa-clock mr-1"></i>
+                                    Last execution: @orchestrator.LastExecutionTime.Value.ToLocalTime().ToString("g")
+                                </p>
+                            }
+
+                            @if (orchestrator.Capabilities != null)
+                            {
+                                <div class="capabilities-list">
+                                    @if (orchestrator.Capabilities.SupportsStreaming)
+                                    {
+                                        <span class="capability-badge">
+                                            <i class="fas fa-stream"></i> Streaming
+                                        </span>
+                                    }
+                                    @if (orchestrator.Capabilities.SupportsParallelExecution)
+                                    {
+                                        <span class="capability-badge">
+                                            <i class="fas fa-tasks"></i> Parallel
+                                        </span>
+                                    }
+                                    @if (orchestrator.Capabilities.SupportsCancel)
+                                    {
+                                        <span class="capability-badge">
+                                            <i class="fas fa-stop-circle"></i> Cancelable
+                                        </span>
+                                    }
+                                    @foreach (var category in orchestrator.Capabilities.SupportedToolCategories ?? new List<string>())
+                                    {
+                                        <span class="capability-badge">
+                                            <i class="fas fa-tools"></i> @category
+                                        </span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="card-footer">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="/Orchestrators/Details/@orchestrator.Id" class="btn btn-info">
+                                    <i class="fas fa-info-circle"></i> Details
+                                </a>
+                                <a href="/Orchestrators/Test/@orchestrator.Id" class="btn btn-primary">
+                                    <i class="fas fa-play"></i> Test
+                                </a>
+                                <button class="btn btn-warning" onclick="viewConfig('@orchestrator.Id')">
+                                    <i class="fas fa-cog"></i> Config
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (!Model.Any())
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-robot fa-4x text-muted mb-3"></i>
+                            <h4>No Orchestrators Found</h4>
+                            <p class="text-muted">No orchestrators are currently registered in the system.</p>
+                            <a href="/Orchestrators/Projects/Create" class="btn btn-primary mt-3">
+                                <i class="fas fa-plus"></i> Create First Project
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        function refreshMetrics() {
+            location.reload();
+        }
+        
+        function viewConfig(orchestratorId) {
+            // TODO: Show configuration modal
+            alert('Configuration for orchestrator: ' + orchestratorId);
+        }
+        
+        // Auto-refresh every 30 seconds
+        setInterval(function() {
+            if (document.visibilityState === 'visible') {
+                refreshMetrics();
+            }
+        }, 30000);
+    </script>
+}

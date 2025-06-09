@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
 OptimalyAI Development Runner
-- Spouští dotnet watch přímo
+- Automaticky restartuje aplikaci
+- Běží v pozadí (detached)
 - Inteligentní správa Chrome tabů
-- Hot reload s automatickým refreshem
+- Podporuje restart příkazem
 """
 
 import subprocess
@@ -13,12 +14,14 @@ import time
 import socket
 import signal
 import threading
+import datetime
 
 class DevRunner:
     def __init__(self):
         self.port = 5005
         self.url = f"https://localhost:{self.port}"
         self.process = None
+        self.log_file = f"dev-runner-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
         
     def is_port_in_use(self):
         """Kontrola jestli port není obsazený"""
@@ -72,56 +75,53 @@ class DevRunner:
             print("🌐 Otevírám Chrome...")
             subprocess.run(['open', '-a', 'Google Chrome', self.url])
     
-    def kill_process(self):
-        """Ukončí běžící dotnet proces"""
-        if self.process:
-            print("🛑 Ukončuji aplikaci...")
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-            print("✅ Aplikace ukončena")
-    
-    def setup_signal_handlers(self):
-        """Nastaví signal handlery pro ukončení"""
-        def signal_handler(sig, frame):
-            print("\n🛑 Ukončuji...")
-            self.kill_process()
-            sys.exit(0)
+    def kill_dotnet_processes(self):
+        """Ukončí všechny dotnet procesy OptimalyAI"""
+        print("🔪 Ukončuji existující dotnet procesy OptimalyAI...")
         
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-    
-    def run(self):
-        """Hlavní run metoda"""
-        self.setup_signal_handlers()
+        # Nejdřív graceful termination
+        subprocess.run("pkill -f 'dotnet.*OptimalyAI'", shell=True, capture_output=True)
+        time.sleep(2)
         
-        print("🚀 Spouštím OptimalyAI aplikaci...")
+        # Force kill pokud ještě běží
+        check_result = subprocess.run("pgrep -f 'dotnet.*OptimalyAI'", shell=True, capture_output=True, text=True)
+        if check_result.stdout:
+            subprocess.run("pkill -9 -f 'dotnet.*OptimalyAI'", shell=True, capture_output=True)
+            time.sleep(1)
+        
+        # Ukončíme i procesy na portu
+        if self.is_port_in_use():
+            result = subprocess.run(['lsof', '-ti', f':{self.port}'], capture_output=True, text=True)
+            if result.stdout:
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    subprocess.run(['kill', '-9', pid])
+            time.sleep(1)
+            
+        print("✅ Všechny procesy ukončeny")
+    
+    def run_detached(self):
+        """Spustí aplikaci v pozadí (detached)"""
+        self.kill_dotnet_processes()
+        
+        print("🚀 Spouštím OptimalyAI aplikaci v pozadí...")
         
         try:
-            # Spustíme dotnet watch přímo s explicitním URL
-            self.process = subprocess.Popen([
-                'dotnet', 'watch', 'run', 
-                '--project', 'OptimalyAI.csproj',
-                '--urls', f'https://localhost:{self.port}'
-            ], cwd=os.getcwd(), 
-               stdout=subprocess.PIPE, 
-               stderr=subprocess.STDOUT,
-               universal_newlines=True,
-               bufsize=1)
+            # Spustíme dotnet run v pozadí s nohup
+            with open(self.log_file, 'w') as log:
+                self.process = subprocess.Popen([
+                    'nohup',
+                    'dotnet', 'run', 
+                    '--project', 'OptimalyAI.csproj',
+                    '--urls', f'https://localhost:{self.port}'
+                ], 
+                cwd=os.getcwd(),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                preexec_fn=os.setpgrp,  # Detach from parent process group
+                start_new_session=True)
             
-            # Thread pro čtení výstupu
-            def read_output():
-                try:
-                    for line in iter(self.process.stdout.readline, ''):
-                        if line:
-                            print(f"   {line.rstrip()}")
-                except:
-                    pass
-            
-            output_thread = threading.Thread(target=read_output, daemon=True)
-            output_thread.start()
+            print(f"📝 Logy se ukládají do: {self.log_file}")
             
             # Počkáme až aplikace naběhne
             print("⏳ Čekám na spuštění aplikace...")
@@ -132,91 +132,92 @@ class DevRunner:
                     self.open_chrome()
                     break
                 time.sleep(1)
+                sys.stdout.write('.')
+                sys.stdout.flush()
             else:
-                print("⚠️ Aplikace se nespustila během 30 sekund")
-            
-            print(f"\n🌐 Aplikace běží na: {self.url}")
-            print("📝 Pro ukončení stiskni Ctrl+C")
-            print("=" * 50)
-            
-            # Čekáme na ukončení procesu
-            self.process.wait()
-            
-        except KeyboardInterrupt:
-            print("\n🛑 Ukončuji...")
-            self.kill_process()
+                print("\n⚠️ Aplikace se nespustila během 30 sekund")
+                print("🔍 Zkontroluj logy:")
+                subprocess.run(['tail', '-20', self.log_file])
+                
         except Exception as e:
             print(f"❌ Chyba: {e}")
-            self.kill_process()
-
-def main():
-    print("╔════════════════════════════════════════╗")
-    print("║   OptimalyAI Development Runner        ║")
-    print("║   Direct dotnet watch                  ║")
-    print("╚════════════════════════════════════════╝\n")
     
-    runner = DevRunner()
-    
-    # Kontrola jestli port není obsazený
-    if runner.is_port_in_use():
-        print(f"⚠️ Port {runner.port} je už obsazený!")
-        print("   Buď už aplikace běží, nebo běží jiná aplikace na tomto portu.")
-        print()
-        print("🔧 Co chceš udělat?")
-        print("   [k] Ukončit procesy na portu a restartovat")
-        print("   [o] Otevřít Chrome na běžící aplikaci")
-        print("   [q] Quit")
-        
-        choice = input("\nVolba: ").lower()
-        
-        if choice == 'k':
-            print("🛑 Ukončuji procesy na portu...")
-            # Najdeme a ukončíme process na portu - ale pouze dotnet procesy
-            result = subprocess.run(['lsof', '-ti', f':{runner.port}'], capture_output=True, text=True)
+    def show_status(self):
+        """Zobrazí status aplikace"""
+        if self.is_port_in_use():
+            print(f"✅ Aplikace běží na: {self.url}")
+            
+            # Najdeme PID procesu
+            result = subprocess.run("pgrep -f 'dotnet.*OptimalyAI'", shell=True, capture_output=True, text=True)
             if result.stdout:
                 pids = result.stdout.strip().split('\n')
-                for pid in pids:
-                    # Zkontrolujeme jestli je to dotnet proces
-                    proc_check = subprocess.run(['ps', '-p', pid, '-o', 'comm='], capture_output=True, text=True)
-                    if 'dotnet' in proc_check.stdout.lower():
-                        subprocess.run(['kill', '-15', pid])  # Graceful termination first
-                        print(f"   Ukončen dotnet proces PID: {pid}")
-                        time.sleep(2)
-                        # Force kill only if still running
-                        proc_check2 = subprocess.run(['ps', '-p', pid], capture_output=True)
-                        if proc_check2.returncode == 0:
-                            subprocess.run(['kill', '-9', pid])
-                            print(f"   Force killed PID: {pid}")
-                    else:
-                        print(f"   Přeskakuji ne-dotnet proces PID: {pid}")
-            
-            # Ukončíme pouze dotnet procesy, které běží na našem portu
-            # Nepoužíváme pkill -f, protože to může zabít i Ollama server
-            dotnet_procs = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
-            if dotnet_procs.stdout:
-                lines = dotnet_procs.stdout.split('\n')
-                for line in lines:
-                    # Hledáme pouze dotnet watch run procesy s naším projektem
-                    if 'dotnet' in line and 'watch' in line and 'run' in line and 'OptimalyAI.csproj' in line:
-                        parts = line.split()
-                        if len(parts) > 1:
-                            pid = parts[1]
-                            subprocess.run(['kill', '-15', pid])
-                            print(f"   Ukončen dotnet watch proces PID: {pid}")
-            time.sleep(2)
-            if not runner.is_port_in_use():
-                print("✅ Port uvolněn, spouštím aplikaci...")
-                runner.run()
-            else:
-                print("❌ Port stále obsazený, zkus manuálně ukončit procesy")
-        elif choice == 'o':
-            print("🌐 Otevírám Chrome...")
-            runner.open_chrome()
+                print(f"📊 Běžící procesy: {', '.join(pids)}")
         else:
-            print("👋 Končím")
-        return
+            print("❌ Aplikace neběží")
     
-    runner.run()
+    def show_logs(self, lines=50):
+        """Zobrazí posledních N řádků logů"""
+        # Najdeme nejnovější log soubor
+        result = subprocess.run("ls -t dev-runner-*.log 2>/dev/null | head -1", 
+                               shell=True, capture_output=True, text=True)
+        if result.stdout:
+            log_file = result.stdout.strip()
+            print(f"📝 Zobrazuji posledních {lines} řádků z {log_file}:")
+            subprocess.run(['tail', f'-{lines}', log_file])
+        else:
+            print("❌ Žádné logy nenalezeny")
+
+def print_help():
+    """Zobrazí nápovědu"""
+    print("""
+🚀 OptimalyAI Dev Runner - Příkazy:
+    
+    run-dev.py          - Restartuje a spustí aplikaci v pozadí
+    run-dev.py status   - Zobrazí status aplikace
+    run-dev.py logs     - Zobrazí posledních 50 řádků logů
+    run-dev.py logs N   - Zobrazí posledních N řádků logů
+    run-dev.py stop     - Zastaví aplikaci
+    run-dev.py restart  - Restartuje aplikaci
+    run-dev.py help     - Zobrazí tuto nápovědu
+    """)
+
+def main():
+    runner = DevRunner()
+    
+    # Parsování argumentů
+    if len(sys.argv) > 1:
+        command = sys.argv[1].lower()
+        
+        if command == 'status':
+            runner.show_status()
+        elif command == 'logs':
+            lines = int(sys.argv[2]) if len(sys.argv) > 2 else 50
+            runner.show_logs(lines)
+        elif command == 'stop':
+            print("🛑 Zastavuji aplikaci...")
+            runner.kill_dotnet_processes()
+            print("✅ Aplikace zastavena")
+        elif command == 'restart':
+            print("🔄 Restartuji aplikaci...")
+            runner.run_detached()
+        elif command == 'help':
+            print_help()
+        else:
+            print(f"❌ Neznámý příkaz: {command}")
+            print_help()
+    else:
+        # Výchozí akce - restart a spuštění
+        print("╔════════════════════════════════════════╗")
+        print("║   OptimalyAI Development Runner        ║")
+        print("║   Auto-restart & Background Mode       ║")
+        print("╚════════════════════════════════════════╝\n")
+        
+        runner.run_detached()
+        
+        print(f"\n🌐 Aplikace běží na: {runner.url}")
+        print("📝 Pro zobrazení logů: ./run-dev.py logs")
+        print("🛑 Pro zastavení: ./run-dev.py stop")
+        print("🔄 Pro restart: ./run-dev.py restart")
 
 if __name__ == "__main__":
     main()

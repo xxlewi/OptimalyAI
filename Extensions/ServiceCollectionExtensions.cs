@@ -227,6 +227,10 @@ public static class ServiceCollectionExtensions
         // Register conversation orchestrator
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
             OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator>();
+            
+        // Register tool chain orchestrator
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.ToolChainOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
+            OAI.ServiceLayer.Services.Orchestration.Implementations.ToolChainOrchestrator>();
         
         // Register conversation manager interface for orchestrator
         services.AddScoped<OAI.ServiceLayer.Services.AI.Interfaces.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();
@@ -254,6 +258,29 @@ public static class ServiceCollectionExtensions
         
         // Register concrete tool implementations
         services.TryAddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.SimpleWebSearchTool>();
+        
+        // Register ReAct services
+        services.AddReActServices(configuration);
+        
+        return services;
+    }
+    
+    public static IServiceCollection AddReActServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Register ReAct interfaces with their implementations
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IReActAgent, OAI.ServiceLayer.Services.Orchestration.ReAct.ConversationReActAgent>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IAgentMemory, OAI.ServiceLayer.Services.Orchestration.ReAct.AgentMemory>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IThoughtProcess, OAI.ServiceLayer.Services.Orchestration.ReAct.ThoughtProcess>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IActionExecutor, OAI.ServiceLayer.Services.Orchestration.ReAct.ActionExecutor>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IObservationProcessor, OAI.ServiceLayer.Services.Orchestration.ReAct.ObservationProcessor>();
+        
+        // Register supporting classes
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.ReAct.ThoughtParser>();
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.ReAct.ActionParser>();
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.ReAct.ObservationFormatter>();
+        
+        // Add memory cache for ReAct agent memory
+        services.AddMemoryCache();
         
         return services;
     }
