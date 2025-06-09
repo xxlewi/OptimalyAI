@@ -34,6 +34,8 @@ namespace OptimalyAI.Services.Tools
                 using var scope = _serviceProvider.CreateScope();
                 var tools = scope.ServiceProvider.GetServices<ITool>();
                 
+                _logger.LogInformation("Found {Count} tools in DI container", tools.Count());
+                
                 foreach (var tool in tools)
                 {
                     try

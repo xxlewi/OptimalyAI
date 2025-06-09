@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OAI.Core.Interfaces;
 using OAI.ServiceLayer.Infrastructure;
 using System.Reflection;
@@ -166,7 +167,9 @@ public static class ServiceCollectionExtensions
                 .AddServices()
                 .AddMappers()
                 .AddApiControllers()
-                .AddValidation();
+                .AddValidation()
+                .AddOllamaServices(configuration)
+                .AddOrchestratorServices(configuration);
         
         services.AddSwaggerDocumentation();
         services.AddSecurity(configuration);
@@ -179,8 +182,8 @@ public static class ServiceCollectionExtensions
         // Configure Ollama settings
         services.Configure<OllamaSettings>(configuration.GetSection("OllamaSettings"));
         
-        // Register HttpClient for OllamaService
-        services.AddHttpClient<IOllamaService, OllamaService>((serviceProvider, client) =>
+        // Register HttpClient for OllamaService (main service)
+        services.AddHttpClient<IOllamaService, OllamaService>("MainOllamaService", (serviceProvider, client) =>
         {
             var settings = configuration.GetSection("OllamaSettings").Get<OllamaSettings>() 
                 ?? new OllamaSettings();
@@ -200,8 +203,57 @@ public static class ServiceCollectionExtensions
         // Register Web Search services
         services.AddHttpClient<OAI.ServiceLayer.Services.WebSearch.IWebSearchService, OAI.ServiceLayer.Services.WebSearch.DuckDuckGoSearchService>();
         
+        // Register HttpClient for LlmTornadoTool
+        services.AddHttpClient<OAI.ServiceLayer.Services.Tools.Implementations.LlmTornadoTool>();
+        
         // Register concrete tool implementations
         services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.SimpleWebSearchTool>();
+        services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.LlmTornadoTool>();
+        
+        return services;
+    }
+    
+    public static IServiceCollection AddOrchestratorServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Configure Ollama settings for orchestrator services
+        services.Configure<OllamaSettings>(configuration.GetSection("OllamaSettings"));
+        
+        // Register main Conversation Manager
+        services.TryAddSingleton<IConversationManager, ConversationManager>();
+        
+        // Register orchestrator metrics
+        services.AddSingleton<OAI.Core.Interfaces.Orchestration.IOrchestratorMetrics, OAI.ServiceLayer.Services.Orchestration.OrchestratorMetricsService>();
+        
+        // Register conversation orchestrator
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
+            OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator>();
+        
+        // Register conversation manager interface for orchestrator
+        services.AddScoped<OAI.ServiceLayer.Services.AI.Interfaces.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();
+        
+        // Register simple Ollama service for orchestrator
+        services.AddHttpClient<OAI.ServiceLayer.Services.AI.Interfaces.IOllamaService, OAI.ServiceLayer.Services.AI.SimpleOllamaService>("OrchestratorOllamaService", (serviceProvider, client) =>
+        {
+            var baseUrl = configuration.GetSection("OllamaSettings:BaseUrl").Value ?? "http://localhost:11434";
+            var timeout = int.Parse(configuration.GetSection("OllamaSettings:DefaultTimeout").Value ?? "30");
+            
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(timeout);
+        });
+        
+        // Register Tool services needed for orchestrators
+        services.TryAddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
+        services.TryAddScoped<OAI.Core.Interfaces.Tools.IToolExecutor, OAI.ServiceLayer.Services.Tools.ToolExecutorService>();
+        services.TryAddScoped<OAI.Core.Interfaces.Tools.IToolSecurity, OAI.ServiceLayer.Services.Tools.ToolSecurityService>();
+        
+        // Register Web Search services
+        if (!services.Any(s => s.ServiceType == typeof(OAI.ServiceLayer.Services.WebSearch.IWebSearchService)))
+        {
+            services.AddHttpClient<OAI.ServiceLayer.Services.WebSearch.IWebSearchService, OAI.ServiceLayer.Services.WebSearch.DuckDuckGoSearchService>();
+        }
+        
+        // Register concrete tool implementations
+        services.TryAddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.SimpleWebSearchTool>();
         
         return services;
     }
