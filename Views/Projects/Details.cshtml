@@ -1,0 +1,147 @@
+@model OptimalyAI.ViewModels.ProjectViewModel
+@{
+    ViewData["Title"] = $"Projekt: {Model.Name}";
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">@Model.Name</h3>
+                <div class="card-tools">
+                    <span class="badge badge-@(Model.Status switch { 
+                        ProjectStatus.Active => "success",
+                        ProjectStatus.Failed => "danger",
+                        ProjectStatus.Paused => "warning",
+                        ProjectStatus.Completed => "info",
+                        _ => "secondary"
+                    })">@Model.Status</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5>Popis projektu</h5>
+                        <p>@Model.Description</p>
+                        
+                        <h5 class="mt-4">Workflow kroky</h5>
+                        <div class="timeline">
+                            @foreach (var step in Model.Workflow.OrderBy(s => s.Order))
+                            {
+                                <div>
+                                    <i class="fas fa-@(step.Status == "completed" ? "check-circle text-success" : "circle") bg-gray"></i>
+                                    <div class="timeline-item">
+                                        <h3 class="timeline-header">@step.Name</h3>
+                                        <div class="timeline-body">
+                                            @step.Description
+                                            <br />
+                                            <small class="text-muted">Tool: @step.ToolId</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <h5 class="mt-4">Konfigurace</h5>
+                        <dl class="row">
+                            <dt class="col-sm-3">Zdroje:</dt>
+                            <dd class="col-sm-9">
+                                @foreach (var source in Model.Configuration.Sources)
+                                {
+                                    <span class="badge badge-info">@source</span>
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-3">Klíčová slova:</dt>
+                            <dd class="col-sm-9">
+                                @foreach (var keyword in Model.Configuration.Keywords)
+                                {
+                                    <span class="badge badge-primary">@keyword</span>
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-3">CRM integrace:</dt>
+                            <dd class="col-sm-9">@(string.IsNullOrEmpty(Model.Configuration.CrmIntegration) ? "Není nastavena" : Model.Configuration.CrmIntegration)</dd>
+                            
+                            <dt class="col-sm-3">Notifikační email:</dt>
+                            <dd class="col-sm-9">@(string.IsNullOrEmpty(Model.Configuration.NotificationEmail) ? "Není nastaven" : Model.Configuration.NotificationEmail)</dd>
+                        </dl>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-clock"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Plánování</span>
+                                <span class="info-box-number">@Model.Schedule</span>
+                            </div>
+                        </div>
+                        
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Úspěšnost</span>
+                                <span class="info-box-number">@Model.Metrics.SuccessRate.ToString("F1")%</span>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: @Model.Metrics.SuccessRate%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="info-box">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-tasks"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Zpracováno položek</span>
+                                <span class="info-box-number">@Model.Metrics.ItemsProcessed</span>
+                                <span class="progress-description">
+                                    Shoda: @Model.Metrics.ItemsMatched položek
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="info-box">
+                            <span class="info-box-icon bg-primary"><i class="fas fa-hourglass-half"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Průměrný čas běhu</span>
+                                <span class="info-box-number">@Model.Metrics.AverageRunTime.TotalMinutes.ToString("F1") min</span>
+                            </div>
+                        </div>
+                        
+                        @if (Model.LastRun.HasValue)
+                        {
+                            <div class="info-box">
+                                <span class="info-box-icon bg-secondary"><i class="fas fa-history"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">Poslední běh</span>
+                                    <span class="info-box-number">@Model.LastRun.Value.ToString("dd.MM.yyyy HH:mm")</span>
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (Model.NextRun.HasValue)
+                        {
+                            <div class="info-box">
+                                <span class="info-box-icon bg-info"><i class="fas fa-calendar-alt"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">Další běh</span>
+                                    <span class="info-box-number">@Model.NextRun.Value.ToString("dd.MM.yyyy HH:mm")</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary">
+                    <i class="fas fa-edit"></i> Upravit
+                </a>
+                <a asp-action="RunNow" asp-route-id="@Model.Id" class="btn btn-success">
+                    <i class="fas fa-play"></i> Spustit nyní
+                </a>
+                <a asp-action="Index" class="btn btn-default">
+                    <i class="fas fa-arrow-left"></i> Zpět na seznam
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,94 @@
+@model OptimalyAI.ViewModels.CreateProjectViewModel
+@{
+    ViewData["Title"] = "Nový projekt";
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Vytvořit nový AI projekt</h3>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Name" class="control-label"></label>
+                        <input asp-for="Name" class="form-control" placeholder="Např. Analyzátor poptávek na internetu" />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Description" class="control-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="4" 
+                                  placeholder="Podrobný popis toho, co projekt dělá a jaký je jeho účel"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="ProjectType" class="control-label"></label>
+                        <select asp-for="ProjectType" class="form-control">
+                            <option value="DemandAnalyzer">Analyzátor poptávek</option>
+                            <option value="ContentGenerator">Generátor obsahu</option>
+                            <option value="DataProcessor">Zpracování dat</option>
+                            <option value="Custom">Vlastní</option>
+                        </select>
+                        <span asp-validation-for="ProjectType" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Schedule" class="control-label"></label>
+                        <input asp-for="Schedule" class="form-control" />
+                        <small class="form-text text-muted">
+                            CRON výraz pro plánování. Příklady:
+                            <br />• <code>0 */6 * * *</code> - Každých 6 hodin
+                            <br />• <code>0 0 * * *</code> - Každý den o půlnoci
+                            <br />• <code>0 9 * * 1-5</code> - Každý všední den v 9:00
+                        </small>
+                        <span asp-validation-for="Schedule" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Vytvořit projekt
+                    </button>
+                    <a asp-action="Index" class="btn btn-default">
+                        <i class="fas fa-times"></i> Zrušit
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title">Nápověda</h3>
+            </div>
+            <div class="card-body">
+                <h5>Typy projektů</h5>
+                <dl>
+                    <dt>Analyzátor poptávek</dt>
+                    <dd>Automaticky vyhledává a analyzuje poptávky z různých zdrojů (Bazos, Facebook Marketplace) a posílá relevantní data do CRM systému</dd>
+                    
+                    <dt>Generátor obsahu</dt>
+                    <dd>Vytváří obsah na základě zadaných parametrů a klíčových slov</dd>
+                    
+                    <dt>Zpracování dat</dt>
+                    <dd>Zpracovává a transformuje data z různých zdrojů</dd>
+                    
+                    <dt>Vlastní</dt>
+                    <dd>Vlastní typ projektu s individuálním nastavením</dd>
+                </dl>
+                
+                <h5 class="mt-3">Plánování</h5>
+                <p>Projekty mohou běžet automaticky podle nastaveného plánu pomocí CRON výrazů. Můžete také spustit projekt ručně kdykoliv.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

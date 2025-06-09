@@ -1,0 +1,73 @@
+@model OptimalyAI.ViewModels.EditProjectViewModel
+@{
+    ViewData["Title"] = $"Upravit projekt: {Model.Name}";
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Upravit projekt</h3>
+            </div>
+            <form asp-action="Edit" method="post">
+                <input asp-for="Id" type="hidden" />
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Name" class="control-label"></label>
+                        <input asp-for="Name" class="form-control" />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Description" class="control-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Status" class="control-label"></label>
+                        <select asp-for="Status" class="form-control" asp-items="Html.GetEnumSelectList<ProjectStatus>()"></select>
+                        <span asp-validation-for="Status" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="ProjectType" class="control-label"></label>
+                        <select asp-for="ProjectType" class="form-control">
+                            <option value="DemandAnalyzer">Analyzátor poptávek</option>
+                            <option value="ContentGenerator">Generátor obsahu</option>
+                            <option value="DataProcessor">Zpracování dat</option>
+                            <option value="Custom">Vlastní</option>
+                        </select>
+                        <span asp-validation-for="ProjectType" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label asp-for="Schedule" class="control-label"></label>
+                        <input asp-for="Schedule" class="form-control" />
+                        <small class="form-text text-muted">
+                            CRON výraz pro plánování. Příklady:
+                            <br />• <code>0 */6 * * *</code> - Každých 6 hodin
+                            <br />• <code>0 0 * * *</code> - Každý den o půlnoci
+                            <br />• <code>0 9 * * 1-5</code> - Každý všední den v 9:00
+                        </small>
+                        <span asp-validation-for="Schedule" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Uložit změny
+                    </button>
+                    <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-default">
+                        <i class="fas fa-times"></i> Zrušit
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
