@@ -1,17 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using OAI.Core.Entities.Projects;
 
 namespace OptimalyAI.ViewModels
 {
-    public enum ProjectStatus
-    {
-        Draft,
-        Active,
-        Paused,
-        Failed,
-        Completed
-    }
     public class ProjectViewModel : BaseViewModel
     {
         public Guid Id { get; set; }
@@ -43,12 +36,43 @@ namespace OptimalyAI.ViewModels
 
         [Display(Name = "Plánování (CRON)")]
         public string Schedule { get; set; } = "0 */6 * * *"; // Every 6 hours
+        
+        [Display(Name = "Jméno zákazníka")]
+        public string CustomerName { get; set; } = string.Empty;
+        
+        [Display(Name = "Email zákazníka")]
+        [EmailAddress]
+        public string CustomerEmail { get; set; } = string.Empty;
+        
+        [Display(Name = "Odhadovaný počet hodin")]
+        [Range(0, 10000)]
+        public decimal? EstimatedHours { get; set; }
+        
+        [Display(Name = "Hodinová sazba")]
+        [Range(0, 100000)]
+        public decimal? HourlyRate { get; set; }
     }
 
     public class EditProjectViewModel : CreateProjectViewModel
     {
         public Guid Id { get; set; }
         public ProjectStatus Status { get; set; }
+        public ProjectPriority Priority { get; set; }
+        
+        [Display(Name = "Jméno zákazníka")]
+        public string CustomerName { get; set; } = string.Empty;
+        
+        [Display(Name = "Email zákazníka")]
+        [EmailAddress]
+        public string CustomerEmail { get; set; } = string.Empty;
+        
+        [Display(Name = "Odhadovaný počet hodin")]
+        [Range(0, 10000)]
+        public decimal? EstimatedHours { get; set; }
+        
+        [Display(Name = "Hodinová sazba")]
+        [Range(0, 100000)]
+        public decimal? HourlyRate { get; set; }
     }
 
     public class ProjectConfiguration

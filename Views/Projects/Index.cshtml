@@ -1,91 +1,324 @@
 @model IEnumerable<OptimalyAI.ViewModels.ProjectViewModel>
+@using OAI.Core.Entities.Projects
 @{
-    ViewData["Title"] = "AI Projekty";
+    ViewData["Title"] = "Projekty zákazníků";
 }
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">AI Projekty</h3>
-                <div class="card-tools">
-                    <a asp-action="Create" class="btn btn-primary btn-sm">
-                        <i class="fas fa-plus"></i> Nový projekt
-                    </a>
-                </div>
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Projekty zákazníků</h1>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    @foreach (var project in Model)
-                    {
-                        <div class="col-md-6 col-lg-4">
-                            <div class="card card-widget widget-user-2">
-                                <div class="widget-user-header bg-@(project.Status switch { 
-                                    ProjectStatus.Active => "success",
-                                    ProjectStatus.Failed => "danger",
-                                    ProjectStatus.Paused => "warning",
-                                    ProjectStatus.Completed => "info",
-                                    _ => "secondary"
-                                })">
-                                    <h3 class="widget-user-username">@project.Name</h3>
-                                    <h5 class="widget-user-desc">@project.Status</h5>
-                                </div>
-                                <div class="card-body">
-                                    <p class="text-muted">@project.Description</p>
-                                    <ul class="nav flex-column">
-                                        <li class="nav-item">
-                                            <span class="nav-link">
-                                                <i class="fas fa-clock"></i> Plánování: <strong>@project.Schedule</strong>
-                                            </span>
-                                        </li>
-                                        <li class="nav-item">
-                                            <span class="nav-link">
-                                                <i class="fas fa-chart-line"></i> Úspěšnost: <strong>@project.Metrics.SuccessRate.ToString("F1")%</strong>
-                                            </span>
-                                        </li>
-                                        <li class="nav-item">
-                                            <span class="nav-link">
-                                                <i class="fas fa-tasks"></i> Zpracováno: <strong>@project.Metrics.ItemsProcessed</strong> položek
-                                            </span>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <div class="card-footer">
-                                    <div class="btn-group btn-group-sm">
-                                        <a asp-action="Details" asp-route-id="@project.Id" class="btn btn-default">
-                                            <i class="fas fa-eye"></i> Detail
-                                        </a>
-                                        <a asp-action="Edit" asp-route-id="@project.Id" class="btn btn-default">
-                                            <i class="fas fa-edit"></i> Upravit
-                                        </a>
-                                        @if (project.Status == ProjectStatus.Active)
-                                        {
-                                            <a asp-action="Pause" asp-route-id="@project.Id" class="btn btn-warning">
-                                                <i class="fas fa-pause"></i> Pozastavit
-                                            </a>
-                                        }
-                                        else if (project.Status == ProjectStatus.Paused)
-                                        {
-                                            <a asp-action="Resume" asp-route-id="@project.Id" class="btn btn-success">
-                                                <i class="fas fa-play"></i> Spustit
-                                            </a>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Projekty</li>
+                </ol>
             </div>
         </div>
     </div>
 </div>
 
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Seznam projektů</h3>
+                        <div class="card-tools">
+                            <a asp-action="Create" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Nový projekt
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (!Model.Any())
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> Zatím nemáte žádné projekty. <a asp-action="Create">Vytvořte první projekt</a>.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row">
+                                @foreach (var project in Model)
+                                {
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card card-widget widget-user-2">
+                                            <div class="widget-user-header bg-@(project.Status switch { 
+                                                ProjectStatus.Active => "success",
+                                                ProjectStatus.Failed => "danger",
+                                                ProjectStatus.Paused => "warning",
+                                                ProjectStatus.Completed => "info",
+                                                ProjectStatus.Testing => "purple",
+                                                ProjectStatus.Development => "primary",
+                                                _ => "secondary"
+                                            })">
+                                                <div class="widget-user-image">
+                                                    <div class="img-circle elevation-2" style="width: 65px; height: 65px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;">
+                                                        <i class="fas fa-@(project.Status switch {
+                                                            ProjectStatus.Active => "play-circle",
+                                                            ProjectStatus.Paused => "pause-circle",
+                                                            ProjectStatus.Completed => "check-circle",
+                                                            ProjectStatus.Failed => "times-circle",
+                                                            ProjectStatus.Development => "code",
+                                                            ProjectStatus.Testing => "flask",
+                                                            _ => "project-diagram"
+                                                        }) fa-2x"></i>
+                                                    </div>
+                                                </div>
+                                                <h3 class="widget-user-username">@project.Name</h3>
+                                                <h5 class="widget-user-desc">@GetStatusText(project.Status)</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <p class="text-muted">@(project.Description?.Length > 100 ? project.Description.Substring(0, 100) + "..." : project.Description)</p>
+                                                <ul class="nav flex-column">
+                                                    <li class="nav-item">
+                                                        <span class="nav-link">
+                                                            <i class="fas fa-user"></i> Zákazník: <strong>@(ViewBag.CustomerName ?? "Interní")</strong>
+                                                        </span>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <span class="nav-link">
+                                                            <i class="fas fa-calendar"></i> Vytvořeno: <strong>@project.CreatedAt.ToString("d.M.yyyy")</strong>
+                                                        </span>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <span class="nav-link">
+                                                            <i class="fas fa-chart-line"></i> Úspěšnost: <strong>@project.Metrics.SuccessRate.ToString("F1")%</strong>
+                                                        </span>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <div class="card-footer">
+                                                <div class="btn-group btn-group-sm">
+                                                    <a asp-action="Details" asp-route-id="@project.Id" class="btn btn-default">
+                                                        <i class="fas fa-eye"></i> Detail
+                                                    </a>
+                                                    @if (project.Status == ProjectStatus.Active)
+                                                    {
+                                                        <button onclick="pauseProject('@project.Id')" class="btn btn-warning">
+                                                            <i class="fas fa-pause"></i> Pozastavit
+                                                        </button>
+                                                    }
+                                                    else if (project.Status == ProjectStatus.Paused || project.Status == ProjectStatus.Draft)
+                                                    {
+                                                        <button onclick="resumeProject('@project.Id')" class="btn btn-success">
+                                                            <i class="fas fa-play"></i> Aktivovat
+                                                        </button>
+                                                    }
+                                                    <button onclick="executeProject('@project.Id')" class="btn btn-primary">
+                                                        <i class="fas fa-rocket"></i> Spustit
+                                                    </button>
+                                                    <button onclick="deleteProject('@project.Id', '@project.Name')" class="btn btn-warning">
+                                                        <i class="fas fa-archive"></i> Archivovat
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+                
+                @if (ViewBag.ArchivedProjects != null && ((IEnumerable<OptimalyAI.ViewModels.ProjectViewModel>)ViewBag.ArchivedProjects).Any())
+                {
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h3 class="card-title">Archivované projekty</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                @foreach (var project in (IEnumerable<OptimalyAI.ViewModels.ProjectViewModel>)ViewBag.ArchivedProjects)
+                                {
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card card-widget widget-user-2" style="opacity: 0.7;">
+                                            <div class="widget-user-header bg-secondary">
+                                                <div class="widget-user-image">
+                                                    <div class="img-circle elevation-2" style="width: 65px; height: 65px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;">
+                                                        <i class="fas fa-archive fa-2x"></i>
+                                                    </div>
+                                                </div>
+                                                <h3 class="widget-user-username">@project.Name</h3>
+                                                <h5 class="widget-user-desc">Archivováno</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <p class="text-muted">@(project.Description?.Length > 100 ? project.Description.Substring(0, 100) + "..." : project.Description)</p>
+                                                <ul class="nav flex-column">
+                                                    <li class="nav-item">
+                                                        <span class="nav-link">
+                                                            <i class="fas fa-user"></i> Zákazník: <strong>@(ViewBag.CustomerName ?? "Interní")</strong>
+                                                        </span>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <span class="nav-link">
+                                                            <i class="fas fa-calendar"></i> Archivováno: <strong>@project.UpdatedAt.ToString("d.M.yyyy")</strong>
+                                                        </span>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <div class="card-footer">
+                                                <div class="btn-group btn-group-sm">
+                                                    <a asp-action="Details" asp-route-id="@project.Id" class="btn btn-default">
+                                                        <i class="fas fa-eye"></i> Detail
+                                                    </a>
+                                                    <button onclick="restoreProject('@project.Id')" class="btn btn-success">
+                                                        <i class="fas fa-undo"></i> Obnovit
+                                                    </button>
+                                                    <button onclick="permanentlyDeleteProject('@project.Id', '@project.Name')" class="btn btn-danger">
+                                                        <i class="fas fa-trash-alt"></i> Trvale smazat
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
 @section Scripts {
+    <script src="~/plugins/sweetalert2/sweetalert2.min.js"></script>
     <script>
-        // Auto-refresh every 30 seconds
-        setTimeout(function() {
-            location.reload();
-        }, 30000);
+        function pauseProject(id) {
+            Swal.fire({
+                title: 'Pozastavit projekt?',
+                text: "Projekt bude pozastaven a nebude se automaticky spouštět.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Ano, pozastavit',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('@Url.Action("Pause")', { id: id }, function(response) {
+                        if (response.success) {
+                            Swal.fire('Pozastaveno!', response.message, 'success').then(() => location.reload());
+                        } else {
+                            Swal.fire('Chyba!', response.message, 'error');
+                        }
+                    });
+                }
+            });
+        }
+
+        function resumeProject(id) {
+            $.post('@Url.Action("Resume")', { id: id }, function(response) {
+                if (response.success) {
+                    Swal.fire('Aktivováno!', response.message, 'success').then(() => location.reload());
+                } else {
+                    Swal.fire('Chyba!', response.message, 'error');
+                }
+            });
+        }
+
+        function executeProject(id) {
+            Swal.fire({
+                title: 'Spouštím projekt...',
+                html: 'Prosím čekejte',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            $.post('@Url.Action("Execute")', { id: id }, function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Projekt spuštěn!',
+                        text: response.message,
+                        showConfirmButton: true
+                    });
+                } else {
+                    Swal.fire('Chyba!', response.message, 'error');
+                }
+            }).fail(function() {
+                Swal.fire('Chyba!', 'Nepodařilo se spustit projekt.', 'error');
+            });
+        }
+
+        function deleteProject(id, name) {
+            Swal.fire({
+                title: 'Archivovat projekt?',
+                text: `Projekt "${name}" bude přesunut do archivu.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Ano, archivovat!',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('@Url.Action("Delete")', { id: id }, function(response) {
+                        if (response.success) {
+                            Swal.fire('Archivováno!', response.message, 'success').then(() => location.reload());
+                        } else {
+                            Swal.fire('Chyba!', response.message, 'error');
+                        }
+                    }).fail(function() {
+                        Swal.fire('Chyba!', 'Nepodařilo se archivovat projekt.', 'error');
+                    });
+                }
+            });
+        }
+
+        function restoreProject(id) {
+            $.post('@Url.Action("Resume")', { id: id }, function(response) {
+                if (response.success) {
+                    Swal.fire('Obnoveno!', 'Projekt byl obnoven z archivu.', 'success').then(() => location.reload());
+                } else {
+                    Swal.fire('Chyba!', response.message, 'error');
+                }
+            }).fail(function() {
+                Swal.fire('Chyba!', 'Nepodařilo se obnovit projekt.', 'error');
+            });
+        }
+
+        function permanentlyDeleteProject(id, name) {
+            Swal.fire({
+                title: 'Opravdu trvale smazat projekt?',
+                html: `<p>Projekt "${name}" bude <strong>trvale odstraněn</strong>.</p><p class="text-danger">Tuto akci nelze vrátit zpět!</p>`,
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Ano, trvale smazat!',
+                cancelButtonText: 'Zrušit',
+                focusCancel: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // TODO: Implementovat akci pro trvalé smazání
+                    Swal.fire('Info', 'Trvalé mazání ještě není implementováno.', 'info');
+                }
+            });
+        }
     </script>
+}
+
+@functions {
+    string GetStatusText(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Draft => "Koncept",
+        ProjectStatus.Analysis => "Analýza",
+        ProjectStatus.Planning => "Plánování",
+        ProjectStatus.Development => "Vývoj",
+        ProjectStatus.Testing => "Testování",
+        ProjectStatus.Active => "Aktivní",
+        ProjectStatus.Paused => "Pozastaveno",
+        ProjectStatus.Failed => "Selhalo",
+        ProjectStatus.Completed => "Dokončeno",
+        ProjectStatus.Archived => "Archivováno",
+        _ => "Neznámý"
+    };
 }

@@ -7,17 +7,18 @@ namespace OptimalyAI.Extensions;
 public static class DbContextExtensions
 {
     /// <summary>
-    /// Automaticky registruje všechny entity dědící z BaseEntity
+    /// Automaticky registruje všechny entity dědící z BaseEntity nebo BaseGuidEntity
     /// </summary>
     public static void RegisterEntitiesAutomatically(this ModelBuilder modelBuilder)
     {
-        // Najde všechny entity dědící z BaseEntity ve všech načtených assembly
+        // Najde všechny entity dědící z BaseEntity nebo BaseGuidEntity ve všech načtených assembly
         var entityTypes = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(assembly => assembly.GetTypes())
             .Where(type => type.IsClass && 
                           !type.IsAbstract && 
-                          typeof(BaseEntity).IsAssignableFrom(type) &&
-                          type != typeof(BaseEntity))
+                          (typeof(BaseEntity).IsAssignableFrom(type) || typeof(BaseGuidEntity).IsAssignableFrom(type)) &&
+                          type != typeof(BaseEntity) &&
+                          type != typeof(BaseGuidEntity))
             .ToList();
 
         foreach (var entityType in entityTypes)
@@ -28,14 +29,14 @@ public static class DbContextExtensions
     }
 
     /// <summary>
-    /// Automaticky aplikuje konfiguraci pro všechny BaseEntity
+    /// Automaticky aplikuje konfiguraci pro všechny BaseEntity a BaseGuidEntity
     /// </summary>
     public static void ConfigureBaseEntities(this ModelBuilder modelBuilder, bool isPostgreSQL = false)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             var type = entityType.ClrType;
-            if (typeof(BaseEntity).IsAssignableFrom(type))
+            if (typeof(BaseEntity).IsAssignableFrom(type) || typeof(BaseGuidEntity).IsAssignableFrom(type))
             {
                 // Automatické nastavení CreatedAt při vložení
                 var defaultSql = isPostgreSQL ? "CURRENT_TIMESTAMP" : "GETUTCDATE()";

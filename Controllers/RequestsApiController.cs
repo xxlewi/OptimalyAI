@@ -35,7 +35,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<BusinessRequestDto>>), 200)]
-        public async Task<ActionResult<ApiResponse<IEnumerable<BusinessRequestDto>>>> GetAll([FromQuery] RequestStatus? status = null)
+        public async Task<IActionResult> GetAll([FromQuery] RequestStatus? status = null)
         {
             if (status.HasValue)
             {
@@ -53,7 +53,7 @@ namespace OptimalyAI.Controllers
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<BusinessRequestDto>>> GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
             var request = await _requestService.GetRequestWithDetailsAsync(id);
             return Ok(request, "Business request retrieved successfully");
@@ -64,7 +64,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet("client/{clientId}")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<BusinessRequestDto>>), 200)]
-        public async Task<ActionResult<ApiResponse<IEnumerable<BusinessRequestDto>>>> GetByClient(string clientId)
+        public async Task<IActionResult> GetByClient(string clientId)
         {
             var requests = await _requestService.GetRequestsByClientAsync(clientId);
             return Ok(requests, "Client requests retrieved successfully");
@@ -76,7 +76,7 @@ namespace OptimalyAI.Controllers
         [HttpPost]
         [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 201)]
         [ProducesResponseType(400)]
-        public async Task<ActionResult<ApiResponse<BusinessRequestDto>>> Create([FromBody] CreateBusinessRequestDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateBusinessRequestDto dto)
         {
             var request = await _requestService.CreateRequestAsync(dto);
             
@@ -94,7 +94,7 @@ namespace OptimalyAI.Controllers
         [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<BusinessRequestDto>>> Update(int id, [FromBody] UpdateBusinessRequestDto dto)
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateBusinessRequestDto dto)
         {
             var request = await _requestService.UpdateRequestAsync(id, dto);
             
@@ -111,7 +111,7 @@ namespace OptimalyAI.Controllers
         [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<BusinessRequestDto>>> Submit(int id)
+        public async Task<IActionResult> Submit(int id)
         {
             var request = await _requestService.SubmitRequestAsync(id);
             
@@ -128,7 +128,7 @@ namespace OptimalyAI.Controllers
         [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<BusinessRequestDto>>> Cancel(int id, [FromBody] CancelRequestDto dto)
+        public async Task<IActionResult> Cancel(int id, [FromBody] CancelRequestDto dto)
         {
             var request = await _requestService.CancelRequestAsync(id, dto.Reason);
             
@@ -161,7 +161,7 @@ namespace OptimalyAI.Controllers
         [ProducesResponseType(typeof(ApiResponse<RequestExecutionDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<RequestExecutionDto>>> StartExecution(int id)
+        public async Task<IActionResult> StartExecution(int id)
         {
             var executionDto = new CreateRequestExecutionDto
             {
@@ -182,7 +182,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet("{id}/executions")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<RequestExecutionDto>>), 200)]
-        public async Task<ActionResult<ApiResponse<IEnumerable<RequestExecutionDto>>>> GetExecutions(int id)
+        public async Task<IActionResult> GetExecutions(int id)
         {
             var request = await _requestService.GetRequestWithDetailsAsync(id);
             return Ok(request.Executions.AsEnumerable(), "Executions retrieved successfully");
@@ -194,7 +194,7 @@ namespace OptimalyAI.Controllers
         [HttpGet("executions/{executionId}/progress")]
         [ProducesResponseType(typeof(ApiResponse<ExecutionProgressDto>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<ExecutionProgressDto>>> GetExecutionProgress(int executionId)
+        public async Task<IActionResult> GetExecutionProgress(int executionId)
         {
             var progress = await _executionService.GetExecutionProgressAsync(executionId);
             return Ok(progress, "Execution progress retrieved successfully");
@@ -206,7 +206,7 @@ namespace OptimalyAI.Controllers
         [HttpPost("executions/{executionId}/pause")]
         [ProducesResponseType(typeof(ApiResponse<RequestExecutionDto>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<RequestExecutionDto>>> PauseExecution(int executionId)
+        public async Task<IActionResult> PauseExecution(int executionId)
         {
             var execution = await _executionService.PauseExecutionAsync(executionId);
             
@@ -222,7 +222,7 @@ namespace OptimalyAI.Controllers
         [HttpPost("executions/{executionId}/resume")]
         [ProducesResponseType(typeof(ApiResponse<RequestExecutionDto>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<RequestExecutionDto>>> ResumeExecution(int executionId)
+        public async Task<IActionResult> ResumeExecution(int executionId)
         {
             var execution = await _executionService.ResumeExecutionAsync(executionId);
             
@@ -238,7 +238,7 @@ namespace OptimalyAI.Controllers
         [HttpPost("executions/{executionId}/cancel")]
         [ProducesResponseType(typeof(ApiResponse<RequestExecutionDto>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<RequestExecutionDto>>> CancelExecution(int executionId)
+        public async Task<IActionResult> CancelExecution(int executionId)
         {
             var execution = await _executionService.CancelExecutionAsync(executionId);
             
@@ -253,7 +253,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet("executions/active")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<RequestExecutionDto>>), 200)]
-        public async Task<ActionResult<ApiResponse<IEnumerable<RequestExecutionDto>>>> GetActiveExecutions()
+        public async Task<IActionResult> GetActiveExecutions()
         {
             var executions = await _executionService.GetActiveExecutionsAsync();
             return Ok(executions, "Active executions retrieved successfully");

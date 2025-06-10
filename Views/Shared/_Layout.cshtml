@@ -141,6 +141,34 @@
                                 <p>Dashboard</p>
                             </a>
                         </li>
+                        <li class="nav-header">ZÁKAZNÍCI</li>
+                        <li class="nav-item">
+                            <a asp-controller="Customers" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-users"></i>
+                                <p>Seznam zákazníků</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Customers" asp-action="Create" class="nav-link">
+                                <i class="nav-icon fas fa-user-plus"></i>
+                                <p>Nový zákazník</p>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-header">PROJEKTY</li>
+                        <li class="nav-item">
+                            <a asp-controller="Projects" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-project-diagram"></i>
+                                <p>Seznam projektů</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Projects" asp-action="Create" class="nav-link">
+                                <i class="nav-icon fas fa-plus-circle"></i>
+                                <p>Nový projekt</p>
+                            </a>
+                        </li>
+                        
                         <li class="nav-header">POŽADAVKY</li>
                         <li class="nav-item">
                             <a asp-controller="Requests" asp-action="New" class="nav-link">

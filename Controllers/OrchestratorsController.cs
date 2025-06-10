@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration;
+using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.ServiceLayer.Services.Orchestration.Base;
 using OptimalyAI.ViewModels;

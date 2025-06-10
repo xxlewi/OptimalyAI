@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
     {
         // Registrace generického repository
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped(typeof(IGuidRepository<>), typeof(GuidRepository<>));
         
         // Unit of Work
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -107,6 +108,16 @@ public static class ServiceCollectionExtensions
                 services.AddScoped(interfaceType, serviceType);
             }
         }
+        
+        // Explicitní registrace projektových služeb
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectService, OAI.ServiceLayer.Services.Projects.ProjectService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectWorkflowService, OAI.ServiceLayer.Services.Projects.ProjectWorkflowService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectExecutionService, OAI.ServiceLayer.Services.Projects.ProjectExecutionService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectMetricsService, OAI.ServiceLayer.Services.Projects.ProjectMetricsService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectContextService, OAI.ServiceLayer.Services.Projects.ProjectContextService>();
+
+        // Explicitní registrace zákaznických služeb
+        services.AddScoped<OAI.ServiceLayer.Services.Customers.ICustomerService, OAI.ServiceLayer.Services.Customers.CustomerService>();
 
         return services;
     }

@@ -26,7 +26,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<WorkflowTemplateDto>>), 200)]
-        public async Task<ActionResult<ApiResponse<IEnumerable<WorkflowTemplateDto>>>> GetAll([FromQuery] bool? activeOnly = true)
+        public async Task<IActionResult> GetAll([FromQuery] bool? activeOnly = true)
         {
             if (activeOnly == true)
             {
@@ -44,7 +44,7 @@ namespace OptimalyAI.Controllers
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(ApiResponse<WorkflowTemplateDto>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<WorkflowTemplateDto>>> GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
             var template = await _workflowService.GetTemplateWithStepsAsync(id);
             return Ok(template, "Workflow template retrieved successfully");
@@ -55,7 +55,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet("request-type/{requestType}")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<WorkflowTemplateDto>>), 200)]
-        public async Task<ActionResult<ApiResponse<IEnumerable<WorkflowTemplateDto>>>> GetByRequestType(string requestType)
+        public async Task<IActionResult> GetByRequestType(string requestType)
         {
             var templates = await _workflowService.GetTemplatesByRequestTypeAsync(requestType);
             return Ok(templates, "Workflow templates retrieved successfully");
@@ -67,7 +67,7 @@ namespace OptimalyAI.Controllers
         [HttpPost]
         [ProducesResponseType(typeof(ApiResponse<WorkflowTemplateDto>), 201)]
         [ProducesResponseType(400)]
-        public async Task<ActionResult<ApiResponse<WorkflowTemplateDto>>> Create([FromBody] CreateWorkflowTemplateDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateWorkflowTemplateDto dto)
         {
             var template = await _workflowService.CreateTemplateAsync(dto);
             return CreatedAtAction(nameof(GetById), new { id = template.Id }, 
@@ -81,7 +81,7 @@ namespace OptimalyAI.Controllers
         [ProducesResponseType(typeof(ApiResponse<WorkflowTemplateDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<WorkflowTemplateDto>>> Update(int id, [FromBody] UpdateWorkflowTemplateDto dto)
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateWorkflowTemplateDto dto)
         {
             var template = await _workflowService.UpdateTemplateAsync(id, dto);
             return Ok(template, "Workflow template updated successfully");
@@ -93,7 +93,7 @@ namespace OptimalyAI.Controllers
         [HttpPost("{id}/clone")]
         [ProducesResponseType(typeof(ApiResponse<WorkflowTemplateDto>), 201)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<WorkflowTemplateDto>>> Clone(int id, [FromBody] CloneTemplateDto dto)
+        public async Task<IActionResult> Clone(int id, [FromBody] CloneTemplateDto dto)
         {
             var template = await _workflowService.CloneTemplateAsync(id, dto.NewName);
             return CreatedAtAction(nameof(GetById), new { id = template.Id }, 
@@ -106,7 +106,7 @@ namespace OptimalyAI.Controllers
         [HttpPost("{id}/deactivate")]
         [ProducesResponseType(typeof(ApiResponse<bool>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<bool>>> Deactivate(int id)
+        public async Task<IActionResult> Deactivate(int id)
         {
             var result = await _workflowService.DeactivateTemplateAsync(id);
             return Ok(result, "Workflow template deactivated successfully");
@@ -131,7 +131,7 @@ namespace OptimalyAI.Controllers
         [ProducesResponseType(typeof(ApiResponse<WorkflowTemplateDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<WorkflowTemplateDto>>> AddStep(int id, [FromBody] CreateWorkflowStepDto dto)
+        public async Task<IActionResult> AddStep(int id, [FromBody] CreateWorkflowStepDto dto)
         {
             var template = await _workflowService.AddStepAsync(id, dto);
             return Ok(template, "Step added successfully");
@@ -143,7 +143,7 @@ namespace OptimalyAI.Controllers
         [HttpDelete("{templateId}/steps/{stepId}")]
         [ProducesResponseType(typeof(ApiResponse<bool>), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<bool>>> RemoveStep(int templateId, int stepId)
+        public async Task<IActionResult> RemoveStep(int templateId, int stepId)
         {
             var result = await _workflowService.RemoveStepAsync(templateId, stepId);
             return Ok(result, "Step removed successfully");
@@ -156,7 +156,7 @@ namespace OptimalyAI.Controllers
         [ProducesResponseType(typeof(ApiResponse<WorkflowTemplateDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<ApiResponse<WorkflowTemplateDto>>> ReorderSteps(int id, [FromBody] ReorderStepsDto dto)
+        public async Task<IActionResult> ReorderSteps(int id, [FromBody] ReorderStepsDto dto)
         {
             var template = await _workflowService.ReorderStepsAsync(id, dto.StepOrders);
             return Ok(template, "Steps reordered successfully");
@@ -167,7 +167,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet("request-types")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<string>>), 200)]
-        public ActionResult<ApiResponse<IEnumerable<string>>> GetRequestTypes()
+        public IActionResult GetRequestTypes()
         {
             // This could be moved to configuration or database
             var requestTypes = new[]
@@ -189,7 +189,7 @@ namespace OptimalyAI.Controllers
         /// </summary>
         [HttpGet("step-types")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<string>>), 200)]
-        public ActionResult<ApiResponse<IEnumerable<string>>> GetStepTypes()
+        public IActionResult GetStepTypes()
         {
             var stepTypes = new[]
             {

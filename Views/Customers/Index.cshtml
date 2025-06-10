@@ -1,0 +1,229 @@
+@model IEnumerable<OAI.Core.DTOs.Customers.CustomerListDto>
+@using OAI.Core.Entities.Customers
+@{
+    ViewData["Title"] = "Zákazníci";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Správa zákazníků</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Zákazníci</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Seznam zákazníků</h3>
+                        <div class="card-tools">
+                            <div class="input-group input-group-sm" style="width: 300px;">
+                                <input type="text" id="customerSearch" class="form-control float-right" placeholder="Hledat...">
+                                <div class="input-group-append">
+                                    <button type="button" class="btn btn-default" onclick="searchCustomers()">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <a asp-action="Create" class="btn btn-primary btn-sm ml-2">
+                                <i class="fas fa-plus"></i> Nový zákazník
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover text-nowrap">
+                            <thead>
+                                <tr>
+                                    <th>Název</th>
+                                    <th>IČO</th>
+                                    <th>Email</th>
+                                    <th>Telefon</th>
+                                    <th>Typ</th>
+                                    <th>Segment</th>
+                                    <th>Status</th>
+                                    <th>Projekty</th>
+                                    <th>Hodnota</th>
+                                    <th>Akce</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customerTableBody">
+                                @foreach (var customer in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a asp-action="Details" asp-route-id="@customer.Id" class="text-primary">
+                                                <strong>@customer.Name</strong>
+                                                @if (!string.IsNullOrEmpty(customer.CompanyName))
+                                                {
+                                                    <br />
+                                                    <small class="text-muted">@customer.CompanyName</small>
+                                                }
+                                            </a>
+                                        </td>
+                                        <td>@(customer.CompanyName ?? "-")</td>
+                                        <td>
+                                            <a href="mailto:@customer.Email">@customer.Email</a>
+                                        </td>
+                                        <td>@(customer.Phone ?? "-")</td>
+                                        <td>
+                                            <span class="badge badge-@(customer.Type switch {
+                                                CustomerType.Individual => "info",
+                                                CustomerType.Company => "primary",
+                                                CustomerType.Government => "warning",
+                                                CustomerType.NonProfit => "success",
+                                                _ => "secondary"
+                                            })">@GetTypeText(customer.Type)</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-@(customer.Segment switch {
+                                                CustomerSegment.VIP => "danger",
+                                                CustomerSegment.Premium => "warning",
+                                                CustomerSegment.Strategic => "purple",
+                                                _ => "secondary"
+                                            })">@GetSegmentText(customer.Segment)</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-@(customer.Status switch {
+                                                CustomerStatus.Active => "success",
+                                                CustomerStatus.Lead => "info",
+                                                CustomerStatus.Inactive => "secondary",
+                                                CustomerStatus.Suspended => "warning",
+                                                CustomerStatus.Blacklisted => "danger",
+                                                _ => "secondary"
+                                            })">@GetStatusText(customer.Status)</span>
+                                        </td>
+                                        <td>
+                                            <span class="text-primary">@customer.ActiveProjectsCount</span> / @customer.ProjectsCount
+                                        </td>
+                                        <td>
+                                            @if (customer.TotalProjectsValue > 0)
+                                            {
+                                                <strong>@customer.TotalProjectsValue.ToString("C0")</strong>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a asp-action="Details" asp-route-id="@customer.Id" class="btn btn-info" title="Detail">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a asp-action="Edit" asp-route-id="@customer.Id" class="btn btn-warning" title="Upravit">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@customer.Id" class="btn btn-success" title="Nový projekt">
+                                                    <i class="fas fa-plus"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Statistiky -->
+                <div class="row">
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-users"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Celkem zákazníků</span>
+                                <span class="info-box-number">@Model.Count()</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Aktivní zákazníci</span>
+                                <span class="info-box-number">@Model.Count(c => c.Status == CustomerStatus.Active)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-project-diagram"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Aktivní projekty</span>
+                                <span class="info-box-number">@Model.Sum(c => c.ActiveProjectsCount)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-danger"><i class="fas fa-dollar-sign"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Celková hodnota</span>
+                                <span class="info-box-number">@Model.Sum(c => c.TotalProjectsValue).ToString("C0")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        function searchCustomers() {
+            var query = $('#customerSearch').val();
+            $.get('@Url.Action("Search")', { query: query }, function(data) {
+                $('#customerTableBody').html(data);
+            });
+        }
+
+        $('#customerSearch').on('keypress', function(e) {
+            if (e.which === 13) {
+                searchCustomers();
+            }
+        });
+    </script>
+}
+
+@functions {
+    string GetTypeText(CustomerType type) => type switch
+    {
+        CustomerType.Individual => "Fyzická osoba",
+        CustomerType.Company => "Firma",
+        CustomerType.Government => "Státní správa",
+        CustomerType.NonProfit => "Neziskovka",
+        _ => "Neznámý"
+    };
+
+    string GetSegmentText(CustomerSegment segment) => segment switch
+    {
+        CustomerSegment.Small => "Malý",
+        CustomerSegment.Standard => "Standardní",
+        CustomerSegment.Premium => "Prémiový",
+        CustomerSegment.VIP => "VIP",
+        CustomerSegment.Strategic => "Strategický",
+        _ => "Neznámý"
+    };
+
+    string GetStatusText(CustomerStatus status) => status switch
+    {
+        CustomerStatus.Lead => "Potenciální",
+        CustomerStatus.Active => "Aktivní",
+        CustomerStatus.Inactive => "Neaktivní",
+        CustomerStatus.Suspended => "Pozastavený",
+        CustomerStatus.Blacklisted => "Blacklist",
+        _ => "Neznámý"
+    };
+}

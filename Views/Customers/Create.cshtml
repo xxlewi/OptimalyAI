@@ -1,0 +1,309 @@
+@model OptimalyAI.ViewModels.CreateCustomerViewModel
+@using OAI.Core.Entities.Customers
+@{
+    ViewData["Title"] = "Nový zákazník";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Nový zákazník</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-action="Index">Zákazníci</a></li>
+                    <li class="breadcrumb-item active">Nový zákazník</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <form asp-action="Create" method="post">
+            <div class="row">
+                <div class="col-md-8">
+                    <!-- Základní údaje -->
+                    <div class="card card-primary">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-user"></i> Základní údaje</h3>
+                        </div>
+                        <div class="card-body">
+                            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Name" class="control-label"></label>
+                                        <input asp-for="Name" class="form-control" placeholder="Jméno nebo název zákazníka" />
+                                        <span asp-validation-for="Name" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="CompanyName" class="control-label"></label>
+                                        <input asp-for="CompanyName" class="form-control" placeholder="Název společnosti (nepovinné)" />
+                                        <span asp-validation-for="CompanyName" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label asp-for="ICO" class="control-label"></label>
+                                        <input asp-for="ICO" class="form-control" placeholder="12345678" />
+                                        <span asp-validation-for="ICO" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label asp-for="DIC" class="control-label"></label>
+                                        <input asp-for="DIC" class="form-control" placeholder="CZ12345678" />
+                                        <span asp-validation-for="DIC" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label asp-for="Type" class="control-label"></label>
+                                        <select asp-for="Type" class="form-control">
+                                            <option value="Individual">Fyzická osoba</option>
+                                            <option value="Company">Firma</option>
+                                            <option value="Government">Státní správa</option>
+                                            <option value="NonProfit">Neziskovka</option>
+                                        </select>
+                                        <span asp-validation-for="Type" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label asp-for="Segment" class="control-label"></label>
+                                        <select asp-for="Segment" class="form-control">
+                                            <option value="Small">Malý</option>
+                                            <option value="Standard">Standardní</option>
+                                            <option value="Premium">Prémiový</option>
+                                            <option value="VIP">VIP</option>
+                                            <option value="Strategic">Strategický</option>
+                                        </select>
+                                        <span asp-validation-for="Segment" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kontaktní údaje -->
+                    <div class="card card-info">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-phone"></i> Kontaktní údaje</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Email" class="control-label"></label>
+                                        <input asp-for="Email" class="form-control" type="email" placeholder="zakaznik@firma.cz" />
+                                        <span asp-validation-for="Email" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="ContactPerson" class="control-label"></label>
+                                        <input asp-for="ContactPerson" class="form-control" placeholder="Jméno kontaktní osoby" />
+                                        <span asp-validation-for="ContactPerson" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="Phone" class="control-label"></label>
+                                        <input asp-for="Phone" class="form-control" placeholder="+420 123 456 789" />
+                                        <span asp-validation-for="Phone" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="Mobile" class="control-label"></label>
+                                        <input asp-for="Mobile" class="form-control" placeholder="+420 777 888 999" />
+                                        <span asp-validation-for="Mobile" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="PreferredCommunication" class="control-label"></label>
+                                        <select asp-for="PreferredCommunication" class="form-control">
+                                            <option value="Email">Email</option>
+                                            <option value="Phone">Telefon</option>
+                                            <option value="SMS">SMS</option>
+                                            <option value="InPerson">Osobně</option>
+                                            <option value="NoPreference">Bez preference</option>
+                                        </select>
+                                        <span asp-validation-for="PreferredCommunication" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fakturační údaje -->
+                    <div class="card card-warning">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-file-invoice"></i> Fakturační údaje</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label asp-for="BillingStreet" class="control-label"></label>
+                                        <input asp-for="BillingStreet" class="form-control" placeholder="Ulice a číslo popisné" />
+                                        <span asp-validation-for="BillingStreet" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="BillingCity" class="control-label"></label>
+                                        <input asp-for="BillingCity" class="form-control" placeholder="Praha" />
+                                        <span asp-validation-for="BillingCity" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="BillingZip" class="control-label"></label>
+                                        <input asp-for="BillingZip" class="form-control" placeholder="110 00" />
+                                        <span asp-validation-for="BillingZip" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="BillingCountry" class="control-label"></label>
+                                        <input asp-for="BillingCountry" class="form-control" />
+                                        <span asp-validation-for="BillingCountry" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input asp-for="UseDeliveryAddress" class="custom-control-input" id="useDeliveryAddress" />
+                                    <label class="custom-control-label" for="useDeliveryAddress">
+                                        Jiná dodací adresa
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="deliveryAddressSection" style="display: none;">
+                                <h5>Dodací adresa</h5>
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="form-group">
+                                            <label asp-for="DeliveryStreet" class="control-label"></label>
+                                            <input asp-for="DeliveryStreet" class="form-control" placeholder="Ulice a číslo popisné" />
+                                            <span asp-validation-for="DeliveryStreet" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label asp-for="DeliveryCity" class="control-label"></label>
+                                            <input asp-for="DeliveryCity" class="form-control" placeholder="Praha" />
+                                            <span asp-validation-for="DeliveryCity" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label asp-for="DeliveryZip" class="control-label"></label>
+                                            <input asp-for="DeliveryZip" class="form-control" placeholder="110 00" />
+                                            <span asp-validation-for="DeliveryZip" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label asp-for="DeliveryCountry" class="control-label"></label>
+                                            <input asp-for="DeliveryCountry" class="form-control" placeholder="Česká republika" />
+                                            <span asp-validation-for="DeliveryCountry" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <!-- Obchodní podmínky -->
+                    <div class="card card-success">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-money-check-alt"></i> Obchodní podmínky</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="CreditLimit" class="control-label"></label>
+                                <input asp-for="CreditLimit" class="form-control" type="number" step="1000" placeholder="100000" />
+                                <span asp-validation-for="CreditLimit" class="text-danger"></span>
+                                <small class="form-text text-muted">Maximální dluh v Kč</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="PaymentTermDays" class="control-label"></label>
+                                <input asp-for="PaymentTermDays" class="form-control" type="number" />
+                                <span asp-validation-for="PaymentTermDays" class="text-danger"></span>
+                                <small class="form-text text-muted">Počet dní splatnosti faktur</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Poznámky -->
+                    <div class="card card-secondary">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-sticky-note"></i> Poznámky</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label asp-for="Notes" class="control-label"></label>
+                                <textarea asp-for="Notes" class="form-control" rows="5" placeholder="Interní poznámky k zákazníkovi..."></textarea>
+                                <span asp-validation-for="Notes" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Akce -->
+                    <div class="card">
+                        <div class="card-body">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                <i class="fas fa-save"></i> Vytvořit zákazníka
+                            </button>
+                            <a asp-action="Index" class="btn btn-default btn-block">
+                                <i class="fas fa-times"></i> Zrušit
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        $(document).ready(function() {
+            // Toggle dodací adresy
+            $('#useDeliveryAddress').change(function() {
+                if ($(this).is(':checked')) {
+                    $('#deliveryAddressSection').slideDown();
+                } else {
+                    $('#deliveryAddressSection').slideUp();
+                }
+            });
+        });
+    </script>
+}
