@@ -135,7 +135,7 @@
     <script>
         function startExecution(requestId) {
             if (confirm('Opravdu chcete spustit zpracování tohoto požadavku?')) {
-                fetch(`/api/requests/${requestId}/execute`, {
+                fetch(`/api/requestsapi/${requestId}/execute`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

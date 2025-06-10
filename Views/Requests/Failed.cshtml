@@ -162,7 +162,7 @@
         async function retryExecution(requestId) {
             if (confirm('Opravdu chcete znovu spustit zpracování tohoto požadavku?')) {
                 try {
-                    const response = await fetch(`/api/requests/${requestId}/execute`, {
+                    const response = await fetch(`/api/requestsapi/${requestId}/execute`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'

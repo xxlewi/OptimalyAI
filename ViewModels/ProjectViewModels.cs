@@ -36,15 +36,13 @@ namespace OptimalyAI.ViewModels
         [Display(Name = "Typ projektu")]
         public string ProjectType { get; set; } = "DemandAnalyzer";
 
-        [Display(Name = "Plánování (CRON)")]
-        public string Schedule { get; set; } = "0 */6 * * *"; // Every 6 hours
         
         [Display(Name = "Jméno zákazníka")]
         public string CustomerName { get; set; } = string.Empty;
         
         [Display(Name = "Email zákazníka")]
-        [EmailAddress]
-        public string CustomerEmail { get; set; } = string.Empty;
+        [EmailAddress(ErrorMessage = "Neplatný formát emailu")]
+        public string? CustomerEmail { get; set; }
         
         [Display(Name = "Odhadovaný počet hodin")]
         [Range(0, 10000)]

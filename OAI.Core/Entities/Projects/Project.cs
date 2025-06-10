@@ -14,19 +14,18 @@ namespace OAI.Core.Entities.Projects
         public string Name { get; set; }
 
         [MaxLength(500)]
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
         /// <summary>
         /// ID zákazníka
         /// </summary>
         public Guid? CustomerId { get; set; }
 
-        [Required]
         [MaxLength(200)]
-        public string CustomerName { get; set; }
+        public string? CustomerName { get; set; }
 
         [MaxLength(100)]
-        public string CustomerEmail { get; set; }
+        public string? CustomerEmail { get; set; }
 
         [MaxLength(50)]
         public string? CustomerPhone { get; set; }
@@ -34,8 +33,7 @@ namespace OAI.Core.Entities.Projects
         /// <summary>
         /// Původní požadavek od zákazníka
         /// </summary>
-        [Required]
-        public string CustomerRequirement { get; set; }
+        public string? CustomerRequirement { get; set; }
 
         /// <summary>
         /// Status projektu
@@ -46,7 +44,7 @@ namespace OAI.Core.Entities.Projects
         /// Typ projektu (např. ImageProcessing, DataAnalysis, TextGeneration)
         /// </summary>
         [MaxLength(50)]
-        public string ProjectType { get; set; }
+        public string? ProjectType { get; set; }
 
         /// <summary>
         /// Priorita projektu
@@ -99,6 +97,27 @@ namespace OAI.Core.Entities.Projects
         public int Version { get; set; } = 1;
 
         /// <summary>
+        /// Požadovaný termín dokončení od zákazníka
+        /// </summary>
+        public DateTime? RequestedDeadline { get; set; }
+
+        /// <summary>
+        /// Rozpočet projektu
+        /// </summary>
+        public decimal? Budget { get; set; }
+
+        /// <summary>
+        /// Tagy pro kategorizaci (oddělené čárkou)
+        /// </summary>
+        [MaxLength(500)]
+        public string? Tags { get; set; }
+
+        /// <summary>
+        /// Metadata projektu (JSON)
+        /// </summary>
+        public string? Metadata { get; set; }
+
+        /// <summary>
         /// Poznámky k projektu
         /// </summary>
         public string? Notes { get; set; }
@@ -144,6 +163,7 @@ namespace OAI.Core.Entities.Projects
         Low,
         Medium,
         High,
+        Urgent,
         Critical
     }
 }

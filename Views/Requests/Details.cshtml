@@ -31,16 +31,37 @@
                     <div class="card-header">
                         <h3 class="card-title">Detaily požadavku</h3>
                         <div class="card-tools">
+                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Draft)
+                            {
+                                <a href="/Requests/@Model.Id/Edit" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-edit"></i> Upravit
+                                </a>
+                                <button type="button" class="btn btn-sm btn-success" onclick="submitRequest(@Model.Id)">
+                                    <i class="fas fa-paper-plane"></i> Odeslat ke zpracování
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="deleteRequest(@Model.Id)">
+                                    <i class="fas fa-trash"></i> Smazat
+                                </button>
+                            }
                             @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Submitted)
                             {
                                 <button type="button" class="btn btn-sm btn-success" onclick="startExecution(@Model.Id)">
                                     <i class="fas fa-play"></i> Spustit zpracování
+                                </button>
+                                <button type="button" class="btn btn-sm btn-warning" onclick="returnToDraft(@Model.Id)">
+                                    <i class="fas fa-undo"></i> Vrátit k úpravám
                                 </button>
                             }
                             @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Processing)
                             {
                                 <a href="/Requests/@Model.Id/Progress" class="btn btn-sm btn-info">
                                     <i class="fas fa-chart-line"></i> Zobrazit průběh
+                                </a>
+                            }
+                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Completed)
+                            {
+                                <a href="/Requests/@Model.Id/Results" class="btn btn-sm btn-success">
+                                    <i class="fas fa-check-circle"></i> Zobrazit výsledky
                                 </a>
                             }
                         </div>
@@ -188,9 +209,97 @@
 
 @section Scripts {
     <script>
+        function submitRequest(requestId) {
+            Swal.fire({
+                title: 'Odeslat požadavek?',
+                text: 'Po odeslání již nebude možné požadavek upravovat.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ano, odeslat',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: `/api/requestsapi/${requestId}/submit`,
+                        method: 'POST',
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire('Odesláno!', 'Požadavek byl odeslán ke zpracování.', 'success')
+                                    .then(() => location.reload());
+                            } else {
+                                Swal.fire('Chyba', response.message || 'Nepodařilo se odeslat požadavek', 'error');
+                            }
+                        },
+                        error: function() {
+                            Swal.fire('Chyba', 'Nepodařilo se komunikovat se serverem', 'error');
+                        }
+                    });
+                }
+            });
+        }
+        
+        function deleteRequest(requestId) {
+            Swal.fire({
+                title: 'Smazat požadavek?',
+                text: 'Tuto akci nelze vrátit zpět!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Ano, smazat',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: `/api/requestsapi/${requestId}`,
+                        method: 'DELETE',
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire('Smazáno!', 'Požadavek byl smazán.', 'success')
+                                    .then(() => window.location.href = '/Requests');
+                            } else {
+                                Swal.fire('Chyba', response.message || 'Nepodařilo se smazat požadavek', 'error');
+                            }
+                        },
+                        error: function() {
+                            Swal.fire('Chyba', 'Nepodařilo se komunikovat se serverem', 'error');
+                        }
+                    });
+                }
+            });
+        }
+        
+        function returnToDraft(requestId) {
+            Swal.fire({
+                title: 'Vrátit k úpravám?',
+                text: 'Požadavek bude vrácen do stavu Koncept.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ano, vrátit',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: `/api/requestsapi/${requestId}/return-to-draft`,
+                        method: 'POST',
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire('Vráceno!', 'Požadavek byl vrácen k úpravám.', 'success')
+                                    .then(() => location.reload());
+                            } else {
+                                Swal.fire('Chyba', response.message || 'Nepodařilo se vrátit požadavek', 'error');
+                            }
+                        },
+                        error: function() {
+                            Swal.fire('Chyba', 'Nepodařilo se komunikovat se serverem', 'error');
+                        }
+                    });
+                }
+            });
+        }
+        
         function startExecution(requestId) {
             if (confirm('Opravdu chcete spustit zpracování tohoto požadavku?')) {
-                fetch(`/api/requests/${requestId}/execute`, {
+                fetch(`/api/requestsapi/${requestId}/execute`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

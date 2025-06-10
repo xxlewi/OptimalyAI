@@ -30,8 +30,31 @@ namespace OptimalyAI.Controllers
         /// <summary>
         /// Seznam všech zákazníků
         /// </summary>
-        public async Task<IActionResult> Index(bool showDeleted = false)
+        public async Task<IActionResult> Index(bool showDeleted = false, bool json = false)
         {
+            if (json)
+            {
+                try
+                {
+                    var customers = await _customerService.GetAllAsync();
+                    var result = customers.Select(c => new 
+                    {
+                        id = c.Id,
+                        name = c.Name,
+                        companyName = c.CompanyName,
+                        email = c.Email,
+                        phone = c.Phone
+                    });
+                    
+                    return Json(new { success = true, data = result });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error loading customers for JSON");
+                    return Json(new { success = false, message = "Nepodařilo se načíst zákazníky" });
+                }
+            }
+            
             if (showDeleted)
             {
                 var deletedCustomers = await _customerService.GetDeletedAsync();
@@ -394,6 +417,61 @@ namespace OptimalyAI.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error permanently deleting customer {Id}", id);
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// JSON endpoint pro načtení seznamu zákazníků
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetJson()
+        {
+            try
+            {
+                var customers = await _customerService.GetAllAsync();
+                var result = customers.Select(c => new 
+                {
+                    id = c.Id,
+                    name = c.Name,
+                    companyName = c.CompanyName,
+                    email = c.Email,
+                    phone = c.Phone
+                });
+                
+                return Json(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading customers for JSON");
+                return Json(new { success = false, message = "Nepodařilo se načíst zákazníky" });
+            }
+        }
+
+        /// <summary>
+        /// JSON endpoint pro vytvoření zákazníka
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> CreateJson([FromBody] CreateCustomerDto dto)
+        {
+            try
+            {
+                var customer = await _customerService.CreateAsync(dto);
+                return Json(new { 
+                    success = true, 
+                    data = new {
+                        id = customer.Id,
+                        name = customer.Name,
+                        companyName = customer.CompanyName,
+                        email = customer.Email,
+                        phone = customer.Phone
+                    },
+                    message = "Zákazník byl vytvořen"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating customer via JSON");
                 return Json(new { success = false, message = ex.Message });
             }
         }

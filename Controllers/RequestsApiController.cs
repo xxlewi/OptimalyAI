@@ -5,6 +5,7 @@ using OAI.Core.DTOs.Business;
 using OAI.Core.Entities.Business;
 using OAI.ServiceLayer.Services.Business;
 using OptimalyAI.Hubs;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace OptimalyAI.Controllers
@@ -45,6 +46,31 @@ namespace OptimalyAI.Controllers
 
             var requests = await _requestService.GetAllAsync();
             return Ok(requests, "Business requests retrieved successfully");
+        }
+
+        /// <summary>
+        /// Get request counts by status
+        /// </summary>
+        [HttpGet("status-counts")]
+        [ProducesResponseType(typeof(ApiResponse<object>), 200)]
+        public async Task<IActionResult> GetCounts()
+        {
+            var allRequests = await _requestService.GetAllAsync();
+            
+            var counts = new
+            {
+                total = allRequests.Count(),
+                draft = allRequests.Count(r => r.Status == RequestStatus.Draft),
+                submitted = allRequests.Count(r => r.Status == RequestStatus.Submitted),
+                queued = allRequests.Count(r => r.Status == RequestStatus.Queued),
+                processing = allRequests.Count(r => r.Status == RequestStatus.Processing),
+                review = allRequests.Count(r => r.Status == RequestStatus.Review),
+                completed = allRequests.Count(r => r.Status == RequestStatus.Completed),
+                failed = allRequests.Count(r => r.Status == RequestStatus.Failed),
+                cancelled = allRequests.Count(r => r.Status == RequestStatus.Cancelled)
+            };
+
+            return Ok(counts, "Request counts retrieved successfully");
         }
 
         /// <summary>

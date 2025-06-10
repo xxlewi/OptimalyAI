@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace OptimalyAI.Controllers
 {
-    [Route("Requests")]
+    [Route("[controller]")]
     public class RequestsController : Controller
     {
         private readonly IBusinessRequestService _requestService;
@@ -31,9 +31,8 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests
-        [HttpGet]
-        [Route("")]
-        [Route("Index")]
+        [HttpGet("")]
+        [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
             ViewBag.Title = "Požadavky";
@@ -42,8 +41,7 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests/New
-        [HttpGet]
-        [Route("New")]
+        [HttpGet("New")]
         public async Task<IActionResult> New(Guid? customerId = null)
         {
             ViewBag.Title = "Nový požadavek";
@@ -82,8 +80,7 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests/Queue
-        [HttpGet]
-        [Route("Queue")]
+        [HttpGet("Queue")]
         public async Task<IActionResult> Queue()
         {
             ViewBag.Title = "Příchozí fronta";
@@ -92,8 +89,7 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests/Active
-        [HttpGet]
-        [Route("Active")]
+        [HttpGet("Active")]
         public async Task<IActionResult> Active()
         {
             ViewBag.Title = "Aktivní zpracování";
@@ -102,8 +98,7 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests/Completed
-        [HttpGet]
-        [Route("Completed")]
+        [HttpGet("Completed")]
         public async Task<IActionResult> Completed()
         {
             ViewBag.Title = "Dokončené požadavky";
@@ -112,8 +107,7 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests/Failed
-        [HttpGet]
-        [Route("Failed")]
+        [HttpGet("Failed")]
         public async Task<IActionResult> Failed()
         {
             ViewBag.Title = "Selhané požadavky";
@@ -122,8 +116,7 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests/{id}
-        [HttpGet]
-        [Route("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> Details(int id)
         {
             var request = await _requestService.GetRequestWithDetailsAsync(id);
@@ -137,8 +130,7 @@ namespace OptimalyAI.Controllers
         }
 
         // GET: /Requests/{id}/Progress
-        [HttpGet]
-        [Route("{id}/Progress")]
+        [HttpGet("{id:int}/Progress")]
         public async Task<IActionResult> Progress(int id)
         {
             var request = await _requestService.GetRequestWithDetailsAsync(id);
@@ -161,6 +153,27 @@ namespace OptimalyAI.Controllers
             ViewBag.Request = request;
             
             return View(progress);
+        }
+
+        // GET: /Requests/{id}/Edit
+        [HttpGet("{id:int}/Edit")]
+        public async Task<IActionResult> Edit(int id)
+        {
+            var request = await _requestService.GetRequestWithDetailsAsync(id);
+            if (request == null)
+            {
+                return NotFound();
+            }
+
+            // Only allow editing drafts
+            if (request.Status != RequestStatus.Draft)
+            {
+                TempData["Error"] = "Lze upravovat pouze požadavky ve stavu Koncept";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            ViewBag.Title = $"Upravit požadavek {request.RequestNumber}";
+            return View(request);
         }
     }
 }

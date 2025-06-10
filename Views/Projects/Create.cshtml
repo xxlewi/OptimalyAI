@@ -7,7 +7,7 @@
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">Nový projekt zákazníka</h1>
+                <h1 class="m-0">Nový projekt</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
@@ -22,134 +22,62 @@
 <section class="content">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-md-8">
+            <div class="col-md-6">
                 <div class="card card-primary">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-project-diagram"></i> Základní informace o projektu</h3>
+                        <h3 class="card-title"><i class="fas fa-rocket"></i> Rychlé vytvoření projektu</h3>
                     </div>
                     <form asp-action="Create" asp-controller="Projects" method="post" id="createProjectForm">
                         @Html.AntiForgeryToken()
                         <div class="card-body">
                             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                             
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="Name" class="control-label">Název projektu</label>
-                                        <input asp-for="Name" id="Name" class="form-control" placeholder="Např. Automatizace e-shopu XY" />
-                                        <span asp-validation-for="Name" class="text-danger"></span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="ProjectType" class="control-label">Typ projektu</label>
-                                        <select asp-for="ProjectType" class="form-control">
-                                            <option value="ProductPhotoProcessing">Zpracování produktových fotek</option>
-                                            <option value="DemandAnalyzer">Analyzátor poptávek</option>
-                                            <option value="ContentGenerator">Generátor obsahu</option>
-                                            <option value="DataProcessor">Zpracování dat</option>
-                                            <option value="EshopAutomation">E-shop automatizace</option>
-                                            <option value="Custom">Vlastní řešení</option>
-                                        </select>
-                                        <span asp-validation-for="ProjectType" class="text-danger"></span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <div class="form-group">
-                                        <label asp-for="CustomerId" class="control-label">Zákazník</label>
-                                        <select asp-for="CustomerId" asp-items="ViewBag.Customers" class="form-control" id="customerSelect">
-                                            <option value="">-- Vyberte zákazníka --</option>
-                                        </select>
-                                        <span asp-validation-for="CustomerId" class="text-danger"></span>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="form-group">
-                                        <label class="control-label">&nbsp;</label>
-                                        <a asp-controller="Customers" asp-action="Create" class="btn btn-outline-primary form-control">
-                                            <i class="fas fa-plus"></i> Nový zákazník
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Hidden fields for customer data -->
-                            <input asp-for="CustomerName" type="hidden" />
-                            <input asp-for="CustomerEmail" type="hidden" />
-
-                            <div class="row" id="customerInfo" style="display: none;">
-                                <div class="col-md-12">
-                                    <div class="alert alert-info">
-                                        <strong>Vybraný zákazník:</strong> <span id="selectedCustomerName"></span><br>
-                                        <strong>Email:</strong> <span id="selectedCustomerEmail"></span>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             <div class="form-group">
-                                <label asp-for="Description" class="control-label">Požadavek zákazníka</label>
-                                <textarea asp-for="Description" id="Description" class="form-control" rows="6" 
-                                          placeholder="Detailně popište, co zákazník potřebuje. Např:&#10;&#10;Zákazník provozuje e-shop s oblečením a potřebuje automatizovat zpracování produktových fotografií:&#10;- Odstranění pozadí&#10;- Úprava velikosti na 1000x1000px&#10;- Přidání vodoznaku&#10;- Export do různých formátů&#10;&#10;Denně zpracovává cca 50-100 fotek."></textarea>
-                                <span asp-validation-for="Description" class="text-danger"></span>
-                                <small class="form-text text-muted">Čím podrobnější popis, tím lépe dokážeme navrhnout řešení</small>
+                                <label asp-for="Name" class="control-label">Název projektu <span class="text-danger">*</span></label>
+                                <input asp-for="Name" id="Name" class="form-control form-control-lg" 
+                                       placeholder="např. Redesign webu ABC" 
+                                       autofocus />
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                                <small class="form-text text-muted">Zadejte krátký a výstižný název projektu</small>
                             </div>
 
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="EstimatedHours" class="control-label">Odhadovaný počet hodin</label>
-                                        <input asp-for="EstimatedHours" class="form-control" type="number" step="0.5" placeholder="40" />
-                                        <span asp-validation-for="EstimatedHours" class="text-danger"></span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="HourlyRate" class="control-label">Hodinová sazba (Kč)</label>
-                                        <input asp-for="HourlyRate" class="form-control" type="number" placeholder="1500" />
-                                        <span asp-validation-for="HourlyRate" class="text-danger"></span>
-                                    </div>
-                                </div>
-                            </div>
+                            <!-- Hidden fields -->
+                            <input asp-for="CustomerId" type="hidden" />
+                            <input asp-for="CustomerName" type="hidden" value="Doplnit později" />
+                            <input asp-for="CustomerEmail" type="hidden" />
+                            <input asp-for="Description" type="hidden" value=" " />
+                            <input asp-for="ProjectType" type="hidden" value="Custom" />
 
                         </div>
                         <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Vytvořit projekt
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-check"></i> Vytvořit projekt
                             </button>
                             <a asp-action="Index" class="btn btn-default">
-                                <i class="fas fa-times"></i> Zrušit
+                                Zrušit
                             </a>
                         </div>
                     </form>
                 </div>
             </div>
             
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card card-info">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-info-circle"></i> Jak to funguje</h3>
+                        <h3 class="card-title"><i class="fas fa-lightbulb"></i> Tip</h3>
                     </div>
                     <div class="card-body">
-                        <h5>1. Vytvoření projektu</h5>
-                        <p>Nejprve vytvoříte projekt s požadavkem zákazníka. Systém automaticky vygeneruje projektový kontext.</p>
+                        <p class="lead">Po vytvoření projektu můžete:</p>
+                        <ul class="fa-ul">
+                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Přiřadit projekt zákazníkovi</li>
+                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Doplnit detailní popis a požadavky</li>
+                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Nastavit termíny a priority</li>
+                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Přidat odhad hodin a rozpočet</li>
+                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Sledovat postup realizace</li>
+                        </ul>
                         
-                        <h5>2. Přidání nástrojů a orchestrátorů</h5>
-                        <p>K projektu postupně přidáváte AI nástroje (web search, LLM, image processing) a orchestrátory, které je koordinují.</p>
-                        
-                        <h5>3. Definice workflow</h5>
-                        <p>Vytvoříte workflow, které definuje kroky zpracování - můžete použít CRON pro automatické spouštění.</p>
-                        
-                        <h5>4. Testování a ladění</h5>
-                        <p>Projekt můžete kdykoliv spustit manuálně a sledovat výsledky v reálném čase.</p>
-                        
-                        <h5>5. Produkční provoz</h5>
-                        <p>Po otestování projekt běží automaticky a generuje metriky pro fakturaci.</p>
-                        
-                        <div class="alert alert-success mt-3">
-                            <i class="fas fa-lightbulb"></i> <strong>Tip:</strong> Každý projekt má vlastní "paměť" podobnou CLAUDE.md, kterou můžete upravovat pro lepší výsledky.
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-info-circle"></i> <strong>Poznámka:</strong> Všechny detaily můžete doplnit později v editaci projektu.
                         </div>
                     </div>
                 </div>
@@ -162,32 +90,21 @@
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
     <script>
         $(document).ready(function() {
-            console.log('Create Project page loaded');
+            // Automatický focus na název
+            $('#Name').focus();
             
-            // Form submission handling - zjednodušená verze
+            // Jednoduchá validace
             $('#createProjectForm').on('submit', function(e) {
-                console.log('Form is being submitted');
+                var name = $('#Name').val().trim();
                 
-                // Zkontrolovat povinná pole
-                var name = $('#Name').val();
-                var description = $('#Description').val();
-                
-                if (!name || !description) {
+                if (!name) {
                     e.preventDefault();
-                    
-                    // Zobrazit toast s chybou
-                    toastr.error('Prosím vyplňte všechna povinná pole (Název a Popis)');
-                    
-                    if (!name) {
-                        $('#Name').focus();
-                    } else if (!description) {
-                        $('#Description').focus();
-                    }
-                    
+                    toastr.error('Zadejte název projektu');
+                    $('#Name').focus();
                     return false;
                 }
                 
-                // Zobrazit loading toast
+                // Zobrazit loading
                 toastr.info('Vytváření projektu...', '', {
                     timeOut: 0,
                     extendedTimeOut: 0,
@@ -195,42 +112,8 @@
                     tapToDismiss: false
                 });
                 
-                // Povolit odeslání formuláře
                 return true;
             });
-            
-            // Customer data from server
-            var customersData = @Html.Raw(Json.Serialize(ViewBag.CustomersData ?? new Dictionary<string, object>()));
-
-            // Handle customer selection
-            $('#customerSelect').change(function() {
-                var customerId = $(this).val();
-                
-                if (customerId && customersData[customerId]) {
-                    var customer = customersData[customerId];
-                    
-                    // Update hidden fields
-                    $('input[name="CustomerName"]').val(customer.name);
-                    $('input[name="CustomerEmail"]').val(customer.email);
-                    
-                    // Show customer info
-                    $('#selectedCustomerName').text(customer.name);
-                    $('#selectedCustomerEmail').text(customer.email);
-                    $('#customerInfo').show();
-                } else {
-                    // Clear hidden fields
-                    $('input[name="CustomerName"]').val('');
-                    $('input[name="CustomerEmail"]').val('');
-                    
-                    // Hide customer info
-                    $('#customerInfo').hide();
-                }
-            });
-
-            // Initialize if customer is pre-selected
-            if ($('#customerSelect').val()) {
-                $('#customerSelect').trigger('change');
-            }
         });
     </script>
 }

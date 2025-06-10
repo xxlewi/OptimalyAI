@@ -158,12 +158,6 @@
                                 <p>Seznam projektů</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a asp-controller="Projects" asp-action="Create" class="nav-link">
-                                <i class="nav-icon fas fa-plus-circle"></i>
-                                <p>Nový projekt</p>
-                            </a>
-                        </li>
                         
                         <li class="nav-header">POŽADAVKY</li>
                         <li class="nav-item">
@@ -173,47 +167,57 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a asp-controller="Requests" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-list"></i>
+                                <p>
+                                    Všechny požadavky
+                                    <span class="badge badge-info right request-count-total">0</span>
+                                </p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a asp-controller="Requests" asp-action="Queue" class="nav-link">
                                 <i class="nav-icon fas fa-inbox"></i>
-                                <p>Příchozí fronta</p>
+                                <p>
+                                    Koncepty
+                                    <span class="badge badge-secondary right request-count-draft">0</span>
+                                </p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Requests" asp-action="Queue" class="nav-link">
+                                <i class="nav-icon fas fa-paper-plane"></i>
+                                <p>
+                                    Odeslané
+                                    <span class="badge badge-warning right request-count-submitted">0</span>
+                                </p>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a asp-controller="Requests" asp-action="Active" class="nav-link">
-                                <i class="nav-icon fas fa-spinner"></i>
-                                <p>Aktivní zpracování</p>
+                                <i class="nav-icon fas fa-spinner fa-spin"></i>
+                                <p>
+                                    Aktivní zpracování
+                                    <span class="badge badge-primary right request-count-processing">0</span>
+                                </p>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a asp-controller="Requests" asp-action="Completed" class="nav-link">
                                 <i class="nav-icon fas fa-check-circle"></i>
-                                <p>Dokončené</p>
+                                <p>
+                                    Dokončené
+                                    <span class="badge badge-success right request-count-completed">0</span>
+                                </p>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a asp-controller="Requests" asp-action="Failed" class="nav-link">
                                 <i class="nav-icon fas fa-times-circle"></i>
-                                <p>Selhané</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-header">WORKFLOW</li>
-                        <li class="nav-item">
-                            <a asp-controller="Workflows" asp-action="Templates" class="nav-link">
-                                <i class="nav-icon fas fa-clipboard-list"></i>
-                                <p>Šablony workflow</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Workflows" asp-action="Editor" class="nav-link">
-                                <i class="nav-icon fas fa-sitemap"></i>
-                                <p>Editor workflow</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Workflows" asp-action="Analytics" class="nav-link">
-                                <i class="nav-icon fas fa-chart-bar"></i>
-                                <p>Analýza výkonu</p>
+                                <p>
+                                    Selhané
+                                    <span class="badge badge-danger right request-count-failed">0</span>
+                                </p>
                             </a>
                         </li>
                         
@@ -295,31 +299,6 @@
                             </a>
                         </li>
                         
-                        <li class="nav-header">MONITORING</li>
-                        <li class="nav-item">
-                            <a asp-controller="Monitoring" asp-action="Dashboard" class="nav-link">
-                                <i class="nav-icon fas fa-chart-line"></i>
-                                <p>Dashboard</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Monitoring" asp-action="Alerts" class="nav-link">
-                                <i class="nav-icon fas fa-exclamation-triangle"></i>
-                                <p>Alerty</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Monitoring" asp-action="Reports" class="nav-link">
-                                <i class="nav-icon fas fa-file-chart-line"></i>
-                                <p>Reporty</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Monitoring" asp-action="Costs" class="nav-link">
-                                <i class="nav-icon fas fa-dollar-sign"></i>
-                                <p>Náklady</p>
-                            </a>
-                        </li>
                         <li class="nav-header">SYSTEM</li>
                         <li class="nav-item">
                             <a asp-controller="Logs" asp-action="Index" class="nav-link">
@@ -585,6 +564,37 @@
                 </text>
             }
         });
+        
+        // Load request counts
+        function loadRequestCounts() {
+            $.ajax({
+                url: '/api/requestsapi/status-counts',
+                method: 'GET',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        const counts = response.data;
+                        $('.request-count-total').text(counts.total || 0);
+                        $('.request-count-draft').text(counts.draft || 0);
+                        $('.request-count-submitted').text(counts.submitted || 0);
+                        $('.request-count-processing').text(counts.processing || 0);
+                        $('.request-count-completed').text(counts.completed || 0);
+                        $('.request-count-failed').text(counts.failed || 0);
+                        
+                        // Update badge colors based on counts
+                        if (counts.draft > 0) $('.request-count-draft').removeClass('badge-secondary').addClass('badge-info');
+                        if (counts.submitted > 0) $('.request-count-submitted').removeClass('badge-warning').addClass('badge-warning');
+                        if (counts.processing > 0) $('.request-count-processing').removeClass('badge-primary').addClass('badge-primary');
+                        if (counts.failed > 0) $('.request-count-failed').removeClass('badge-danger').addClass('badge-danger');
+                    }
+                }
+            });
+        }
+        
+        // Load counts on page load
+        loadRequestCounts();
+        
+        // Refresh counts every 30 seconds
+        setInterval(loadRequestCounts, 30000);
     </script>
     
     @await RenderSectionAsync("Scripts", required: false)

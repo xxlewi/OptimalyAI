@@ -164,7 +164,7 @@
         // Load requests
         function loadRequests() {
             $.ajax({
-                url: '/api/requests' + (currentFilter ? '?status=' + currentFilter : ''),
+                url: '/api/requestsapi' + (currentFilter ? '?status=' + currentFilter : ''),
                 method: 'GET',
                 success: function(response) {
                     const tbody = $('#requests-tbody');
@@ -278,32 +278,19 @@
         // Update statistics
         function updateStats() {
             $.ajax({
-                url: '/api/requests',
+                url: '/api/requestsapi/status-counts',
                 method: 'GET',
                 success: function(response) {
-                    if (response.data) {
-                        const stats = {
-                            new: 0,
-                            queued: 0,
-                            processing: 0,
-                            completedToday: 0
-                        };
+                    if (response.success && response.data) {
+                        const counts = response.data;
                         
-                        const today = new Date().toDateString();
+                        // Nové = draft + submitted
+                        const newCount = (counts.draft || 0) + (counts.submitted || 0);
                         
-                        response.data.forEach(request => {
-                            if (request.status === 'Draft' || request.status === 'Submitted') stats.new++;
-                            if (request.status === 'Queued') stats.queued++;
-                            if (request.status === 'Processing') stats.processing++;
-                            if (request.status === 'Completed' && new Date(request.updatedAt).toDateString() === today) {
-                                stats.completedToday++;
-                            }
-                        });
-                        
-                        $('#stats-new').text(stats.new);
-                        $('#stats-queued').text(stats.queued);
-                        $('#stats-processing').text(stats.processing);
-                        $('#stats-completed').text(stats.completedToday);
+                        $('#stats-new').text(newCount);
+                        $('#stats-queued').text(counts.queued || 0);
+                        $('#stats-processing').text(counts.processing || 0);
+                        $('#stats-completed').text(counts.completed || 0);
                     }
                 }
             });
@@ -339,7 +326,7 @@
                 btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
                 
                 $.ajax({
-                    url: `/api/requests/${requestId}/execute`,
+                    url: `/api/requestsapi/${requestId}/execute`,
                     method: 'POST',
                     success: function() {
                         Swal.fire('Úspěch', 'Zpracování bylo spuštěno', 'success');

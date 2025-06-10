@@ -1,0 +1,351 @@
+@model OAI.Core.DTOs.Business.BusinessRequestDto
+@{
+    ViewData["Title"] = $"Upravit požadavek {Model.RequestNumber}";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-edit"></i> Upravit požadavek
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests/@Model.Id">@Model.RequestNumber</a></li>
+                    <li class="breadcrumb-item active">Upravit</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <form id="editRequestForm">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Základní údaje</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Název požadavku <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="title" name="title" value="@Model.Title" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Popis</label>
+                                <textarea class="form-control" id="description" name="description" rows="4">@Model.Description</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Typ požadavku</label>
+                                        <select class="form-control" id="requestType" name="requestType">
+                                            @if (Model.RequestType == "Analysis")
+                                            {
+                                                <option value="Analysis" selected>Analýza</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="Analysis">Analýza</option>
+                                            }
+                                            @if (Model.RequestType == "ProductPhoto")
+                                            {
+                                                <option value="ProductPhoto" selected>Produktové fotografie</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="ProductPhoto">Produktové fotografie</option>
+                                            }
+                                            @if (Model.RequestType == "ContentGeneration")
+                                            {
+                                                <option value="ContentGeneration" selected>Generování obsahu</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="ContentGeneration">Generování obsahu</option>
+                                            }
+                                            @if (Model.RequestType == "DataProcessing")
+                                            {
+                                                <option value="DataProcessing" selected>Zpracování dat</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="DataProcessing">Zpracování dat</option>
+                                            }
+                                            @if (Model.RequestType == "Other")
+                                            {
+                                                <option value="Other" selected>Jiné</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="Other">Jiné</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Priorita</label>
+                                        <select class="form-control" id="priority" name="priority">
+                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.Low)
+                                            {
+                                                <option value="0" selected>Nízká</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="0">Nízká</option>
+                                            }
+                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.Normal)
+                                            {
+                                                <option value="1" selected>Normální</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="1">Normální</option>
+                                            }
+                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.High)
+                                            {
+                                                <option value="2" selected>Vysoká</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="2">Vysoká</option>
+                                            }
+                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.Urgent)
+                                            {
+                                                <option value="3" selected>Urgentní</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="3">Urgentní</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label>Zákazník</label>
+                                        <div class="input-group">
+                                            <select class="form-control" id="customerId" name="customerId">
+                                                <option value="">-- Vyberte zákazníka --</option>
+                                            </select>
+                                            <div class="input-group-append">
+                                                <button type="button" class="btn btn-primary" id="newCustomerBtn" data-toggle="modal" data-target="#newCustomerModal">
+                                                    <i class="fas fa-plus"></i> Nový
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            Vyberte existujícího zákazníka nebo vytvořte nového
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Deadline</label>
+                                        <input type="datetime-local" class="form-control" id="deadline" name="deadline" 
+                                               value="@(Model.Deadline?.ToString("yyyy-MM-ddTHH:mm"))">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Odhadovaná cena</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="estimatedCost" name="estimatedCost" 
+                                                   value="@Model.EstimatedCost" step="0.01">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text">Kč</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Uložit změny
+                    </button>
+                    <a href="/Requests/@Model.Id" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Zrušit
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<!-- New Customer Modal -->
+<div class="modal fade" id="newCustomerModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nový zákazník</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="newCustomerForm">
+                    <div class="form-group">
+                        <label>Název zákazníka <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="customerName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" class="form-control" id="customerEmail">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefon</label>
+                        <input type="tel" class="form-control" id="customerPhone">
+                    </div>
+                    <div class="form-group">
+                        <label>Název společnosti</label>
+                        <input type="text" class="form-control" id="customerCompany">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" id="saveCustomerBtn">
+                    <i class="fas fa-save"></i> Uložit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Load customers
+            loadCustomers();
+            
+            
+            // Form submission
+            $('#editRequestForm').submit(function(e) {
+                e.preventDefault();
+                updateRequest();
+            });
+            
+            // Save new customer
+            $('#saveCustomerBtn').click(function() {
+                const customerData = {
+                    name: $('#customerName').val(),
+                    email: $('#customerEmail').val() || null,
+                    phone: $('#customerPhone').val() || null,
+                    companyName: $('#customerCompany').val() || null
+                };
+                
+                if (!customerData.name) {
+                    Swal.fire('Chyba', 'Název zákazníka je povinný', 'error');
+                    return;
+                }
+                
+                $.ajax({
+                    url: '/api/CustomersJson',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(customerData),
+                    success: function(response) {
+                        if (response.success && response.data) {
+                            $('#newCustomerModal').modal('hide');
+                            $('#newCustomerForm')[0].reset();
+                            
+                            // Reload customers and select the new one
+                            loadCustomers(response.data.id);
+                            
+                            Swal.fire('Úspěch', 'Zákazník byl vytvořen', 'success');
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Chyba', 'Nepodařilo se vytvořit zákazníka', 'error');
+                    }
+                });
+            });
+        });
+        
+        function loadCustomers(selectedId = null) {
+            $.ajax({
+                url: '/api/CustomersJson',
+                method: 'GET',
+                success: function(response) {
+                    const select = $('#customerId');
+                    select.empty();
+                    select.append('<option value="">-- Vyberte zákazníka --</option>');
+                    
+                    if (response.data && response.data.length > 0) {
+                        response.data.forEach(customer => {
+                            const selected = (selectedId && customer.id == selectedId) || 
+                                           (customer.id == '@Model.ClientId') ? 'selected' : '';
+                            const companyInfo = customer.companyName ? ` (${customer.companyName})` : '';
+                            select.append(`<option value="${customer.id}" ${selected}>${customer.name}${companyInfo}</option>`);
+                        });
+                    }
+                }
+            });
+        }
+        
+        
+        function updateRequest() {
+            const selectedCustomer = $('#customerId option:selected');
+            const customerId = $('#customerId').val();
+            
+            const formData = {
+                title: $('#title').val(),
+                description: $('#description').val(),
+                priority: parseInt($('#priority').val()),
+                deadline: $('#deadline').val() || null,
+                estimatedCost: parseFloat($('#estimatedCost').val()) || null,
+                clientId: customerId || null,
+                clientName: customerId ? selectedCustomer.text().split(' (')[0] : null
+            };
+            
+            $.ajax({
+                url: '/api/requestsapi/@Model.Id',
+                method: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Uloženo!',
+                            text: 'Změny byly úspěšně uloženy',
+                            showConfirmButton: false,
+                            timer: 1500
+                        }).then(() => {
+                            window.location.href = '/Requests/@Model.Id';
+                        });
+                    } else {
+                        Swal.fire('Chyba', response.message || 'Nepodařilo se uložit změny', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    const error = xhr.responseJSON?.message || 'Nepodařilo se komunikovat se serverem';
+                    Swal.fire('Chyba', error, 'error');
+                }
+            });
+        }
+    </script>
+}

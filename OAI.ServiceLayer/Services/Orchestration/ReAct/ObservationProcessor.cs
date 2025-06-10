@@ -16,6 +16,23 @@ public class ObservationProcessor : IObservationProcessor
         _formatter = formatter ?? throw new ArgumentNullException(nameof(formatter));
     }
 
+    public async Task<AgentObservation> ProcessObservationAsync(string observation, string action)
+    {
+        await Task.CompletedTask;
+        return new AgentObservation
+        {
+            Content = observation,
+            IsSuccess = true,
+            ToolName = action,
+            CreatedAt = DateTime.UtcNow
+        };
+    }
+
+    public string FormatObservation(AgentObservation observation)
+    {
+        return observation.ToString();
+    }
+
     public async Task<AgentObservation> ProcessToolResultAsync(
         IToolResult toolResult, 
         AgentAction action, 
@@ -370,5 +387,17 @@ public class ObservationProcessor : IObservationProcessor
             _logger.LogError(ex, "Error calculating semantic relevance");
             return 0.5; // Default to moderate relevance on error
         }
+    }
+    
+    // Implementation of IObservationProcessor.IsObservationUsefulAsync
+    public async Task<bool> IsObservationUsefulAsync(
+        AgentObservation observation,
+        IOrchestratorContext context,
+        CancellationToken cancellationToken = default)
+    {
+        await Task.CompletedTask;
+        // Simple heuristic: observation is useful if it has content and is successful
+        return !string.IsNullOrWhiteSpace(observation.Content) && 
+               (observation.IsSuccess || !string.IsNullOrWhiteSpace(observation.ErrorMessage));
     }
 }

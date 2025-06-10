@@ -89,7 +89,7 @@ public class ConversationReActAgent : BaseReActAgent
                     NotifyObservationReceived(context, observation);
 
                     // Check if observation is useful for continuing
-                    if (!await _observationProcessor.IsObservationUsefulAsync(observation, input, cancellationToken))
+                    if (!await _observationProcessor.IsObservationUsefulAsync(observation, context, cancellationToken))
                     {
                         _logger.LogWarning("Observation not useful, considering alternative approach");
                         // Could implement fallback strategy here

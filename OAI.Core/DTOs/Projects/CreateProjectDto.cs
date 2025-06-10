@@ -16,27 +16,25 @@ namespace OAI.Core.DTOs.Projects
         public string Name { get; set; }
 
         [MaxLength(500)]
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
-        [Required(ErrorMessage = "Jméno zákazníka je povinné")]
         [MaxLength(200)]
-        public string CustomerName { get; set; }
+        public string? CustomerName { get; set; }
 
         [EmailAddress(ErrorMessage = "Neplatný formát emailu")]
         [MaxLength(100)]
-        public string CustomerEmail { get; set; }
+        public string? CustomerEmail { get; set; }
 
         [Phone(ErrorMessage = "Neplatný formát telefonu")]
         [MaxLength(50)]
-        public string CustomerPhone { get; set; }
+        public string? CustomerPhone { get; set; }
 
-        [Required(ErrorMessage = "Požadavek zákazníka je povinný")]
-        public string CustomerRequirement { get; set; }
+        public string? CustomerRequirement { get; set; }
 
         public ProjectStatus Status { get; set; } = ProjectStatus.Draft;
 
         [MaxLength(50)]
-        public string ProjectType { get; set; }
+        public string? ProjectType { get; set; }
 
         public ProjectPriority Priority { get; set; } = ProjectPriority.Medium;
 
@@ -50,10 +48,10 @@ namespace OAI.Core.DTOs.Projects
         [Range(0, 100000, ErrorMessage = "Hodinová sazba musí být mezi 0 a 100000")]
         public decimal? HourlyRate { get; set; }
 
-        public string Configuration { get; set; }
+        public string? Configuration { get; set; }
 
-        public string ProjectContext { get; set; }
+        public string? ProjectContext { get; set; }
 
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
     }
 }

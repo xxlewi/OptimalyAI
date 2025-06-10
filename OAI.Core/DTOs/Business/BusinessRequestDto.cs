@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using OAI.Core.Entities.Business;
 
 namespace OAI.Core.DTOs.Business
@@ -26,16 +27,27 @@ namespace OAI.Core.DTOs.Business
 
     public class CreateBusinessRequestDto : CreateDtoBase
     {
-        public string RequestType { get; set; }
+        [Required(ErrorMessage = "Název požadavku je povinný")]
+        [MaxLength(200)]
         public string Title { get; set; }
-        public string Description { get; set; }
-        public string ClientId { get; set; }
-        public string ClientName { get; set; }
+        
+        [MaxLength(50)]
+        public string? RequestType { get; set; }
+        
+        [MaxLength(1000)]
+        public string? Description { get; set; }
+        
+        [MaxLength(50)]
+        public string? ClientId { get; set; }
+        
+        [MaxLength(200)]
+        public string? ClientName { get; set; }
+        
         public RequestPriority Priority { get; set; } = RequestPriority.Normal;
         public DateTime? Deadline { get; set; }
         public decimal? EstimatedCost { get; set; }
         public int? WorkflowTemplateId { get; set; }
-        public string Metadata { get; set; }
+        public string? Metadata { get; set; }
     }
 
     public class UpdateBusinessRequestDto : UpdateDtoBase

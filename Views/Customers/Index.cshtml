@@ -69,7 +69,6 @@
                                     <th>Status</th>
                                     <th>Projekty</th>
                                     <th>Požadavky</th>
-                                    <th>Hodnota</th>
                                     <th>Akce</th>
                                 </tr>
                             </thead>
@@ -133,16 +132,6 @@
                                             <span class="text-warning">@customer.ActiveRequestsCount</span> / @customer.RequestsCount
                                         </td>
                                         <td>
-                                            @if (customer.TotalProjectsValue > 0)
-                                            {
-                                                <strong>@customer.TotalProjectsValue.ToString("C0")</strong>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">-</span>
-                                            }
-                                        </td>
-                                        <td>
                                             <div class="btn-group btn-group-sm">
                                                 <a asp-action="Details" asp-route-id="@customer.Id" class="btn btn-info" title="Detail">
                                                     <i class="fas fa-eye"></i>
@@ -156,7 +145,7 @@
                                                         <i class="fas fa-project-diagram"></i>
                                                     </a>
                                                     <a asp-controller="Requests" asp-action="New" asp-route-customerId="@customer.Id" class="btn btn-info" title="Nový požadavek">
-                                                        <i class="fas fa-file-plus"></i>
+                                                        <i class="fas fa-plus-circle"></i>
                                                     </a>
                                                 }
                                                 else

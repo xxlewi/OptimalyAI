@@ -203,7 +203,7 @@
 
         async function loadStepsDetail() {
             try {
-                const response = await fetch(`/api/requests/executions/${executionId}/steps`);
+                const response = await fetch(`/api/requestsapi/executions/${executionId}/steps`);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -277,7 +277,7 @@
 
         async function refreshProgress() {
             try {
-                const response = await fetch(`/api/requests/executions/${executionId}/progress`);
+                const response = await fetch(`/api/requestsapi/executions/${executionId}/progress`);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -298,7 +298,7 @@
             if (!confirm('Opravdu chcete pozastavit zpracování?')) return;
             
             try {
-                const response = await fetch(`/api/requests/executions/${executionId}/pause`, { method: 'POST' });
+                const response = await fetch(`/api/requestsapi/executions/${executionId}/pause`, { method: 'POST' });
                 const data = await response.json();
                 
                 if (data.success) {
@@ -314,7 +314,7 @@
 
         async function resumeExecution() {
             try {
-                const response = await fetch(`/api/requests/executions/${executionId}/resume`, { method: 'POST' });
+                const response = await fetch(`/api/requestsapi/executions/${executionId}/resume`, { method: 'POST' });
                 const data = await response.json();
                 
                 if (data.success) {
@@ -332,7 +332,7 @@
             if (!confirm('Opravdu chcete zrušit zpracování? Tuto akci nelze vrátit zpět.')) return;
             
             try {
-                const response = await fetch(`/api/requests/executions/${executionId}/cancel`, { method: 'POST' });
+                const response = await fetch(`/api/requestsapi/executions/${executionId}/cancel`, { method: 'POST' });
                 const data = await response.json();
                 
                 if (data.success) {

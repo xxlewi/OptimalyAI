@@ -43,17 +43,6 @@
                         <span asp-validation-for="ProjectType" class="text-danger"></span>
                     </div>
                     
-                    <div class="form-group">
-                        <label asp-for="Schedule" class="control-label"></label>
-                        <input asp-for="Schedule" class="form-control" />
-                        <small class="form-text text-muted">
-                            CRON výraz pro plánování. Příklady:
-                            <br />• <code>0 */6 * * *</code> - Každých 6 hodin
-                            <br />• <code>0 0 * * *</code> - Každý den o půlnoci
-                            <br />• <code>0 9 * * 1-5</code> - Každý všední den v 9:00
-                        </small>
-                        <span asp-validation-for="Schedule" class="text-danger"></span>
-                    </div>
                 </div>
                 <div class="card-footer">
                     <button type="submit" class="btn btn-primary">

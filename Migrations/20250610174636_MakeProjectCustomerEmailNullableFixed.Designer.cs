@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OptimalyAI.Infrastructure;
@@ -11,9 +12,11 @@ using OptimalyAI.Infrastructure;
 namespace OptimalyAI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250610174636_MakeProjectCustomerEmailNullableFixed")]
+    partial class MakeProjectCustomerEmailNullableFixed
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -36,10 +39,12 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<string>("ClientId")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("ClientName")
+                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -52,6 +57,7 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
+                        .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
@@ -59,6 +65,7 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<string>("Metadata")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<int>("Priority")
@@ -70,6 +77,7 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<string>("RequestType")
+                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
@@ -898,9 +906,6 @@ namespace OptimalyAI.Migrations
                     b.Property<decimal?>("ActualHours")
                         .HasColumnType("numeric");
 
-                    b.Property<decimal?>("Budget")
-                        .HasColumnType("numeric");
-
                     b.Property<DateTime?>("CompletedDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -920,6 +925,7 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("CustomerName")
+                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -928,9 +934,11 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<string>("CustomerRequirement")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("Description")
+                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
@@ -942,9 +950,6 @@ namespace OptimalyAI.Migrations
 
                     b.Property<decimal?>("HourlyRate")
                         .HasColumnType("numeric");
-
-                    b.Property<string>("Metadata")
-                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -961,21 +966,15 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("ProjectType")
+                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime?>("RequestedDeadline")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Tags")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

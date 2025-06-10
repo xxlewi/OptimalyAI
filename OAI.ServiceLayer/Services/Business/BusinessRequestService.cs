@@ -57,11 +57,21 @@ namespace OAI.ServiceLayer.Services.Business
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
 
-            _logger.LogInformation("Creating new business request of type {RequestType}", dto.RequestType);
+            _logger.LogInformation("Creating new business request: {Title}", dto.Title);
 
             var entity = ((BusinessRequestMapper)_mapper).MapCreateDtoToEntity(dto);
             entity.RequestNumber = await GenerateRequestNumberAsync();
             entity.Status = RequestStatus.Draft;
+            
+            // Set default values for optional fields
+            if (string.IsNullOrEmpty(entity.RequestType))
+            {
+                entity.RequestType = "Analysis";
+            }
+            if (string.IsNullOrEmpty(entity.Description))
+            {
+                entity.Description = " "; // Avoid null
+            }
 
             // Validate workflow template if provided
             if (dto.WorkflowTemplateId.HasValue)
