@@ -4,9 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Database Configuration
 - **Development**: Uses In-Memory database (no local database needed)
-- **Production**: Will use PostgreSQL
+- **Production**: Uses PostgreSQL via Docker
 - **NEVER** use LocalDB, SQLite, or any local file-based database
 - Migrations are created but not applied in development (In-Memory DB recreates on each run)
+
+### Switching Between Databases
+- Set `"UseProductionDatabase": true` in appsettings.json for PostgreSQL
+- Set `"UseProductionDatabase": false` in appsettings.json for In-Memory (default)
+
+### PostgreSQL with Docker
+```bash
+# Start PostgreSQL
+./docker-db-start.sh
+
+# Stop PostgreSQL  
+./docker-db-stop.sh
+
+# Apply migrations
+dotnet ef database update
+```
+
+### Connection Details
+- Host: localhost
+- Port: 5432  
+- Database: optimalyai_db
+- Username: optimaly
+- Password: OptimalyAI2024!
 
 ## Key URLs and Pages
 
@@ -94,6 +117,33 @@ Exceptions are automatically converted to appropriate HTTP responses:
 - `BusinessException` → 400
 - `UnauthorizedAccessException` → 401
 - Others → 500 (with details only in Development)
+
+## Business Layer Architecture
+
+The application includes a complete business layer for E2E request management:
+
+### Business Entities
+- `BusinessRequest` - Main request entity with workflow lifecycle
+- `WorkflowTemplate` - Reusable workflow definitions
+- `WorkflowStep` - Individual steps in workflows
+- `RequestExecution` - Tracks execution of requests
+- `StepExecution` - Tracks individual step execution
+- `RequestFile` - File attachments for requests
+
+### E2E Workflow
+Requests follow this lifecycle:
+1. **Přijetí** (Receipt) - New request creation
+2. **Analýza** (Analysis) - Request analysis and planning
+3. **Plánování** (Planning) - Workflow selection
+4. **Zpracování** (Processing) - Active execution
+5. **Kontrola** (Review) - Quality check
+6. **Doručení** (Delivery) - Results delivery
+7. **Vyhodnocení** (Evaluation) - Performance analysis
+
+### Business Services
+- `IBusinessRequestService` - Request management with status transitions
+- `IWorkflowTemplateService` - Template CRUD with cloning support
+- `IRequestExecutionService` - Orchestrates execution with real-time monitoring
 
 ## Creating New Features
 
@@ -236,8 +286,24 @@ var result = await _orchestrator.ExecuteAsync(request, context, cancellationToke
 - Animated progress indicators during tool execution
 - Tool confidence display
 - SignalR events for tool status updates
+## Repository Pattern Extensions
+
+The `IRepository<T>` interface has been extended with advanced query capabilities:
+
+```csharp
+Task<IEnumerable<T>> GetAsync(
+    Expression<Func<T, bool>> filter = null,
+    Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
+    Func<IQueryable<T>, IQueryable<T>> include = null,
+    int? skip = null,
+    int? take = null);
+```
+
+This allows complex queries with filtering, ordering, includes, and pagination.
+
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+Prosím piš česky pokud s tebou user komunikuje česky.

@@ -24,7 +24,7 @@ public class AppDbContext : DbContext
         modelBuilder.RegisterEntitiesAutomatically();
 
         // Automatická konfigurace BaseEntity
-        modelBuilder.ConfigureBaseEntities();
+        modelBuilder.ConfigureBaseEntities(Database.IsNpgsql());
 
         // Aplikuje konvence pro názvy
         modelBuilder.ApplyNamingConventions();
@@ -60,15 +60,21 @@ public class AppDbContext : DbContext
             .HasIndex(br => br.RequestNumber)
             .IsUnique();
             
+        // Configure request number
         modelBuilder.Entity<BusinessRequest>()
             .Property(br => br.RequestNumber)
-            .ValueGeneratedOnAdd()
-            .HasDefaultValueSql("CONCAT('REQ-', YEAR(GETDATE()), '-', FORMAT(NEXT VALUE FOR RequestNumberSequence, '0000'))");
+            .HasMaxLength(50)
+            .IsRequired();
             
-        // Create sequence for request numbers
-        modelBuilder.HasSequence<int>("RequestNumberSequence")
-            .StartsAt(1)
-            .IncrementsBy(1);
+        // Sequence will be created only for PostgreSQL during migration
+            
+        // Sequence for PostgreSQL (will be ignored for InMemory)
+        if (!Database.IsInMemory())
+        {
+            modelBuilder.HasSequence<int>("RequestNumberSequence")
+                .StartsAt(1)
+                .IncrementsBy(1);
+        }
             
         // WorkflowTemplate configuration
         modelBuilder.Entity<WorkflowTemplate>()

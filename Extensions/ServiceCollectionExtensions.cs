@@ -15,8 +15,28 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
+        var useProductionDatabase = configuration.GetValue<bool>("UseProductionDatabase");
+        
         services.AddDbContext<Infrastructure.AppDbContext>(options =>
-            options.UseInMemoryDatabase("OptimalyAI_InMemory"));
+        {
+            if (useProductionDatabase)
+            {
+                var connectionString = configuration.GetConnectionString("DefaultConnection");
+                options.UseNpgsql(connectionString, npgsqlOptions =>
+                {
+                    npgsqlOptions.MigrationsAssembly("OptimalyAI");
+                    npgsqlOptions.EnableRetryOnFailure(3);
+                });
+                options.EnableSensitiveDataLogging(false);
+                options.EnableDetailedErrors(false);
+            }
+            else
+            {
+                options.UseInMemoryDatabase("OptimalyAI_InMemory");
+                options.EnableSensitiveDataLogging(true);
+                options.EnableDetailedErrors(true);
+            }
+        });
         
         services.AddScoped<DbContext>(provider => provider.GetService<Infrastructure.AppDbContext>()!);
         

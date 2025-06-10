@@ -30,7 +30,7 @@ public static class DbContextExtensions
     /// <summary>
     /// Automaticky aplikuje konfiguraci pro všechny BaseEntity
     /// </summary>
-    public static void ConfigureBaseEntities(this ModelBuilder modelBuilder)
+    public static void ConfigureBaseEntities(this ModelBuilder modelBuilder, bool isPostgreSQL = false)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
@@ -38,9 +38,10 @@ public static class DbContextExtensions
             if (typeof(BaseEntity).IsAssignableFrom(type))
             {
                 // Automatické nastavení CreatedAt při vložení
+                var defaultSql = isPostgreSQL ? "CURRENT_TIMESTAMP" : "GETUTCDATE()";
                 modelBuilder.Entity(type)
                     .Property("CreatedAt")
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql(defaultSql);
 
                 // Index na CreatedAt pro lepší výkon
                 modelBuilder.Entity(type)
