@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Database Configuration
+- **Development**: Uses In-Memory database (no local database needed)
+- **Production**: Will use PostgreSQL
+- **NEVER** use LocalDB, SQLite, or any local file-based database
+- Migrations are created but not applied in development (In-Memory DB recreates on each run)
+
 ## Key URLs and Pages
 
 - **Dashboard**: `https://localhost:5005/`
@@ -230,3 +236,8 @@ var result = await _orchestrator.ExecuteAsync(request, context, cancellationToke
 - Animated progress indicators during tool execution
 - Tool confidence display
 - SignalR events for tool status updates
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

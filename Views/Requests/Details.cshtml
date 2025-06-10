@@ -1,0 +1,328 @@
+@model OAI.Core.DTOs.Business.BusinessRequestDto
+@{
+    ViewData["Title"] = $"Požadavek {Model.RequestNumber}";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    @ViewData["Title"]
+                    <span class="badge badge-@GetStatusBadgeClass(Model.Status)">@GetStatusText(Model.Status)</span>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Domů</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
+                    <li class="breadcrumb-item active">@Model.RequestNumber</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Detaily požadavku</h3>
+                        <div class="card-tools">
+                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Submitted)
+                            {
+                                <button type="button" class="btn btn-sm btn-success" onclick="startExecution(@Model.Id)">
+                                    <i class="fas fa-play"></i> Spustit zpracování
+                                </button>
+                            }
+                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Processing)
+                            {
+                                <a href="/Requests/@Model.Id/Progress" class="btn btn-sm btn-info">
+                                    <i class="fas fa-chart-line"></i> Zobrazit průběh
+                                </a>
+                            }
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">Číslo požadavku:</dt>
+                            <dd class="col-sm-9">@Model.RequestNumber</dd>
+                            
+                            <dt class="col-sm-3">Typ požadavku:</dt>
+                            <dd class="col-sm-9">@GetRequestTypeText(Model.RequestType)</dd>
+                            
+                            <dt class="col-sm-3">Název:</dt>
+                            <dd class="col-sm-9">@Model.Title</dd>
+                            
+                            <dt class="col-sm-3">Popis:</dt>
+                            <dd class="col-sm-9">@Model.Description</dd>
+                            
+                            <dt class="col-sm-3">Klient:</dt>
+                            <dd class="col-sm-9">@Model.ClientName (@Model.ClientId)</dd>
+                            
+                            <dt class="col-sm-3">Priorita:</dt>
+                            <dd class="col-sm-9">
+                                <span class="badge badge-@GetPriorityBadgeClass(Model.Priority)">
+                                    @GetPriorityText(Model.Priority)
+                                </span>
+                            </dd>
+                            
+                            <dt class="col-sm-3">Deadline:</dt>
+                            <dd class="col-sm-9">@(Model.Deadline?.ToString("dd.MM.yyyy HH:mm") ?? "Není stanoveno")</dd>
+                            
+                            <dt class="col-sm-3">Odhadovaná cena:</dt>
+                            <dd class="col-sm-9">@(Model.EstimatedCost?.ToString("C") ?? "Není stanoveno")</dd>
+                            
+                            <dt class="col-sm-3">Skutečná cena:</dt>
+                            <dd class="col-sm-9">@(Model.ActualCost?.ToString("C") ?? "Zatím neznámá")</dd>
+                            
+                            <dt class="col-sm-3">Workflow:</dt>
+                            <dd class="col-sm-9">@(Model.WorkflowTemplateName ?? "Není přiřazeno")</dd>
+                            
+                            <dt class="col-sm-3">Vytvořeno:</dt>
+                            <dd class="col-sm-9">@(Model.CreatedAt.ToString("dd.MM.yyyy HH:mm"))</dd>
+                            
+                            <dt class="col-sm-3">Naposledy upraveno:</dt>
+                            <dd class="col-sm-9">@(Model.UpdatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "Neznámý")</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                @if (Model.Files != null && Model.Files.Any())
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Přiložené soubory</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Název souboru</th>
+                                            <th>Velikost</th>
+                                            <th>Typ</th>
+                                            <th>Nahráno</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var file in Model.Files)
+                                        {
+                                            <tr>
+                                                <td>@file.FileName</td>
+                                                <td>@FormatFileSize(file.FileSize)</td>
+                                                <td>@file.ContentType</td>
+                                                <td>@(file.CreatedAt.ToString("dd.MM.yyyy HH:mm"))</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Historie zpracování</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.Executions != null && Model.Executions.Any())
+                        {
+                            <div class="timeline">
+                                @foreach (var execution in Model.Executions.OrderByDescending(e => e.StartedAt))
+                                {
+                                    <div class="time-label">
+                                        <span class="bg-@GetExecutionStatusColor(execution.Status)">
+                                            @(execution.StartedAt.ToString("dd.MM.yyyy"))
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <i class="fas fa-@GetExecutionStatusIcon(execution.Status) bg-@GetExecutionStatusColor(execution.Status)"></i>
+                                        <div class="timeline-item">
+                                            <span class="time">
+                                                <i class="fas fa-clock"></i> @(execution.StartedAt.ToString("HH:mm"))
+                                            </span>
+                                            <h3 class="timeline-header">
+                                                Zpracování #@execution.Id
+                                                <span class="badge badge-@GetExecutionStatusColor(execution.Status)">
+                                                    @GetExecutionStatusText(execution.Status)
+                                                </span>
+                                            </h3>
+                                            <div class="timeline-body">
+                                                <p>Spustil: @execution.ExecutedBy</p>
+                                                @if (execution.CompletedAt.HasValue)
+                                                {
+                                                    <p>Dokončeno: @(execution.CompletedAt.Value.ToString("dd.MM.yyyy HH:mm"))</p>
+                                                    <p>Doba trvání: @FormatDuration(execution.StartedAt, execution.CompletedAt.Value)</p>
+                                                }
+                                                @if (!string.IsNullOrEmpty(execution.Errors))
+                                                {
+                                                    <div class="alert alert-danger">
+                                                        @execution.Errors
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                <div>
+                                    <i class="fas fa-clock bg-gray"></i>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Zatím nebylo spuštěno žádné zpracování.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function startExecution(requestId) {
+            if (confirm('Opravdu chcete spustit zpracování tohoto požadavku?')) {
+                fetch(`/api/requests/${requestId}/execute`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        toastr.success('Zpracování bylo úspěšně spuštěno');
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        toastr.error(data.message || 'Chyba při spouštění zpracování');
+                    }
+                })
+                .catch(error => {
+                    toastr.error('Chyba při komunikaci se serverem');
+                });
+            }
+        }
+    </script>
+}
+
+@functions {
+    string GetStatusText(OAI.Core.Entities.Business.RequestStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.RequestStatus.Draft => "Koncept",
+        OAI.Core.Entities.Business.RequestStatus.Submitted => "Odesláno",
+        OAI.Core.Entities.Business.RequestStatus.Queued => "Ve frontě",
+        OAI.Core.Entities.Business.RequestStatus.Processing => "Zpracovává se",
+        OAI.Core.Entities.Business.RequestStatus.Review => "K revizi",
+        OAI.Core.Entities.Business.RequestStatus.Completed => "Dokončeno",
+        OAI.Core.Entities.Business.RequestStatus.Failed => "Selhalo",
+        OAI.Core.Entities.Business.RequestStatus.Cancelled => "Zrušeno",
+        _ => status.ToString()
+    };
+
+    string GetStatusBadgeClass(OAI.Core.Entities.Business.RequestStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.RequestStatus.Draft => "secondary",
+        OAI.Core.Entities.Business.RequestStatus.Submitted => "info",
+        OAI.Core.Entities.Business.RequestStatus.Queued => "warning",
+        OAI.Core.Entities.Business.RequestStatus.Processing => "primary",
+        OAI.Core.Entities.Business.RequestStatus.Review => "warning",
+        OAI.Core.Entities.Business.RequestStatus.Completed => "success",
+        OAI.Core.Entities.Business.RequestStatus.Failed => "danger",
+        OAI.Core.Entities.Business.RequestStatus.Cancelled => "dark",
+        _ => "secondary"
+    };
+
+    string GetRequestTypeText(string requestType) => requestType switch
+    {
+        "ProductPhoto" => "Produktové foto",
+        "DocumentAnalysis" => "Analýza dokumentu",
+        "WebScraping" => "Web scraping",
+        "DataProcessing" => "Zpracování dat",
+        "Custom" => "Vlastní",
+        _ => requestType
+    };
+
+    string GetPriorityText(OAI.Core.Entities.Business.RequestPriority priority) => priority switch
+    {
+        OAI.Core.Entities.Business.RequestPriority.Low => "Nízká",
+        OAI.Core.Entities.Business.RequestPriority.Normal => "Normální",
+        OAI.Core.Entities.Business.RequestPriority.High => "Vysoká",
+        OAI.Core.Entities.Business.RequestPriority.Urgent => "Urgentní",
+        _ => priority.ToString()
+    };
+
+    string GetPriorityBadgeClass(OAI.Core.Entities.Business.RequestPriority priority) => priority switch
+    {
+        OAI.Core.Entities.Business.RequestPriority.Low => "secondary",
+        OAI.Core.Entities.Business.RequestPriority.Normal => "info",
+        OAI.Core.Entities.Business.RequestPriority.High => "warning",
+        OAI.Core.Entities.Business.RequestPriority.Urgent => "danger",
+        _ => "secondary"
+    };
+
+    string GetExecutionStatusText(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Pending => "Čeká",
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "Běží",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "Pozastaveno",
+        OAI.Core.Entities.Business.ExecutionStatus.Completed => "Dokončeno",
+        OAI.Core.Entities.Business.ExecutionStatus.Failed => "Selhalo",
+        OAI.Core.Entities.Business.ExecutionStatus.Cancelled => "Zrušeno",
+        _ => status.ToString()
+    };
+
+    string GetExecutionStatusColor(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Pending => "secondary",
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "primary",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "warning",
+        OAI.Core.Entities.Business.ExecutionStatus.Completed => "success",
+        OAI.Core.Entities.Business.ExecutionStatus.Failed => "danger",
+        OAI.Core.Entities.Business.ExecutionStatus.Cancelled => "dark",
+        _ => "secondary"
+    };
+
+    string GetExecutionStatusIcon(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Pending => "clock",
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "cog",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "pause",
+        OAI.Core.Entities.Business.ExecutionStatus.Completed => "check",
+        OAI.Core.Entities.Business.ExecutionStatus.Failed => "times",
+        OAI.Core.Entities.Business.ExecutionStatus.Cancelled => "ban",
+        _ => "question"
+    };
+
+    string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size = size / 1024;
+        }
+        return $"{size:0.##} {sizes[order]}";
+    }
+
+    string FormatDuration(DateTime start, DateTime end)
+    {
+        var duration = end - start;
+        if (duration.TotalMinutes < 1)
+            return $"{duration.TotalSeconds:0} sekund";
+        if (duration.TotalHours < 1)
+            return $"{duration.TotalMinutes:0} minut";
+        if (duration.TotalDays < 1)
+            return $"{duration.TotalHours:0.#} hodin";
+        return $"{duration.TotalDays:0.#} dní";
+    }
+}

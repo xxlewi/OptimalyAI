@@ -1,0 +1,357 @@
+@{
+    ViewData["Title"] = "Požadavky";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-inbox"></i> Požadavky
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Požadavky</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <!-- Statistics Row -->
+        <div class="row">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3 id="stats-new">0</h3>
+                        <p>Nové</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-plus"></i>
+                    </div>
+                    <a href="/Requests/New" class="small-box-footer">
+                        Vytvořit nový <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3 id="stats-queued">0</h3>
+                        <p>Ve frontě</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <a href="/Requests/Queue" class="small-box-footer">
+                        Zobrazit frontu <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3 id="stats-processing">0</h3>
+                        <p>Zpracovává se</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-spinner"></i>
+                    </div>
+                    <a href="/Requests/Active" class="small-box-footer">
+                        Aktivní zpracování <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3 id="stats-completed">0</h3>
+                        <p>Dokončené dnes</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <a href="/Requests/Completed" class="small-box-footer">
+                        Dokončené <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Requests Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Přehled požadavků</h3>
+                <div class="card-tools">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-tool dropdown-toggle" data-toggle="dropdown">
+                            <i class="fas fa-filter"></i> Filtr
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a href="#" class="dropdown-item filter-status" data-status="">Všechny</a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item filter-status" data-status="Draft">Koncept</a>
+                            <a href="#" class="dropdown-item filter-status" data-status="Submitted">Odeslané</a>
+                            <a href="#" class="dropdown-item filter-status" data-status="Queued">Ve frontě</a>
+                            <a href="#" class="dropdown-item filter-status" data-status="Processing">Zpracovává se</a>
+                            <a href="#" class="dropdown-item filter-status" data-status="Completed">Dokončené</a>
+                            <a href="#" class="dropdown-item filter-status" data-status="Failed">Selhané</a>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-tool" id="refresh-btn">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Číslo</th>
+                            <th>Název</th>
+                            <th>Typ</th>
+                            <th>Klient</th>
+                            <th>Priorita</th>
+                            <th>Stav</th>
+                            <th>Vytvořeno</th>
+                            <th>Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requests-tbody">
+                        <tr>
+                            <td colspan="8" class="text-center">
+                                <i class="fas fa-spinner fa-spin"></i> Načítání...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/lib/microsoft-signalr/dist/browser/signalr.min.js"></script>
+    <script>
+        let currentFilter = '';
+        
+        // Initialize SignalR connection
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/monitoringHub")
+            .build();
+            
+        connection.on("RequestCreated", (request) => {
+            loadRequests();
+            updateStats();
+        });
+        
+        connection.on("RequestUpdated", (request) => {
+            loadRequests();
+            updateStats();
+        });
+        
+        connection.start().catch(err => console.error(err));
+        
+        // Load requests
+        function loadRequests() {
+            $.ajax({
+                url: '/api/requests' + (currentFilter ? '?status=' + currentFilter : ''),
+                method: 'GET',
+                success: function(response) {
+                    const tbody = $('#requests-tbody');
+                    tbody.empty();
+                    
+                    if (response.data && response.data.length > 0) {
+                        response.data.forEach(request => {
+                            tbody.append(createRequestRow(request));
+                        });
+                    } else {
+                        tbody.append('<tr><td colspan="8" class="text-center">Žádné požadavky nenalezeny</td></tr>');
+                    }
+                },
+                error: function() {
+                    $('#requests-tbody').html('<tr><td colspan="8" class="text-center text-danger">Chyba při načítání požadavků</td></tr>');
+                }
+            });
+        }
+        
+        // Create request row
+        function createRequestRow(request) {
+            const priorityBadge = {
+                'Low': 'badge-secondary',
+                'Normal': 'badge-info',
+                'High': 'badge-warning',
+                'Urgent': 'badge-danger'
+            };
+            
+            const statusBadge = {
+                'Draft': 'badge-secondary',
+                'Submitted': 'badge-info',
+                'Queued': 'badge-warning',
+                'Processing': 'badge-primary',
+                'Review': 'badge-info',
+                'Completed': 'badge-success',
+                'Failed': 'badge-danger',
+                'Cancelled': 'badge-dark'
+            };
+            
+            return `
+                <tr>
+                    <td><a href="/Requests/${request.id}">${request.requestNumber}</a></td>
+                    <td>${request.title}</td>
+                    <td>${getRequestTypeLabel(request.requestType)}</td>
+                    <td>${request.clientName || '-'}</td>
+                    <td><span class="badge ${priorityBadge[request.priority]}">${getPriorityLabel(request.priority)}</span></td>
+                    <td><span class="badge ${statusBadge[request.status]}">${getStatusLabel(request.status)}</span></td>
+                    <td>${formatDate(request.createdAt)}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a href="/Requests/${request.id}" class="btn btn-info" title="Detail">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            ${request.status === 'Processing' ? `
+                                <a href="/Requests/${request.id}/Progress" class="btn btn-primary" title="Průběh">
+                                    <i class="fas fa-tasks"></i>
+                                </a>
+                            ` : ''}
+                            ${request.status === 'Submitted' || request.status === 'Queued' ? `
+                                <button class="btn btn-success execute-btn" data-id="${request.id}" title="Spustit">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // Helper functions
+        function getRequestTypeLabel(type) {
+            const labels = {
+                'ProductPhoto': 'Produktové foto',
+                'DocumentAnalysis': 'Analýza dokumentu',
+                'WebScraping': 'Web scraping',
+                'DataProcessing': 'Zpracování dat',
+                'Custom': 'Vlastní'
+            };
+            return labels[type] || type;
+        }
+        
+        function getPriorityLabel(priority) {
+            const labels = {
+                'Low': 'Nízká',
+                'Normal': 'Normální',
+                'High': 'Vysoká',
+                'Urgent': 'Urgentní'
+            };
+            return labels[priority] || priority;
+        }
+        
+        function getStatusLabel(status) {
+            const labels = {
+                'Draft': 'Koncept',
+                'Submitted': 'Odesláno',
+                'Queued': 'Ve frontě',
+                'Processing': 'Zpracovává se',
+                'Review': 'Kontrola',
+                'Completed': 'Dokončeno',
+                'Failed': 'Selhalo',
+                'Cancelled': 'Zrušeno'
+            };
+            return labels[status] || status;
+        }
+        
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('cs-CZ') + ' ' + date.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        // Update statistics
+        function updateStats() {
+            $.ajax({
+                url: '/api/requests',
+                method: 'GET',
+                success: function(response) {
+                    if (response.data) {
+                        const stats = {
+                            new: 0,
+                            queued: 0,
+                            processing: 0,
+                            completedToday: 0
+                        };
+                        
+                        const today = new Date().toDateString();
+                        
+                        response.data.forEach(request => {
+                            if (request.status === 'Draft' || request.status === 'Submitted') stats.new++;
+                            if (request.status === 'Queued') stats.queued++;
+                            if (request.status === 'Processing') stats.processing++;
+                            if (request.status === 'Completed' && new Date(request.updatedAt).toDateString() === today) {
+                                stats.completedToday++;
+                            }
+                        });
+                        
+                        $('#stats-new').text(stats.new);
+                        $('#stats-queued').text(stats.queued);
+                        $('#stats-processing').text(stats.processing);
+                        $('#stats-completed').text(stats.completedToday);
+                    }
+                }
+            });
+        }
+        
+        // Event handlers
+        $(document).ready(function() {
+            loadRequests();
+            updateStats();
+            
+            // Refresh button
+            $('#refresh-btn').click(function() {
+                $(this).find('i').addClass('fa-spin');
+                loadRequests();
+                updateStats();
+                setTimeout(() => {
+                    $(this).find('i').removeClass('fa-spin');
+                }, 1000);
+            });
+            
+            // Filter buttons
+            $('.filter-status').click(function(e) {
+                e.preventDefault();
+                currentFilter = $(this).data('status');
+                loadRequests();
+            });
+            
+            // Execute button
+            $(document).on('click', '.execute-btn', function() {
+                const requestId = $(this).data('id');
+                const btn = $(this);
+                
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+                
+                $.ajax({
+                    url: `/api/requests/${requestId}/execute`,
+                    method: 'POST',
+                    success: function() {
+                        Swal.fire('Úspěch', 'Zpracování bylo spuštěno', 'success');
+                        loadRequests();
+                        updateStats();
+                    },
+                    error: function() {
+                        Swal.fire('Chyba', 'Nepodařilo se spustit zpracování', 'error');
+                        btn.prop('disabled', false).html('<i class="fas fa-play"></i>');
+                    }
+                });
+            });
+        });
+    </script>
+}

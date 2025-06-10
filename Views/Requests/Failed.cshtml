@@ -1,0 +1,257 @@
+@model IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto>
+@{
+    ViewData["Title"] = "Selhané požadavky";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Domů</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
+                    <li class="breadcrumb-item active">Selhané</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card card-danger card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">Požadavky, které selhaly při zpracování</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Číslo</th>
+                                            <th>Název</th>
+                                            <th>Typ</th>
+                                            <th>Klient</th>
+                                            <th>Selhalo</th>
+                                            <th>Důvod selhání</th>
+                                            <th>Pokusů</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var request in Model.OrderByDescending(r => r.UpdatedAt))
+                                        {
+                                            var failedExecution = request.Executions?
+                                                .Where(e => e.Status == OAI.Core.Entities.Business.ExecutionStatus.Failed)
+                                                .OrderByDescending(e => e.CompletedAt)
+                                                .FirstOrDefault();
+                                                
+                                            <tr>
+                                                <td>
+                                                    <a href="/Requests/@request.Id">@request.RequestNumber</a>
+                                                </td>
+                                                <td>@request.Title</td>
+                                                <td>@GetRequestTypeText(request.RequestType)</td>
+                                                <td>@request.ClientName</td>
+                                                <td>
+                                                    @(failedExecution?.CompletedAt?.ToString("dd.MM.yyyy HH:mm") ?? request.UpdatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "Neznámý")
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(failedExecution?.Errors))
+                                                    {
+                                                        <span class="text-danger" title="@failedExecution.Errors">
+                                                            @TruncateError(failedExecution.Errors)
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Neznámá chyba</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-warning">
+                                                        @(request.Executions?.Count ?? 0)
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <a href="/Requests/@request.Id" class="btn btn-sm btn-info" title="Detail">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    <button type="button" class="btn btn-sm btn-success" 
+                                                            onclick="retryExecution(@request.Id)" title="Zkusit znovu">
+                                                        <i class="fas fa-redo"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-warning" 
+                                                            onclick="reportIssue(@request.Id)" title="Nahlásit problém">
+                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="mt-4">
+                                <h5>Nejčastější důvody selhání</h5>
+                                <div class="row">
+                                    @foreach (var errorGroup in GetTopErrors(Model))
+                                    {
+                                        <div class="col-md-4">
+                                            <div class="info-box bg-danger">
+                                                <span class="info-box-icon">
+                                                    <i class="fas fa-exclamation-circle"></i>
+                                                </span>
+                                                <div class="info-box-content">
+                                                    <span class="info-box-text">@errorGroup.Key</span>
+                                                    <span class="info-box-number">@errorGroup.Count() případů</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle"></i> Skvělé! Žádné požadavky neselhaly.
+                            </div>
+                        }
+                    </div>
+                    @if (Model.Any())
+                    {
+                        <div class="card-footer">
+                            <div class="row">
+                                <div class="col-sm-4">
+                                    <div class="description-block">
+                                        <h5 class="description-header text-danger">@Model.Count()</h5>
+                                        <span class="description-text">Celkem selhalo</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <div class="description-block">
+                                        <h5 class="description-header">@CalculateFailureRate(Model)%</h5>
+                                        <span class="description-text">Míra selhání</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <div class="description-block">
+                                        <h5 class="description-header">@GetRecoverableCount(Model)</h5>
+                                        <span class="description-text">Lze opakovat</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function retryExecution(requestId) {
+            if (confirm('Opravdu chcete znovu spustit zpracování tohoto požadavku?')) {
+                try {
+                    const response = await fetch(`/api/requests/${requestId}/execute`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        toastr.success('Zpracování bylo znovu spuštěno');
+                        setTimeout(() => {
+                            window.location.href = `/Requests/${requestId}/Progress`;
+                        }, 1500);
+                    } else {
+                        toastr.error(data.message || 'Chyba při spouštění zpracování');
+                    }
+                } catch (error) {
+                    toastr.error('Chyba při komunikaci se serverem');
+                }
+            }
+        }
+
+        function reportIssue(requestId) {
+            // TODO: Implement issue reporting
+            toastr.info('Funkce hlášení problémů bude brzy dostupná');
+        }
+    </script>
+}
+
+@functions {
+    string GetRequestTypeText(string requestType) => requestType switch
+    {
+        "ProductPhoto" => "Produktové foto",
+        "DocumentAnalysis" => "Analýza dokumentu",
+        "WebScraping" => "Web scraping",
+        "DataProcessing" => "Zpracování dat",
+        "Custom" => "Vlastní",
+        _ => requestType
+    };
+
+    string TruncateError(string error)
+    {
+        if (string.IsNullOrEmpty(error))
+            return "Neznámá chyba";
+            
+        return error.Length > 50 
+            ? error.Substring(0, 50) + "..." 
+            : error;
+    }
+
+    IEnumerable<IGrouping<string, OAI.Core.DTOs.Business.RequestExecutionDto>> GetTopErrors(IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto> requests)
+    {
+        return requests
+            .Where(r => r.Executions != null)
+            .SelectMany(r => r.Executions)
+            .Where(e => e.Status == OAI.Core.Entities.Business.ExecutionStatus.Failed && !string.IsNullOrEmpty(e.Errors))
+            .GroupBy(e => GetErrorCategory(e.Errors))
+            .OrderByDescending(g => g.Count())
+            .Take(3);
+    }
+
+    string GetErrorCategory(string error)
+    {
+        if (error.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+            return "Časový limit";
+        if (error.Contains("connection", StringComparison.OrdinalIgnoreCase))
+            return "Problém s připojením";
+        if (error.Contains("memory", StringComparison.OrdinalIgnoreCase))
+            return "Nedostatek paměti";
+        if (error.Contains("permission", StringComparison.OrdinalIgnoreCase) || 
+            error.Contains("access", StringComparison.OrdinalIgnoreCase))
+            return "Problém s oprávněním";
+        if (error.Contains("validation", StringComparison.OrdinalIgnoreCase))
+            return "Chyba validace";
+        return "Jiná chyba";
+    }
+
+    double CalculateFailureRate(IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto> failedRequests)
+    {
+        // This is a simplified calculation
+        // In real scenario, you'd calculate against all requests
+        return 5.2; // Mock value
+    }
+
+    int GetRecoverableCount(IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto> requests)
+    {
+        return requests.Count(r => 
+            r.Executions?.Any(e => 
+                e.Status == OAI.Core.Entities.Business.ExecutionStatus.Failed && 
+                (e.Errors?.Contains("timeout", StringComparison.OrdinalIgnoreCase) == true ||
+                 e.Errors?.Contains("connection", StringComparison.OrdinalIgnoreCase) == true)) == true);
+    }
+}

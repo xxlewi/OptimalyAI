@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
+using OAI.Core.Entities.Business;
 using OptimalyAI.Extensions;
 using System.Reflection;
 
@@ -41,18 +42,60 @@ public class AppDbContext : DbContext
 
     private void ConfigureSpecificEntities(ModelBuilder modelBuilder)
     {
-        // Zde můžete přidat specifické konfigurace pro jednotlivé entity
-        // Například:
-        // modelBuilder.Entity<User>()
-        //     .HasIndex(u => u.Email)
-        //     .IsUnique();
-        
         // Configure Conversation and Message relationship
         modelBuilder.Entity<Conversation>()
             .HasMany(c => c.Messages)
             .WithOne(m => m.Conversation)
             .HasForeignKey(m => m.ConversationId)
             .OnDelete(DeleteBehavior.Cascade);
+            
+        // Configure Business entities
+        ConfigureBusinessEntities(modelBuilder);
+    }
+    
+    private void ConfigureBusinessEntities(ModelBuilder modelBuilder)
+    {
+        // BusinessRequest configuration
+        modelBuilder.Entity<BusinessRequest>()
+            .HasIndex(br => br.RequestNumber)
+            .IsUnique();
+            
+        modelBuilder.Entity<BusinessRequest>()
+            .Property(br => br.RequestNumber)
+            .ValueGeneratedOnAdd()
+            .HasDefaultValueSql("CONCAT('REQ-', YEAR(GETDATE()), '-', FORMAT(NEXT VALUE FOR RequestNumberSequence, '0000'))");
+            
+        // Create sequence for request numbers
+        modelBuilder.HasSequence<int>("RequestNumberSequence")
+            .StartsAt(1)
+            .IncrementsBy(1);
+            
+        // WorkflowTemplate configuration
+        modelBuilder.Entity<WorkflowTemplate>()
+            .HasIndex(wt => new { wt.Name, wt.Version })
+            .IsUnique();
+            
+        // WorkflowStep configuration
+        modelBuilder.Entity<WorkflowStep>()
+            .HasIndex(ws => new { ws.WorkflowTemplateId, ws.Order });
+            
+        // RequestExecution configuration
+        modelBuilder.Entity<RequestExecution>()
+            .HasOne(re => re.Conversation)
+            .WithMany()
+            .HasForeignKey(re => re.ConversationId)
+            .OnDelete(DeleteBehavior.SetNull);
+            
+        // StepExecution configuration
+        modelBuilder.Entity<StepExecution>()
+            .HasOne(se => se.ToolExecution)
+            .WithMany()
+            .HasForeignKey(se => se.ToolExecutionId)
+            .OnDelete(DeleteBehavior.SetNull);
+            
+        // RequestFile configuration
+        modelBuilder.Entity<RequestFile>()
+            .HasIndex(rf => rf.StoragePath);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

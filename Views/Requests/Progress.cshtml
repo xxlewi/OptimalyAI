@@ -1,0 +1,394 @@
+@model OAI.Core.DTOs.Business.ExecutionProgressDto
+@{
+    ViewData["Title"] = ViewBag.Title;
+    var request = ViewBag.Request as OAI.Core.DTOs.Business.BusinessRequestDto;
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Domů</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests/@request.Id">@request.RequestNumber</a></li>
+                    <li class="breadcrumb-item active">Průběh</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Průběh zpracování</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="refreshProgress()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress-group">
+                            <span class="progress-text">Celkový postup</span>
+                            <span class="float-right">
+                                <b>@Model.CompletedSteps</b>/@Model.TotalSteps kroků
+                            </span>
+                            <div class="progress progress-sm">
+                                <div class="progress-bar @GetProgressBarClass(Model.Status)" 
+                                     style="width: @Model.ProgressPercentage%"></div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <dl class="row">
+                                <dt class="col-sm-4">Stav:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge badge-@GetExecutionStatusColor(Model.Status)">
+                                        @GetExecutionStatusText(Model.Status)
+                                    </span>
+                                </dd>
+                                
+                                <dt class="col-sm-4">Aktuální krok:</dt>
+                                <dd class="col-sm-8">@(Model.CurrentStep ?? "N/A")</dd>
+                                
+                                <dt class="col-sm-4">Dokončené kroky:</dt>
+                                <dd class="col-sm-8">@Model.CompletedSteps</dd>
+                                
+                                <dt class="col-sm-4">Selhané kroky:</dt>
+                                <dd class="col-sm-8">@Model.FailedSteps</dd>
+                                
+                                @if (!string.IsNullOrEmpty(Model.EstimatedTimeRemaining))
+                                {
+                                    <dt class="col-sm-4">Odhadovaný čas do dokončení:</dt>
+                                    <dd class="col-sm-8">@Model.EstimatedTimeRemaining</dd>
+                                }
+                            </dl>
+                        </div>
+
+                        <div class="mt-4">
+                            @if (Model.Status == OAI.Core.Entities.Business.ExecutionStatus.Running)
+                            {
+                                <button type="button" class="btn btn-warning" onclick="pauseExecution()">
+                                    <i class="fas fa-pause"></i> Pozastavit
+                                </button>
+                                <button type="button" class="btn btn-danger" onclick="cancelExecution()">
+                                    <i class="fas fa-stop"></i> Zrušit
+                                </button>
+                            }
+                            else if (Model.Status == OAI.Core.Entities.Business.ExecutionStatus.Paused)
+                            {
+                                <button type="button" class="btn btn-success" onclick="resumeExecution()">
+                                    <i class="fas fa-play"></i> Pokračovat
+                                </button>
+                                <button type="button" class="btn btn-danger" onclick="cancelExecution()">
+                                    <i class="fas fa-stop"></i> Zrušit
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Živý výstup</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="liveOutput" class="direct-chat-messages" style="height: 400px; overflow-y: auto;">
+                            <div class="text-muted text-center">
+                                <i class="fas fa-spinner fa-spin"></i> Čekání na události...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Detail kroků</h3>
+                    </div>
+                    <div class="card-body" id="stepsDetail">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin"></i> Načítání...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script>
+        const executionId = @Model.ExecutionId;
+        let connection;
+
+        async function initializeSignalR() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/monitoringHub")
+                .build();
+
+            connection.on("ExecutionProgress", function (progress) {
+                if (progress.executionId === executionId) {
+                    updateProgressDisplay(progress);
+                }
+            });
+
+            connection.on("StepCompleted", function (stepExecution) {
+                addLogEntry(`Krok dokončen: ${stepExecution.workflowStep.name}`, 'success');
+                loadStepsDetail();
+            });
+
+            connection.on("StepFailed", function (stepExecution, error) {
+                addLogEntry(`Krok selhal: ${stepExecution.workflowStep.name} - ${error}`, 'danger');
+                loadStepsDetail();
+            });
+
+            try {
+                await connection.start();
+                console.log("SignalR připojeno");
+            } catch (err) {
+                console.error(err);
+                setTimeout(() => initializeSignalR(), 5000);
+            }
+        }
+
+        function updateProgressDisplay(progress) {
+            $('.progress-bar').css('width', progress.progressPercentage + '%');
+            $('.progress-text').next().html(`<b>${progress.completedSteps}</b>/${progress.totalSteps} kroků`);
+            
+            // Update other fields
+            $('dd:contains("Aktuální krok:")').prev().next().text(progress.currentStep || 'N/A');
+            $('dd:contains("Dokončené kroky:")').prev().next().text(progress.completedSteps);
+            $('dd:contains("Selhané kroky:")').prev().next().text(progress.failedSteps);
+            
+            if (progress.estimatedTimeRemaining) {
+                $('dd:contains("Odhadovaný čas:")').prev().next().text(progress.estimatedTimeRemaining);
+            }
+        }
+
+        function addLogEntry(message, type) {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = `
+                <div class="direct-chat-msg">
+                    <div class="direct-chat-infos clearfix">
+                        <span class="direct-chat-timestamp float-left">${timestamp}</span>
+                    </div>
+                    <div class="direct-chat-text bg-${type}">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            
+            const liveOutput = document.getElementById('liveOutput');
+            if (liveOutput.querySelector('.text-muted')) {
+                liveOutput.innerHTML = '';
+            }
+            liveOutput.insertAdjacentHTML('beforeend', entry);
+            liveOutput.scrollTop = liveOutput.scrollHeight;
+        }
+
+        async function loadStepsDetail() {
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/steps`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderStepsDetail(data.data);
+                }
+            } catch (error) {
+                console.error('Error loading steps:', error);
+            }
+        }
+
+        function renderStepsDetail(steps) {
+            const html = `
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Krok</th>
+                                <th>Stav</th>
+                                <th>Začátek</th>
+                                <th>Konec</th>
+                                <th>Doba trvání</th>
+                                <th>Výsledky</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${steps.map(step => `
+                                <tr>
+                                    <td>${step.workflowStep.name}</td>
+                                    <td>
+                                        <span class="badge badge-${getStepStatusColor(step.status)}">
+                                            ${getStepStatusText(step.status)}
+                                        </span>
+                                    </td>
+                                    <td>${new Date(step.startedAt).toLocaleString()}</td>
+                                    <td>${step.completedAt ? new Date(step.completedAt).toLocaleString() : '-'}</td>
+                                    <td>${step.executionTimeMs ? step.executionTimeMs + ' ms' : '-'}</td>
+                                    <td>
+                                        ${step.results ? '<button class="btn btn-xs btn-info" onclick="showResults(' + step.id + ')">Zobrazit</button>' : '-'}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            document.getElementById('stepsDetail').innerHTML = html;
+        }
+
+        function getStepStatusColor(status) {
+            const colors = {
+                'Pending': 'secondary',
+                'Running': 'primary',
+                'Completed': 'success',
+                'Failed': 'danger',
+                'Cancelled': 'dark'
+            };
+            return colors[status] || 'secondary';
+        }
+
+        function getStepStatusText(status) {
+            const texts = {
+                'Pending': 'Čeká',
+                'Running': 'Běží',
+                'Completed': 'Dokončeno',
+                'Failed': 'Selhalo',
+                'Cancelled': 'Zrušeno'
+            };
+            return texts[status] || status;
+        }
+
+        async function refreshProgress() {
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/progress`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateProgressDisplay(data.data);
+                    if (data.data.status === 'Completed' || data.data.status === 'Failed' || data.data.status === 'Cancelled') {
+                        // Redirect to details after completion
+                        setTimeout(() => {
+                            window.location.href = `/Requests/@request.Id`;
+                        }, 3000);
+                    }
+                }
+            } catch (error) {
+                console.error('Error refreshing progress:', error);
+            }
+        }
+
+        async function pauseExecution() {
+            if (!confirm('Opravdu chcete pozastavit zpracování?')) return;
+            
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/pause`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    toastr.success('Zpracování bylo pozastaveno');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    toastr.error(data.message || 'Chyba při pozastavování');
+                }
+            } catch (error) {
+                toastr.error('Chyba při komunikaci se serverem');
+            }
+        }
+
+        async function resumeExecution() {
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/resume`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    toastr.success('Zpracování bylo obnoveno');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    toastr.error(data.message || 'Chyba při obnovování');
+                }
+            } catch (error) {
+                toastr.error('Chyba při komunikaci se serverem');
+            }
+        }
+
+        async function cancelExecution() {
+            if (!confirm('Opravdu chcete zrušit zpracování? Tuto akci nelze vrátit zpět.')) return;
+            
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/cancel`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    toastr.success('Zpracování bylo zrušeno');
+                    setTimeout(() => {
+                        window.location.href = `/Requests/@request.Id`;
+                    }, 2000);
+                } else {
+                    toastr.error(data.message || 'Chyba při rušení');
+                }
+            } catch (error) {
+                toastr.error('Chyba při komunikaci se serverem');
+            }
+        }
+
+        // Initialize on page load
+        $(document).ready(function() {
+            initializeSignalR();
+            loadStepsDetail();
+            
+            // Auto-refresh every 5 seconds
+            setInterval(refreshProgress, 5000);
+        });
+    </script>
+}
+
+@functions {
+    string GetProgressBarClass(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "bg-primary progress-bar-striped progress-bar-animated",
+        OAI.Core.Entities.Business.ExecutionStatus.Completed => "bg-success",
+        OAI.Core.Entities.Business.ExecutionStatus.Failed => "bg-danger",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "bg-warning",
+        OAI.Core.Entities.Business.ExecutionStatus.Cancelled => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    string GetExecutionStatusText(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Pending => "Čeká",
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "Běží",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "Pozastaveno",
+        OAI.Core.Entities.Business.ExecutionStatus.Completed => "Dokončeno",
+        OAI.Core.Entities.Business.ExecutionStatus.Failed => "Selhalo",
+        OAI.Core.Entities.Business.ExecutionStatus.Cancelled => "Zrušeno",
+        _ => status.ToString()
+    };
+
+    string GetExecutionStatusColor(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Pending => "secondary",
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "primary",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "warning",
+        OAI.Core.Entities.Business.ExecutionStatus.Completed => "success",
+        OAI.Core.Entities.Business.ExecutionStatus.Failed => "danger",
+        OAI.Core.Entities.Business.ExecutionStatus.Cancelled => "dark",
+        _ => "secondary"
+    };
+}

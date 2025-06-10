@@ -326,3 +326,10 @@ FodyWeavers.xsd
 
 # Custom log folder
 logs/
+
+# Docker files we want to keep secret
+.env.docker
+
+# Database backups
+backups/
+*.sql

@@ -111,6 +111,7 @@ public static class ServiceCollectionExtensions
 
         foreach (var mapperType in mapperTypes)
         {
+            // Register generic IMapper<,> interfaces
             var interfaceTypes = mapperType.GetInterfaces()
                 .Where(i => i.IsGenericType && 
                            i.GetGenericTypeDefinition() == typeof(OAI.Core.Mapping.IMapper<,>));
@@ -118,6 +119,15 @@ public static class ServiceCollectionExtensions
             foreach (var interfaceType in interfaceTypes)
             {
                 services.AddScoped(interfaceType, mapperType);
+            }
+            
+            // Register specific named interfaces (e.g., IBusinessRequestMapper)
+            var specificInterface = mapperType.GetInterfaces()
+                .FirstOrDefault(i => i.Name == $"I{mapperType.Name}");
+            
+            if (specificInterface != null)
+            {
+                services.AddScoped(specificInterface, mapperType);
             }
         }
 

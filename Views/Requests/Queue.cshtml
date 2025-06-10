@@ -1,0 +1,210 @@
+@model IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto>
+@{
+    ViewData["Title"] = "Příchozí fronta";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Domů</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
+                    <li class="breadcrumb-item active">Fronta</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Požadavky čekající na zpracování</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="location.reload()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Číslo</th>
+                                            <th>Název</th>
+                                            <th>Typ</th>
+                                            <th>Klient</th>
+                                            <th>Priorita</th>
+                                            <th>Deadline</th>
+                                            <th>Ve frontě od</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var request in Model.OrderByDescending(r => r.Priority).ThenBy(r => r.CreatedAt))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="/Requests/@request.Id">@request.RequestNumber</a>
+                                                </td>
+                                                <td>@request.Title</td>
+                                                <td>@GetRequestTypeText(request.RequestType)</td>
+                                                <td>@request.ClientName</td>
+                                                <td>
+                                                    <span class="badge badge-@GetPriorityBadgeClass(request.Priority)">
+                                                        @GetPriorityText(request.Priority)
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @if (request.Deadline.HasValue)
+                                                    {
+                                                        var daysUntilDeadline = (request.Deadline.Value - DateTime.Now).Days;
+                                                        <span class="@(daysUntilDeadline < 3 ? "text-danger" : "")">
+                                                            @(request.Deadline.Value.ToString("dd.MM.yyyy"))
+                                                            <small>(@daysUntilDeadline d)</small>
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @(request.UpdatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "Neznámý")
+                                                    <small class="text-muted">(@FormatTimeAgo(request.UpdatedAt))</small>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-sm btn-success" 
+                                                            onclick="startExecution(@request.Id)"
+                                                            title="Spustit zpracování">
+                                                        <i class="fas fa-play"></i>
+                                                    </button>
+                                                    <a href="/Requests/@request.Id" class="btn btn-sm btn-info" title="Detail">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> Fronta je prázdná. Žádné požadavky nečekají na zpracování.
+                            </div>
+                        }
+                    </div>
+                    @if (Model.Any())
+                    {
+                        <div class="card-footer">
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <div class="description-block">
+                                        <h5 class="description-header">@Model.Count()</h5>
+                                        <span class="description-text">Celkem ve frontě</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="description-block">
+                                        <h5 class="description-header">@Model.Count(r => r.Priority == OAI.Core.Entities.Business.RequestPriority.Urgent)</h5>
+                                        <span class="description-text">Urgentních</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function startExecution(requestId) {
+            if (confirm('Opravdu chcete spustit zpracování tohoto požadavku?')) {
+                fetch(`/api/requests/${requestId}/execute`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        toastr.success('Zpracování bylo úspěšně spuštěno');
+                        setTimeout(() => {
+                            window.location.href = `/Requests/${requestId}/Progress`;
+                        }, 1500);
+                    } else {
+                        toastr.error(data.message || 'Chyba při spouštění zpracování');
+                    }
+                })
+                .catch(error => {
+                    toastr.error('Chyba při komunikaci se serverem');
+                });
+            }
+        }
+    </script>
+}
+
+@functions {
+    string GetRequestTypeText(string requestType) => requestType switch
+    {
+        "ProductPhoto" => "Produktové foto",
+        "DocumentAnalysis" => "Analýza dokumentu",
+        "WebScraping" => "Web scraping",
+        "DataProcessing" => "Zpracování dat",
+        "Custom" => "Vlastní",
+        _ => requestType
+    };
+
+    string GetPriorityText(OAI.Core.Entities.Business.RequestPriority priority) => priority switch
+    {
+        OAI.Core.Entities.Business.RequestPriority.Low => "Nízká",
+        OAI.Core.Entities.Business.RequestPriority.Normal => "Normální",
+        OAI.Core.Entities.Business.RequestPriority.High => "Vysoká",
+        OAI.Core.Entities.Business.RequestPriority.Urgent => "Urgentní",
+        _ => priority.ToString()
+    };
+
+    string GetPriorityBadgeClass(OAI.Core.Entities.Business.RequestPriority priority) => priority switch
+    {
+        OAI.Core.Entities.Business.RequestPriority.Low => "secondary",
+        OAI.Core.Entities.Business.RequestPriority.Normal => "info",
+        OAI.Core.Entities.Business.RequestPriority.High => "warning",
+        OAI.Core.Entities.Business.RequestPriority.Urgent => "danger",
+        _ => "secondary"
+    };
+
+    string FormatTimeAgo(DateTime? dateTime)
+    {
+        if (!dateTime.HasValue)
+            return "neznámý čas";
+            
+        var timeSpan = DateTime.Now - dateTime.Value;
+        
+        if (timeSpan.TotalMinutes < 1)
+            return "právě teď";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes} min";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours} h";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays} d";
+        
+        return dateTime.Value.ToString("dd.MM.yyyy");
+    }
+}

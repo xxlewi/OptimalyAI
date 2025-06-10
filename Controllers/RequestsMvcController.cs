@@ -1,0 +1,149 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using OAI.Core.DTOs.Business;
+using OAI.Core.Entities.Business;
+using OAI.ServiceLayer.Services.Business;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace OptimalyAI.Controllers
+{
+    [Route("Requests")]
+    public class RequestsController : Controller
+    {
+        private readonly IBusinessRequestService _requestService;
+        private readonly IWorkflowTemplateService _workflowService;
+        private readonly IRequestExecutionService _executionService;
+
+        public RequestsController(
+            IBusinessRequestService requestService,
+            IWorkflowTemplateService workflowService,
+            IRequestExecutionService executionService)
+        {
+            _requestService = requestService;
+            _workflowService = workflowService;
+            _executionService = executionService;
+        }
+
+        // GET: /Requests
+        [HttpGet]
+        [Route("")]
+        [Route("Index")]
+        public async Task<IActionResult> Index()
+        {
+            ViewBag.Title = "Požadavky";
+            var requests = await _requestService.GetAllAsync();
+            return View(requests);
+        }
+
+        // GET: /Requests/New
+        [HttpGet]
+        [Route("New")]
+        public IActionResult New()
+        {
+            ViewBag.Title = "Nový požadavek";
+            ViewBag.RequestTypes = new SelectList(new[]
+            {
+                new { Value = "ProductPhoto", Text = "Produktové foto" },
+                new { Value = "DocumentAnalysis", Text = "Analýza dokumentu" },
+                new { Value = "WebScraping", Text = "Web scraping" },
+                new { Value = "DataProcessing", Text = "Zpracování dat" },
+                new { Value = "EmailAutomation", Text = "E-mailová automatizace" },
+                new { Value = "ReportGeneration", Text = "Generování reportů" },
+                new { Value = "Custom", Text = "Vlastní" }
+            }, "Value", "Text");
+            
+            ViewBag.Priorities = new SelectList(new[]
+            {
+                new { Value = RequestPriority.Low, Text = "Nízká" },
+                new { Value = RequestPriority.Normal, Text = "Normální" },
+                new { Value = RequestPriority.High, Text = "Vysoká" },
+                new { Value = RequestPriority.Urgent, Text = "Urgentní" }
+            }, "Value", "Text");
+            
+            return View();
+        }
+
+        // GET: /Requests/Queue
+        [HttpGet]
+        [Route("Queue")]
+        public async Task<IActionResult> Queue()
+        {
+            ViewBag.Title = "Příchozí fronta";
+            var requests = await _requestService.GetRequestsByStatusAsync(RequestStatus.Queued);
+            return View(requests);
+        }
+
+        // GET: /Requests/Active
+        [HttpGet]
+        [Route("Active")]
+        public async Task<IActionResult> Active()
+        {
+            ViewBag.Title = "Aktivní zpracování";
+            var executions = await _executionService.GetActiveExecutionsAsync();
+            return View(executions);
+        }
+
+        // GET: /Requests/Completed
+        [HttpGet]
+        [Route("Completed")]
+        public async Task<IActionResult> Completed()
+        {
+            ViewBag.Title = "Dokončené požadavky";
+            var requests = await _requestService.GetRequestsByStatusAsync(RequestStatus.Completed);
+            return View(requests);
+        }
+
+        // GET: /Requests/Failed
+        [HttpGet]
+        [Route("Failed")]
+        public async Task<IActionResult> Failed()
+        {
+            ViewBag.Title = "Selhané požadavky";
+            var requests = await _requestService.GetRequestsByStatusAsync(RequestStatus.Failed);
+            return View(requests);
+        }
+
+        // GET: /Requests/{id}
+        [HttpGet]
+        [Route("{id}")]
+        public async Task<IActionResult> Details(int id)
+        {
+            var request = await _requestService.GetRequestWithDetailsAsync(id);
+            if (request == null)
+            {
+                return NotFound();
+            }
+
+            ViewBag.Title = $"Požadavek {request.RequestNumber}";
+            return View(request);
+        }
+
+        // GET: /Requests/{id}/Progress
+        [HttpGet]
+        [Route("{id}/Progress")]
+        public async Task<IActionResult> Progress(int id)
+        {
+            var request = await _requestService.GetRequestWithDetailsAsync(id);
+            if (request == null)
+            {
+                return NotFound();
+            }
+
+            var activeExecution = request.Executions?.FirstOrDefault(e => 
+                e.Status == ExecutionStatus.Running || e.Status == ExecutionStatus.Paused);
+            
+            if (activeExecution == null)
+            {
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            var progress = await _executionService.GetExecutionProgressAsync(activeExecution.Id);
+            
+            ViewBag.Title = $"Průběh zpracování - {request.RequestNumber}";
+            ViewBag.Request = request;
+            
+            return View(progress);
+        }
+    }
+}

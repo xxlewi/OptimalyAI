@@ -1,0 +1,274 @@
+@model IEnumerable<OAI.Core.DTOs.Business.RequestExecutionDto>
+@{
+    ViewData["Title"] = "Aktivní zpracování";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Domů</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
+                    <li class="breadcrumb-item active">Aktivní</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Právě zpracovávané požadavky</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="location.reload()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.Any())
+                        {
+                            <div class="row">
+                                @foreach (var execution in Model)
+                                {
+                                    <div class="col-lg-6">
+                                        <div class="info-box @(execution.Status == OAI.Core.Entities.Business.ExecutionStatus.Paused ? "bg-warning" : "bg-primary")">
+                                            <span class="info-box-icon">
+                                                <i class="fas fa-@(execution.Status == OAI.Core.Entities.Business.ExecutionStatus.Paused ? "pause" : "cog fa-spin")"></i>
+                                            </span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">
+                                                    @execution.RequestNumber - @execution.BusinessRequestTitle
+                                                </span>
+                                                <span class="info-box-number">
+                                                    @GetExecutionStatusText(execution.Status)
+                                                </span>
+                                                <div class="progress">
+                                                    <div class="progress-bar" style="width: @GetProgressPercentage(execution)%"></div>
+                                                </div>
+                                                <span class="progress-description">
+                                                    Spuštěno: @(execution.StartedAt.ToString("HH:mm:ss")) | 
+                                                    Běží: @FormatDuration(execution.StartedAt, DateTime.Now)
+                                                </span>
+                                            </div>
+                                            <div class="info-box-more">
+                                                <a href="/Requests/@execution.BusinessRequestId/Progress" class="btn btn-sm btn-light">
+                                                    <i class="fas fa-chart-line"></i> Průběh
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="table-responsive mt-4">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Číslo požadavku</th>
+                                            <th>Název</th>
+                                            <th>Stav</th>
+                                            <th>Spuštěno</th>
+                                            <th>Doba běhu</th>
+                                            <th>Spustil</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var execution in Model)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="/Requests/@execution.BusinessRequestId">
+                                                        @execution.RequestNumber
+                                                    </a>
+                                                </td>
+                                                <td>@execution.BusinessRequestTitle</td>
+                                                <td>
+                                                    <span class="badge badge-@GetExecutionStatusColor(execution.Status)">
+                                                        @GetExecutionStatusText(execution.Status)
+                                                    </span>
+                                                </td>
+                                                <td>@(execution.StartedAt.ToString("dd.MM.yyyy HH:mm:ss"))</td>
+                                                <td>@FormatDuration(execution.StartedAt, DateTime.Now)</td>
+                                                <td>@execution.ExecutedBy</td>
+                                                <td>
+                                                    <a href="/Requests/@execution.BusinessRequestId/Progress" 
+                                                       class="btn btn-sm btn-info" title="Zobrazit průběh">
+                                                        <i class="fas fa-chart-line"></i>
+                                                    </a>
+                                                    @if (execution.Status == OAI.Core.Entities.Business.ExecutionStatus.Running)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-warning" 
+                                                                onclick="pauseExecution(@execution.Id)" title="Pozastavit">
+                                                            <i class="fas fa-pause"></i>
+                                                        </button>
+                                                    }
+                                                    else if (execution.Status == OAI.Core.Entities.Business.ExecutionStatus.Paused)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-success" 
+                                                                onclick="resumeExecution(@execution.Id)" title="Pokračovat">
+                                                            <i class="fas fa-play"></i>
+                                                        </button>
+                                                    }
+                                                    <button type="button" class="btn btn-sm btn-danger" 
+                                                            onclick="cancelExecution(@execution.Id)" title="Zrušit">
+                                                        <i class="fas fa-stop"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> Žádné požadavky se momentálně nezpracovávají.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script>
+        let connection;
+
+        async function initializeSignalR() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/monitoringHub")
+                .build();
+
+            connection.on("ExecutionProgress", function (progress) {
+                // Auto-refresh when progress updates
+                location.reload();
+            });
+
+            connection.on("ExecutionCompleted", function (execution) {
+                toastr.success(`Zpracování ${execution.businessRequest.requestNumber} bylo dokončeno`);
+                setTimeout(() => location.reload(), 2000);
+            });
+
+            try {
+                await connection.start();
+                console.log("SignalR připojeno");
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function pauseExecution(executionId) {
+            if (!confirm('Opravdu chcete pozastavit zpracování?')) return;
+            
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/pause`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    toastr.success('Zpracování bylo pozastaveno');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    toastr.error(data.message || 'Chyba při pozastavování');
+                }
+            } catch (error) {
+                toastr.error('Chyba při komunikaci se serverem');
+            }
+        }
+
+        async function resumeExecution(executionId) {
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/resume`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    toastr.success('Zpracování bylo obnoveno');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    toastr.error(data.message || 'Chyba při obnovování');
+                }
+            } catch (error) {
+                toastr.error('Chyba při komunikaci se serverem');
+            }
+        }
+
+        async function cancelExecution(executionId) {
+            if (!confirm('Opravdu chcete zrušit zpracování? Tuto akci nelze vrátit zpět.')) return;
+            
+            try {
+                const response = await fetch(`/api/requests/executions/${executionId}/cancel`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    toastr.success('Zpracování bylo zrušeno');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    toastr.error(data.message || 'Chyba při rušení');
+                }
+            } catch (error) {
+                toastr.error('Chyba při komunikaci se serverem');
+            }
+        }
+
+        $(document).ready(function() {
+            initializeSignalR();
+            
+            // Auto-refresh every 10 seconds
+            setInterval(() => {
+                location.reload();
+            }, 10000);
+        });
+    </script>
+}
+
+@functions {
+    string GetExecutionStatusText(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "Zpracovává se",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "Pozastaveno",
+        _ => status.ToString()
+    };
+
+    string GetExecutionStatusColor(OAI.Core.Entities.Business.ExecutionStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.ExecutionStatus.Running => "primary",
+        OAI.Core.Entities.Business.ExecutionStatus.Paused => "warning",
+        _ => "secondary"
+    };
+
+    double GetProgressPercentage(OAI.Core.DTOs.Business.RequestExecutionDto execution)
+    {
+        if (execution.StepExecutions == null || !execution.StepExecutions.Any())
+            return 0;
+            
+        var total = execution.StepExecutions.Count();
+        var completed = execution.StepExecutions.Count(s => s.Status == OAI.Core.Entities.Business.ExecutionStatus.Completed);
+        
+        return total > 0 ? (double)completed / total * 100 : 0;
+    }
+
+    string FormatDuration(DateTime start, DateTime end)
+    {
+        var duration = end - start;
+        if (duration.TotalMinutes < 1)
+            return $"{duration.TotalSeconds:0} sekund";
+        if (duration.TotalHours < 1)
+            return $"{duration.TotalMinutes:0} minut";
+        if (duration.TotalDays < 1)
+            return $"{duration.TotalHours:0.#} hodin";
+        return $"{duration.TotalDays:0.#} dní";
+    }
+}

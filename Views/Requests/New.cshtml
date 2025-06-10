@@ -1,0 +1,514 @@
+@{
+    ViewData["Title"] = "Nový požadavek";
+}
+
+<!-- Content Header -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-plus-circle"></i> Nový požadavek
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
+                    <li class="breadcrumb-item active">Nový</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <!-- Step Indicator -->
+                <div class="bs-stepper">
+                    <div class="bs-stepper-header" role="tablist">
+                        <div class="step active" data-target="#step1">
+                            <button type="button" class="step-trigger" role="tab">
+                                <span class="bs-stepper-circle">1</span>
+                                <span class="bs-stepper-label">Základní údaje</span>
+                            </button>
+                        </div>
+                        <div class="line"></div>
+                        <div class="step" data-target="#step2">
+                            <button type="button" class="step-trigger" role="tab">
+                                <span class="bs-stepper-circle">2</span>
+                                <span class="bs-stepper-label">Konfigurace</span>
+                            </button>
+                        </div>
+                        <div class="line"></div>
+                        <div class="step" data-target="#step3">
+                            <button type="button" class="step-trigger" role="tab">
+                                <span class="bs-stepper-circle">3</span>
+                                <span class="bs-stepper-label">Náhled</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form -->
+                <form id="newRequestForm">
+                    <!-- Step 1: Basic Info -->
+                    <div class="card" id="step1">
+                        <div class="card-header">
+                            <h3 class="card-title">Základní údaje</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Typ požadavku <span class="text-danger">*</span></label>
+                                        <select class="form-control select2" id="requestType" name="requestType" required>
+                                            <option value="">-- Vyberte typ --</option>
+                                            @foreach (var type in ViewBag.RequestTypes)
+                                            {
+                                                <option value="@type.Value">@type.Text</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Priorita <span class="text-danger">*</span></label>
+                                        <select class="form-control" id="priority" name="priority" required>
+                                            @foreach (var priority in ViewBag.Priorities)
+                                            {
+                                                @if (priority.Value.ToString() == "Normal")
+                                                {
+                                                    <option value="@priority.Value" selected>
+                                                        @priority.Text
+                                                    </option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@priority.Value">
+                                                        @priority.Text
+                                                    </option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Název požadavku <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="title" name="title" 
+                                       placeholder="Např. Produktové fotky pro kolekci Jaro 2024" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Popis</label>
+                                <textarea class="form-control" id="description" name="description" rows="3"
+                                          placeholder="Podrobný popis požadavku..."></textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Klient ID</label>
+                                        <input type="text" class="form-control" id="clientId" name="clientId" 
+                                               placeholder="CL-001">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Název klienta</label>
+                                        <input type="text" class="form-control" id="clientName" name="clientName" 
+                                               placeholder="Název společnosti">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Deadline</label>
+                                        <input type="datetime-local" class="form-control" id="deadline" name="deadline">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Odhadovaná cena</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="estimatedCost" name="estimatedCost" 
+                                                   placeholder="0.00" step="0.01">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text">Kč</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="button" class="btn btn-primary float-right" id="nextStep1">
+                                Další <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Configuration -->
+                    <div class="card" id="step2" style="display: none;">
+                        <div class="card-header">
+                            <h3 class="card-title">Konfigurace workflow</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Workflow šablona</label>
+                                <select class="form-control select2" id="workflowTemplateId" name="workflowTemplateId">
+                                    <option value="">-- Načítání šablon --</option>
+                                </select>
+                            </div>
+                            
+                            <div id="workflow-details" style="display: none;">
+                                <div class="alert alert-info">
+                                    <h5><i class="icon fas fa-info"></i> Detail workflow</h5>
+                                    <p id="workflow-description"></p>
+                                    <ul id="workflow-steps"></ul>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Soubory</label>
+                                <div class="custom-file">
+                                    <input type="file" class="custom-file-input" id="files" name="files" multiple>
+                                    <label class="custom-file-label" for="files">Vyberte soubory</label>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Můžete vybrat více souborů najednou
+                                </small>
+                            </div>
+                            
+                            <div id="file-list" class="mt-3"></div>
+                            
+                            <div class="form-group">
+                                <label>Dodatečná nastavení (JSON)</label>
+                                <textarea class="form-control" id="metadata" name="metadata" rows="5"
+                                          placeholder='{"removeBackground": true, "enhanceQuality": true}'></textarea>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="button" class="btn btn-secondary" id="prevStep2">
+                                <i class="fas fa-arrow-left"></i> Zpět
+                            </button>
+                            <button type="button" class="btn btn-primary float-right" id="nextStep2">
+                                Další <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Preview -->
+                    <div class="card" id="step3" style="display: none;">
+                        <div class="card-header">
+                            <h3 class="card-title">Náhled požadavku</h3>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row">
+                                <dt class="col-sm-3">Typ požadavku:</dt>
+                                <dd class="col-sm-9" id="preview-type"></dd>
+                                
+                                <dt class="col-sm-3">Název:</dt>
+                                <dd class="col-sm-9" id="preview-title"></dd>
+                                
+                                <dt class="col-sm-3">Priorita:</dt>
+                                <dd class="col-sm-9" id="preview-priority"></dd>
+                                
+                                <dt class="col-sm-3">Klient:</dt>
+                                <dd class="col-sm-9" id="preview-client"></dd>
+                                
+                                <dt class="col-sm-3">Deadline:</dt>
+                                <dd class="col-sm-9" id="preview-deadline"></dd>
+                                
+                                <dt class="col-sm-3">Odhadovaná cena:</dt>
+                                <dd class="col-sm-9" id="preview-cost"></dd>
+                                
+                                <dt class="col-sm-3">Workflow:</dt>
+                                <dd class="col-sm-9" id="preview-workflow"></dd>
+                                
+                                <dt class="col-sm-3">Počet souborů:</dt>
+                                <dd class="col-sm-9" id="preview-files"></dd>
+                            </dl>
+                            
+                            <div class="alert alert-warning">
+                                <i class="icon fas fa-exclamation-triangle"></i>
+                                Po vytvoření bude požadavek ve stavu <strong>Koncept</strong>. 
+                                Pro zahájení zpracování jej musíte odeslat.
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="button" class="btn btn-secondary" id="prevStep3">
+                                <i class="fas fa-arrow-left"></i> Zpět
+                            </button>
+                            <button type="submit" class="btn btn-success float-right" id="submitRequest">
+                                <i class="fas fa-check"></i> Vytvořit požadavek
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/plugins/select2/css/select2.min.css">
+    <link rel="stylesheet" href="~/plugins/select2-bootstrap4-theme/select2-bootstrap4.min.css">
+    <link rel="stylesheet" href="~/plugins/bs-stepper/css/bs-stepper.min.css">
+}
+
+@section Scripts {
+    <script src="~/plugins/select2/js/select2.full.min.js"></script>
+    <script src="~/plugins/bs-stepper/js/bs-stepper.min.js"></script>
+    <script src="~/plugins/bs-custom-file-input/bs-custom-file-input.min.js"></script>
+    
+    <script>
+        let selectedFiles = [];
+        let workflows = {};
+        
+        $(document).ready(function() {
+            // Initialize plugins
+            $('.select2').select2({
+                theme: 'bootstrap4'
+            });
+            
+            bsCustomFileInput.init();
+            
+            // Step navigation
+            $('#nextStep1').click(function() {
+                if (validateStep1()) {
+                    $('#step1').hide();
+                    $('#step2').show();
+                    updateStepIndicator(2);
+                    loadWorkflowTemplates();
+                }
+            });
+            
+            $('#prevStep2').click(function() {
+                $('#step2').hide();
+                $('#step1').show();
+                updateStepIndicator(1);
+            });
+            
+            $('#nextStep2').click(function() {
+                if (validateStep2()) {
+                    $('#step2').hide();
+                    $('#step3').show();
+                    updateStepIndicator(3);
+                    updatePreview();
+                }
+            });
+            
+            $('#prevStep3').click(function() {
+                $('#step3').hide();
+                $('#step2').show();
+                updateStepIndicator(2);
+            });
+            
+            // Request type change
+            $('#requestType').change(function() {
+                const type = $(this).val();
+                if (type) {
+                    loadWorkflowTemplates(type);
+                }
+            });
+            
+            // Workflow template change
+            $('#workflowTemplateId').change(function() {
+                const templateId = $(this).val();
+                if (templateId && workflows[templateId]) {
+                    const workflow = workflows[templateId];
+                    $('#workflow-description').text(workflow.description || 'Bez popisu');
+                    
+                    const stepsList = $('#workflow-steps');
+                    stepsList.empty();
+                    workflow.steps.forEach(step => {
+                        stepsList.append(`<li>${step.name} (${step.stepType})</li>`);
+                    });
+                    
+                    $('#workflow-details').show();
+                } else {
+                    $('#workflow-details').hide();
+                }
+            });
+            
+            // File selection
+            $('#files').change(function(e) {
+                selectedFiles = Array.from(e.target.files);
+                updateFileList();
+            });
+            
+            // Form submission
+            $('#newRequestForm').submit(function(e) {
+                e.preventDefault();
+                createRequest();
+            });
+        });
+        
+        function updateStepIndicator(step) {
+            $('.step').removeClass('active');
+            $(`.step:nth-child(${(step - 1) * 2 + 1})`).addClass('active');
+        }
+        
+        function validateStep1() {
+            const required = ['requestType', 'title', 'priority'];
+            let valid = true;
+            
+            required.forEach(field => {
+                const value = $(`#${field}`).val();
+                if (!value) {
+                    $(`#${field}`).addClass('is-invalid');
+                    valid = false;
+                } else {
+                    $(`#${field}`).removeClass('is-invalid');
+                }
+            });
+            
+            if (!valid) {
+                Swal.fire('Chyba', 'Vyplňte všechny povinné údaje', 'error');
+            }
+            
+            return valid;
+        }
+        
+        function validateStep2() {
+            // Workflow template is optional
+            return true;
+        }
+        
+        function loadWorkflowTemplates(type) {
+            const requestType = type || $('#requestType').val();
+            if (!requestType) return;
+            
+            $.ajax({
+                url: `/api/workflows/request-type/${requestType}`,
+                method: 'GET',
+                success: function(response) {
+                    const select = $('#workflowTemplateId');
+                    select.empty();
+                    select.append('<option value="">-- Vyberte workflow (volitelné) --</option>');
+                    
+                    if (response.data && response.data.length > 0) {
+                        response.data.forEach(workflow => {
+                            workflows[workflow.id] = workflow;
+                            select.append(`<option value="${workflow.id}">${workflow.name} v${workflow.version}</option>`);
+                        });
+                    }
+                }
+            });
+        }
+        
+        function updateFileList() {
+            const container = $('#file-list');
+            container.empty();
+            
+            if (selectedFiles.length > 0) {
+                const list = $('<ul class="list-unstyled"></ul>');
+                selectedFiles.forEach((file, index) => {
+                    list.append(`
+                        <li>
+                            <i class="fas fa-file"></i> ${file.name} 
+                            <small class="text-muted">(${formatFileSize(file.size)})</small>
+                            <button type="button" class="btn btn-sm btn-link text-danger" onclick="removeFile(${index})">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </li>
+                    `);
+                });
+                container.append(list);
+            }
+        }
+        
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFileList();
+            
+            // Reset file input
+            const dt = new DataTransfer();
+            selectedFiles.forEach(file => dt.items.add(file));
+            $('#files')[0].files = dt.files;
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function updatePreview() {
+            $('#preview-type').text($('#requestType option:selected').text());
+            $('#preview-title').text($('#title').val());
+            $('#preview-priority').html(`<span class="badge badge-${getPriorityClass($('#priority').val())}">${$('#priority option:selected').text()}</span>`);
+            $('#preview-client').text($('#clientName').val() || 'Nespecifikováno');
+            $('#preview-deadline').text($('#deadline').val() ? new Date($('#deadline').val()).toLocaleString('cs-CZ') : 'Nespecifikováno');
+            $('#preview-cost').text($('#estimatedCost').val() ? $('#estimatedCost').val() + ' Kč' : 'Nespecifikováno');
+            $('#preview-workflow').text($('#workflowTemplateId option:selected').text() || 'Žádné');
+            $('#preview-files').text(selectedFiles.length);
+        }
+        
+        function getPriorityClass(priority) {
+            const classes = {
+                'Low': 'secondary',
+                'Normal': 'info',
+                'High': 'warning',
+                'Urgent': 'danger'
+            };
+            return classes[priority] || 'info';
+        }
+        
+        function createRequest() {
+            const formData = {
+                requestType: $('#requestType').val(),
+                title: $('#title').val(),
+                description: $('#description').val(),
+                clientId: $('#clientId').val(),
+                clientName: $('#clientName').val(),
+                priority: parseInt($('#priority').val()),
+                deadline: $('#deadline').val() || null,
+                estimatedCost: parseFloat($('#estimatedCost').val()) || null,
+                workflowTemplateId: parseInt($('#workflowTemplateId').val()) || null,
+                metadata: $('#metadata').val() || null
+            };
+            
+            $.ajax({
+                url: '/api/requests',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                success: function(response) {
+                    if (response.success && response.data) {
+                        // TODO: Upload files if any
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Požadavek vytvořen',
+                            text: `Požadavek ${response.data.requestNumber} byl úspěšně vytvořen`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Zobrazit detail',
+                            cancelButtonText: 'Vytvořit další'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = `/Requests/${response.data.id}`;
+                            } else {
+                                window.location.href = '/Requests/New';
+                            }
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    const error = xhr.responseJSON?.message || 'Nepodařilo se vytvořit požadavek';
+                    Swal.fire('Chyba', error, 'error');
+                }
+            });
+        }
+    </script>
+}
