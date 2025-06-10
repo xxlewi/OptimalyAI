@@ -27,12 +27,22 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="row">
-                            <div class="col-sm-6">
+                            <div class="col-sm-4">
                                 <a asp-action="Create" class="btn btn-primary">
                                     <i class="fas fa-plus"></i> Nový zákazník
                                 </a>
                             </div>
-                            <div class="col-sm-6">
+                            <div class="col-sm-4 text-center">
+                                <div class="btn-group" role="group">
+                                    <a asp-action="Index" asp-route-showDeleted="false" class="btn @(ViewBag.ShowDeleted == false ? "btn-primary" : "btn-outline-primary")">
+                                        <i class="fas fa-users"></i> Aktivní
+                                    </a>
+                                    <a asp-action="Index" asp-route-showDeleted="true" class="btn @(ViewBag.ShowDeleted == true ? "btn-secondary" : "btn-outline-secondary")">
+                                        <i class="fas fa-archive"></i> Archivované
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-sm-4">
                                 <div class="card-tools float-right">
                                     <div class="input-group input-group-sm" style="width: 250px;">
                                         <input type="text" id="customerSearch" class="form-control float-right" placeholder="Hledat zákazníka...">
@@ -58,6 +68,7 @@
                                     <th>Segment</th>
                                     <th>Status</th>
                                     <th>Projekty</th>
+                                    <th>Požadavky</th>
                                     <th>Hodnota</th>
                                     <th>Akce</th>
                                 </tr>
@@ -119,6 +130,9 @@
                                             <span class="text-primary">@customer.ActiveProjectsCount</span> / @customer.ProjectsCount
                                         </td>
                                         <td>
+                                            <span class="text-warning">@customer.ActiveRequestsCount</span> / @customer.RequestsCount
+                                        </td>
+                                        <td>
                                             @if (customer.TotalProjectsValue > 0)
                                             {
                                                 <strong>@customer.TotalProjectsValue.ToString("C0")</strong>
@@ -133,12 +147,29 @@
                                                 <a asp-action="Details" asp-route-id="@customer.Id" class="btn btn-info" title="Detail">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
-                                                <a asp-action="Edit" asp-route-id="@customer.Id" class="btn btn-warning" title="Upravit">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@customer.Id" class="btn btn-success" title="Nový projekt">
-                                                    <i class="fas fa-plus"></i>
-                                                </a>
+                                                @if (!customer.IsDeleted)
+                                                {
+                                                    <a asp-action="Edit" asp-route-id="@customer.Id" class="btn btn-warning" title="Upravit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                    <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@customer.Id" class="btn btn-success" title="Nový projekt">
+                                                        <i class="fas fa-project-diagram"></i>
+                                                    </a>
+                                                    <a asp-controller="Requests" asp-action="New" asp-route-customerId="@customer.Id" class="btn btn-info" title="Nový požadavek">
+                                                        <i class="fas fa-file-plus"></i>
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-success btn-sm restore-customer-btn" data-customer-id="@customer.Id" title="Aktivovat">
+                                                        <i class="fas fa-undo"></i> Aktivovat
+                                                    </button>
+                                                    <button class="btn btn-danger btn-sm permanent-delete-customer-btn" data-customer-id="@customer.Id" title="Trvale smazat">
+                                                        <i class="fas fa-trash-alt"></i> Smazat
+                                                    </button>
+                                                    <br/>
+                                                    <small class="text-muted">Archivován @customer.DeletedAt?.ToString("dd.MM.yyyy")</small>
+                                                }
                                             </div>
                                         </td>
                                     </tr>
@@ -187,6 +218,26 @@
                         </div>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-purple"><i class="fas fa-file-alt"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Celkem požadavků</span>
+                                <span class="info-box-number">@Model.Sum(c => c.RequestsCount)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-orange"><i class="fas fa-clock"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Aktivní požadavky</span>
+                                <span class="info-box-number">@Model.Sum(c => c.ActiveRequestsCount)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -205,6 +256,113 @@
             if (e.which === 13) {
                 searchCustomers();
             }
+        });
+
+        // Obnovení zákazníka
+        $(document).on('click', '.restore-customer-btn', function() {
+            var customerId = $(this).data('customer-id');
+            
+            Swal.fire({
+                title: 'Aktivovat zákazníka?',
+                text: 'Zákazník bude obnoven ze stavu archivován.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#28a745',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ano, aktivovat!',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("Restore", "Customers")/' + customerId,
+                        type: 'POST',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire(
+                                    'Aktivován!',
+                                    response.message,
+                                    'success'
+                                ).then(() => {
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire(
+                                    'Chyba!',
+                                    response.message,
+                                    'error'
+                                );
+                            }
+                        },
+                        error: function() {
+                            Swal.fire(
+                                'Chyba!',
+                                'Nastala chyba při aktivaci zákazníka.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        });
+
+        // Trvalé smazání zákazníka
+        $(document).on('click', '.permanent-delete-customer-btn', function() {
+            var customerId = $(this).data('customer-id');
+            
+            Swal.fire({
+                title: 'Trvale smazat zákazníka?',
+                text: 'POZOR! Tato akce je NEVRATNÁ. Zákazník bude trvale odstraněn ze systému.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ano, trvale smazat!',
+                cancelButtonText: 'Zrušit',
+                input: 'text',
+                inputPlaceholder: 'Napište SMAZAT pro potvrzení',
+                inputValidator: (value) => {
+                    if (value !== 'SMAZAT') {
+                        return 'Musíte napsat SMAZAT pro potvrzení!'
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("PermanentDelete", "Customers")/' + customerId,
+                        type: 'POST',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire(
+                                    'Smazáno!',
+                                    response.message,
+                                    'success'
+                                ).then(() => {
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire(
+                                    'Chyba!',
+                                    response.message,
+                                    'error'
+                                );
+                            }
+                        },
+                        error: function() {
+                            Swal.fire(
+                                'Chyba!',
+                                'Nastala chyba při mazání zákazníka.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
         });
     </script>
 }

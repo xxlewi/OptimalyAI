@@ -27,6 +27,9 @@ namespace OAI.ServiceLayer.Services.Customers
         Task<bool> HasActiveProjectsAsync(Guid customerId);
         Task<bool> ExistsAsync(Guid id);
         Task<IEnumerable<CustomerListDto>> SearchAsync(string query);
+        Task<IEnumerable<CustomerListDto>> GetDeletedAsync();
+        Task RestoreAsync(Guid id);
+        Task PermanentDeleteAsync(Guid id);
     }
 
     public class CustomerService : ICustomerService
@@ -107,6 +110,7 @@ namespace OAI.ServiceLayer.Services.Customers
         public async Task<IEnumerable<CustomerDto>> GetAllAsync()
         {
             var customers = await _repository.GetAsync(
+                filter: c => !c.IsDeleted,
                 orderBy: q => q.OrderBy(c => c.Name))
                 .ToListAsync();
 
@@ -116,7 +120,9 @@ namespace OAI.ServiceLayer.Services.Customers
         public async Task<IEnumerable<CustomerListDto>> GetAllListAsync()
         {
             var customers = await _repository.GetAsync(
-                include: q => q.Include(c => c.Projects),
+                filter: c => !c.IsDeleted,
+                include: q => q.Include(c => c.Projects)
+                              .Include(c => c.Requests),
                 orderBy: q => q.OrderBy(c => c.Name))
                 .ToListAsync();
 
@@ -219,6 +225,9 @@ namespace OAI.ServiceLayer.Services.Customers
             if (customer == null)
                 throw new NotFoundException("Customer", id);
 
+            if (customer.IsDeleted)
+                throw new BusinessException("Zákazník je již smazán.");
+
             // Kontrola aktivních projektů
             var hasActiveProjects = await HasActiveProjectsAsync(id);
             if (hasActiveProjects)
@@ -226,14 +235,16 @@ namespace OAI.ServiceLayer.Services.Customers
                 throw new BusinessException("Nelze smazat zákazníka s aktivními projekty.");
             }
 
-            // Soft delete - pouze změna statusu
+            // Soft delete
+            customer.IsDeleted = true;
+            customer.DeletedAt = DateTime.UtcNow;
             customer.Status = CustomerStatus.Inactive;
             customer.UpdatedAt = DateTime.UtcNow;
 
             await _repository.UpdateAsync(customer);
             await _unitOfWork.SaveChangesAsync();
 
-            _logger.LogInformation("Customer {Id} deactivated", id);
+            _logger.LogInformation("Customer {Id} soft deleted", id);
         }
 
         public async Task UpdateMetricsAsync(Guid customerId)
@@ -307,6 +318,75 @@ namespace OAI.ServiceLayer.Services.Customers
         public async Task<bool> ExistsAsync(Guid id)
         {
             return await _repository.ExistsAsync(c => c.Id == id);
+        }
+
+        public async Task<IEnumerable<CustomerListDto>> GetDeletedAsync()
+        {
+            var customers = await _repository.GetAsync(
+                filter: c => c.IsDeleted,
+                include: q => q.Include(c => c.Projects),
+                orderBy: q => q.OrderByDescending(c => c.DeletedAt))
+                .ToListAsync();
+
+            return customers.Select(_mapper.ToListDto);
+        }
+
+        public async Task RestoreAsync(Guid id)
+        {
+            var customer = await _repository.GetByIdAsync(id);
+            if (customer == null)
+                throw new NotFoundException("Customer", id);
+
+            if (!customer.IsDeleted)
+                throw new BusinessException("Zákazník není archivován.");
+
+            // Restore zákazníka
+            customer.IsDeleted = false;
+            customer.DeletedAt = null;
+            customer.Status = CustomerStatus.Active;
+            customer.UpdatedAt = DateTime.UtcNow;
+
+            await _repository.UpdateAsync(customer);
+            await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Customer {Id} restored", id);
+        }
+
+        public async Task PermanentDeleteAsync(Guid id)
+        {
+            var customer = await _repository.GetByIdAsync(id);
+            if (customer == null)
+                throw new NotFoundException("Customer", id);
+
+            if (!customer.IsDeleted)
+                throw new BusinessException("Zákazník musí být nejprve archivován před trvalým smazáním.");
+
+            // Kontrola projektů - nesmí mít žádné projekty
+            var hasProjects = await _projectRepository.ExistsAsync(p => p.CustomerId == id);
+            if (hasProjects)
+            {
+                throw new BusinessException("Nelze trvale smazat zákazníka s projekty. Nejprve smažte všechny projekty.");
+            }
+
+            // Kontrola požadavků
+            var hasRequests = await _requestRepository.ExistsAsync(r => r.CustomerId == id);
+            if (hasRequests)
+            {
+                throw new BusinessException("Nelze trvale smazat zákazníka s požadavky. Nejprve smažte všechny požadavky.");
+            }
+
+            // Smazání kontaktů
+            var contacts = await _contactRepository.GetAsync(filter: c => c.CustomerId == id).ToListAsync();
+            foreach (var contact in contacts)
+            {
+                await _contactRepository.DeleteAsync(contact.Id);
+            }
+
+            // Trvalé smazání zákazníka
+            await _repository.DeleteAsync(customer.Id);
+            await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Customer {Id} permanently deleted", id);
         }
     }
 }

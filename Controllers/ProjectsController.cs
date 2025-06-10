@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Projects;
 using OAI.Core.Entities.Projects;
 using OAI.ServiceLayer.Services.Projects;
+using OAI.ServiceLayer.Services.Customers;
 using OptimalyAI.ViewModels;
 
 namespace OptimalyAI.Controllers
@@ -20,6 +21,7 @@ namespace OptimalyAI.Controllers
         private readonly IProjectWorkflowService _workflowService;
         private readonly IProjectExecutionService _executionService;
         private readonly IProjectContextService _contextService;
+        private readonly ICustomerService _customerService;
         private readonly ILogger<ProjectsController> _logger;
 
         public ProjectsController(
@@ -27,12 +29,14 @@ namespace OptimalyAI.Controllers
             IProjectWorkflowService workflowService,
             IProjectExecutionService executionService,
             IProjectContextService contextService,
+            ICustomerService customerService,
             ILogger<ProjectsController> logger)
         {
             _projectService = projectService;
             _workflowService = workflowService;
             _executionService = executionService;
             _contextService = contextService;
+            _customerService = customerService;
             _logger = logger;
         }
 
@@ -166,9 +170,37 @@ namespace OptimalyAI.Controllers
         /// Create new project
         /// </summary>
         [HttpGet]
-        public IActionResult Create()
+        public async Task<IActionResult> Create(Guid? customerId = null)
         {
-            return View();
+            var model = new CreateProjectViewModel();
+            
+            // Načtení seznamu zákazníků pro dropdown
+            var customers = await _customerService.GetAllListAsync();
+            ViewBag.Customers = customers.Select(c => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+            {
+                Value = c.Id.ToString(),
+                Text = string.IsNullOrEmpty(c.CompanyName) ? c.Name : $"{c.Name} ({c.CompanyName})"
+            }).ToList();
+            
+            // Předání dat zákazníků pro JavaScript
+            ViewBag.CustomersData = customers.ToDictionary(
+                c => c.Id.ToString(),
+                c => new { name = c.Name, email = c.Email ?? "" }
+            );
+            
+            // Pokud je zadáno customerId, předvyplň zákazníka
+            if (customerId.HasValue)
+            {
+                var customer = customers.FirstOrDefault(c => c.Id == customerId.Value);
+                if (customer != null)
+                {
+                    model.CustomerId = customerId.Value;
+                    model.CustomerName = customer.Name;
+                    model.CustomerEmail = customer.Email;
+                }
+            }
+            
+            return View(model);
         }
 
         /// <summary>
@@ -178,8 +210,27 @@ namespace OptimalyAI.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(CreateProjectViewModel model)
         {
+            _logger.LogInformation("Create POST called with model: {@Model}", model);
+            
             if (!ModelState.IsValid)
             {
+                _logger.LogWarning("ModelState is invalid. Errors: {Errors}", 
+                    ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+                
+                // Znovu načíst zákazníky pro dropdown při chybě
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.Customers = customers.Select(c => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                {
+                    Value = c.Id.ToString(),
+                    Text = string.IsNullOrEmpty(c.CompanyName) ? c.Name : $"{c.Name} ({c.CompanyName})"
+                }).ToList();
+                
+                // Předání dat zákazníků pro JavaScript
+                ViewBag.CustomersData = customers.ToDictionary(
+                    c => c.Id.ToString(),
+                    c => new { name = c.Name, email = c.Email ?? "" }
+                );
+                
                 return View(model);
             }
 
@@ -196,7 +247,8 @@ namespace OptimalyAI.Controllers
                     Priority = ProjectPriority.Medium,
                     ProjectType = "General",
                     EstimatedHours = model.EstimatedHours,
-                    HourlyRate = model.HourlyRate
+                    HourlyRate = model.HourlyRate,
+                    CustomerId = model.CustomerId
                 };
 
                 var project = await _projectService.CreateAsync(dto);
@@ -209,6 +261,21 @@ namespace OptimalyAI.Controllers
             {
                 _logger.LogError(ex, "Error creating project");
                 ModelState.AddModelError("", "Chyba při vytváření projektu. Zkuste to prosím znovu.");
+                
+                // Znovu načíst zákazníky pro dropdown při chybě
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.Customers = customers.Select(c => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                {
+                    Value = c.Id.ToString(),
+                    Text = string.IsNullOrEmpty(c.CompanyName) ? c.Name : $"{c.Name} ({c.CompanyName})"
+                }).ToList();
+                
+                // Předání dat zákazníků pro JavaScript
+                ViewBag.CustomersData = customers.ToDictionary(
+                    c => c.Id.ToString(),
+                    c => new { name = c.Name, email = c.Email ?? "" }
+                );
+                
                 return View(model);
             }
         }

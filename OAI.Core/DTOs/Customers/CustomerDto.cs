@@ -44,6 +44,10 @@ namespace OAI.Core.DTOs.Customers
         public decimal CurrentDebt { get; set; }
         public int PaymentTermDays { get; set; }
         
+        // Soft delete
+        public bool IsDeleted { get; set; }
+        public DateTime? DeletedAt { get; set; }
+        
         // Kolekce
         public List<CustomerContactDto> Contacts { get; set; } = new();
         public List<CustomerRequestListDto> RecentRequests { get; set; } = new();
@@ -63,8 +67,12 @@ namespace OAI.Core.DTOs.Customers
         // Souhrn
         public int ProjectsCount { get; set; }
         public int ActiveProjectsCount { get; set; }
+        public int RequestsCount { get; set; }
+        public int ActiveRequestsCount { get; set; }
         public decimal TotalProjectsValue { get; set; }
         public DateTime? LastContactDate { get; set; }
+        public bool IsDeleted { get; set; }
+        public DateTime? DeletedAt { get; set; }
     }
 
     public class CreateCustomerDto : CreateDtoBase

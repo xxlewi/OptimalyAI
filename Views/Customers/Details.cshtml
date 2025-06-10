@@ -1,5 +1,6 @@
 @model OptimalyAI.ViewModels.CustomerDetailViewModel
 @using OAI.Core.Entities.Customers
+@using static OAI.Core.Entities.Customers.CustomerRequest
 @{
     ViewData["Title"] = "Detail zákazníka";
 }
@@ -269,12 +270,33 @@
                 <!-- Akce -->
                 <div class="card">
                     <div class="card-body">
-                        <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@Model.Id" class="btn btn-success btn-block">
-                            <i class="fas fa-plus"></i> Nový projekt
-                        </a>
-                        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning btn-block">
-                            <i class="fas fa-edit"></i> Upravit zákazníka
-                        </a>
+                        @if (!Model.IsDeleted)
+                        {
+                            <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@Model.Id" class="btn btn-success btn-block">
+                                <i class="fas fa-plus"></i> Nový projekt
+                            </a>
+                            <a asp-controller="Requests" asp-action="New" asp-route-customerId="@Model.Id" class="btn btn-info btn-block">
+                                <i class="fas fa-file-plus"></i> Nový požadavek
+                            </a>
+                            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning btn-block">
+                                <i class="fas fa-edit"></i> Upravit zákazníka
+                            </a>
+                            <button id="deleteCustomerBtn" class="btn btn-danger btn-block" data-customer-id="@Model.Id">
+                                <i class="fas fa-trash"></i> Archivovat zákazníka
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mb-3">
+                                <i class="fas fa-archive"></i> Zákazník byl archivován @Model.DeletedAt?.ToString("dd.MM.yyyy HH:mm")
+                            </div>
+                            <button id="restoreCustomerBtn" class="btn btn-success btn-block" data-customer-id="@Model.Id">
+                                <i class="fas fa-undo"></i> Aktivovat zákazníka
+                            </button>
+                            <button id="permanentDeleteCustomerBtn" class="btn btn-danger btn-block" data-customer-id="@Model.Id">
+                                <i class="fas fa-trash-alt"></i> Trvale smazat
+                            </button>
+                        }
                         <a asp-action="Index" class="btn btn-default btn-block">
                             <i class="fas fa-arrow-left"></i> Zpět na seznam
                         </a>
@@ -284,71 +306,181 @@
         </div>
 
         <!-- Nedávné projekty -->
-        @if (Model.RecentProjects.Any())
-        {
-            <div class="row">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title"><i class="fas fa-project-diagram"></i> Nedávné projekty</h3>
-                            <div class="card-tools">
-                                <a asp-controller="Projects" asp-action="Index" asp-route-customerId="@Model.Id" class="btn btn-sm btn-primary">
-                                    Zobrazit všechny projekty
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-project-diagram"></i> Nedávné projekty</h3>
+                        <div class="card-tools">
+                            <a asp-controller="Projects" asp-action="Index" asp-route-customerId="@Model.Id" class="btn btn-sm btn-primary">
+                                Zobrazit všechny projekty
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.RecentProjects.Any())
+                        {
+                            <div class="table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Název</th>
+                                            <th>Status</th>
+                                            <th>Priorita</th>
+                                            <th>Vytvořen</th>
+                                            <th>Termín</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var project in Model.RecentProjects)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Projects" asp-action="Details" asp-route-id="@project.Id" class="text-primary">
+                                                        @project.Name
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@project.Status</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">@project.Priority</span>
+                                                </td>
+                                                <td>@project.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                                <td>
+                                                    @if (project.DueDate.HasValue)
+                                                    {
+                                                        @project.DueDate.Value.ToString("dd.MM.yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a asp-controller="Projects" asp-action="Details" asp-route-id="@project.Id" class="btn btn-info btn-sm">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-folder-open fa-3x mb-3"></i>
+                                <p>Žádné projekty zatím nebyly vytvořeny</p>
+                                <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@Model.Id" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Vytvořit první projekt
                                 </a>
                             </div>
-                        </div>
-                        <div class="card-body table-responsive p-0">
-                            <table class="table table-hover text-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th>Název</th>
-                                        <th>Status</th>
-                                        <th>Priorita</th>
-                                        <th>Vytvořen</th>
-                                        <th>Termín</th>
-                                        <th>Akce</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var project in Model.RecentProjects)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <a asp-controller="Projects" asp-action="Details" asp-route-id="@project.Id" class="text-primary">
-                                                    @project.Name
-                                                </a>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-secondary">@project.Status</span>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-secondary">@project.Priority</span>
-                                            </td>
-                                            <td>@project.CreatedAt.ToString("dd.MM.yyyy")</td>
-                                            <td>
-                                                @if (project.DueDate.HasValue)
-                                                {
-                                                    @project.DueDate.Value.ToString("dd.MM.yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                <a asp-controller="Projects" asp-action="Details" asp-route-id="@project.Id" class="btn btn-info btn-sm">
-                                                    <i class="fas fa-eye"></i>
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                        }
                     </div>
                 </div>
             </div>
-        }
+        </div>
+
+        <!-- Nedávné požadavky -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-file-alt"></i> Nedávné požadavky</h3>
+                        <div class="card-tools">
+                            <a asp-controller="Requests" asp-action="Index" asp-route-customerId="@Model.Id" class="btn btn-sm btn-info">
+                                Zobrazit všechny požadavky
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.RecentRequests.Any())
+                        {
+                            <div class="table-responsive p-0">
+                                <table class="table table-hover text-nowrap">
+                                    <thead>
+                                        <tr>
+                                            <th>Název</th>
+                                            <th>Typ</th>
+                                            <th>Status</th>
+                                            <th>Priorita</th>
+                                            <th>Přijato</th>
+                                            <th>Termín</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var request in Model.RecentRequests)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a asp-controller="Requests" asp-action="Details" asp-route-id="@request.Id" class="text-primary">
+                                                        @request.Title
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-info">@request.Type</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(request.Status switch {
+                                                        RequestStatus.New => "info",
+                                                        RequestStatus.InReview => "warning",
+                                                        RequestStatus.Approved => "primary",
+                                                        RequestStatus.InProgress => "warning",
+                                                        RequestStatus.Resolved => "success",
+                                                        RequestStatus.Rejected => "danger",
+                                                        RequestStatus.Cancelled => "secondary",
+                                                        _ => "secondary"
+                                                    })">@request.Status</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-@(request.Priority switch {
+                                                        RequestPriority.Low => "secondary",
+                                                        RequestPriority.Medium => "info",
+                                                        RequestPriority.High => "warning",
+                                                        RequestPriority.Critical => "danger",
+                                                        _ => "secondary"
+                                                    })">@request.Priority</span>
+                                                </td>
+                                                <td>@request.ReceivedDate.ToString("dd.MM.yyyy")</td>
+                                                <td>
+                                                    @if (request.RequestedDeadline.HasValue)
+                                                    {
+                                                        @request.RequestedDeadline.Value.ToString("dd.MM.yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <a asp-controller="Requests" asp-action="Details" asp-route-id="@request.Id" class="btn btn-info btn-sm">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-file-plus fa-3x mb-3"></i>
+                                <p>Žádné požadavky zatím nebyly vytvořeny</p>
+                                <a asp-controller="Requests" asp-action="New" asp-route-customerId="@Model.Id" class="btn btn-info">
+                                    <i class="fas fa-plus"></i> Vytvořit první požadavek
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -391,4 +523,166 @@
         CommunicationPreference.NoPreference => "Bez preference",
         _ => "Neznámé"
     };
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#deleteCustomerBtn').click(function() {
+                var customerId = $(this).data('customer-id');
+                
+                Swal.fire({
+                    title: 'Smazat zákazníka?',
+                    text: 'Tato akce je nevratná. Zákazník bude archivován.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Ano, smazat!',
+                    cancelButtonText: 'Zrušit'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '@Url.Action("Delete", "Customers")/' + customerId,
+                            type: 'POST',
+                            headers: {
+                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    Swal.fire(
+                                        'Smazáno!',
+                                        response.message,
+                                        'success'
+                                    ).then(() => {
+                                        window.location.href = '@Url.Action("Index", "Customers")';
+                                    });
+                                } else {
+                                    Swal.fire(
+                                        'Chyba!',
+                                        response.message,
+                                        'error'
+                                    );
+                                }
+                            },
+                            error: function() {
+                                Swal.fire(
+                                    'Chyba!',
+                                    'Nastala chyba při mazání zákazníka.',
+                                    'error'
+                                );
+                            }
+                        });
+                    }
+                });
+            });
+        });
+
+        // Obnovení zákazníka
+        $('#restoreCustomerBtn').click(function() {
+            var customerId = $(this).data('customer-id');
+            
+            Swal.fire({
+                title: 'Aktivovat zákazníka?',
+                text: 'Zákazník bude obnoven ze stavu archivován.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#28a745',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ano, aktivovat!',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("Restore", "Customers")/' + customerId,
+                        type: 'POST',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire(
+                                    'Aktivován!',
+                                    response.message,
+                                    'success'
+                                ).then(() => {
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire(
+                                    'Chyba!',
+                                    response.message,
+                                    'error'
+                                );
+                            }
+                        },
+                        error: function() {
+                            Swal.fire(
+                                'Chyba!',
+                                'Nastala chyba při aktivaci zákazníka.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        });
+
+        // Trvalé smazání zákazníka
+        $('#permanentDeleteCustomerBtn').click(function() {
+            var customerId = $(this).data('customer-id');
+            
+            Swal.fire({
+                title: 'Trvale smazat zákazníka?',
+                text: 'POZOR! Tato akce je NEVRATNÁ. Zákazník bude trvale odstraněn ze systému.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ano, trvale smazat!',
+                cancelButtonText: 'Zrušit',
+                input: 'text',
+                inputPlaceholder: 'Napište SMAZAT pro potvrzení',
+                inputValidator: (value) => {
+                    if (value !== 'SMAZAT') {
+                        return 'Musíte napsat SMAZAT pro potvrzení!'
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("PermanentDelete", "Customers")/' + customerId,
+                        type: 'POST',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire(
+                                    'Smazáno!',
+                                    response.message,
+                                    'success'
+                                ).then(() => {
+                                    window.location.href = '@Url.Action("Index", "Customers")';
+                                });
+                            } else {
+                                Swal.fire(
+                                    'Chyba!',
+                                    response.message,
+                                    'error'
+                                );
+                            }
+                        },
+                        error: function() {
+                            Swal.fire(
+                                'Chyba!',
+                                'Nastala chyba při mazání zákazníka.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        });
+    </script>
 }

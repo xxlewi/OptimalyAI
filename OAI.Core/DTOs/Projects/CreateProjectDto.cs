@@ -9,6 +9,8 @@ namespace OAI.Core.DTOs.Projects
     /// </summary>
     public class CreateProjectDto : CreateDtoBase
     {
+        public Guid? CustomerId { get; set; }
+
         [Required(ErrorMessage = "Název projektu je povinný")]
         [MaxLength(200)]
         public string Name { get; set; }

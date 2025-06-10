@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Project Create</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Test vytvoření projektu</h1>
+    <button id="testBtn">Test Create Project</button>
+    <div id="result"></div>
+
+    <script>
+        $('#testBtn').click(function() {
+            // Nejprve získáme CSRF token
+            $.get('https://localhost:5005/Projects/Create', function(html) {
+                var token = $(html).find('input[name="__RequestVerificationToken"]').val();
+                console.log('Token:', token);
+                
+                // Teď odešleme formulář
+                var formData = {
+                    __RequestVerificationToken: token,
+                    Name: 'Test Projekt ' + new Date().getTime(),
+                    Description: 'Testovací popis projektu',
+                    ProjectType: 'DemandAnalyzer',
+                    CustomerName: 'Test Customer',
+                    CustomerEmail: 'test@example.com'
+                };
+                
+                $.ajax({
+                    url: 'https://localhost:5005/Projects/Create',
+                    method: 'POST',
+                    data: formData,
+                    success: function(response) {
+                        $('#result').html('Úspěch! Redirected to: ' + this.url);
+                        console.log('Success:', response);
+                    },
+                    error: function(xhr) {
+                        $('#result').html('Chyba: ' + xhr.status + ' - ' + xhr.statusText);
+                        console.log('Error:', xhr);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

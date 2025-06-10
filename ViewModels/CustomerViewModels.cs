@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using OAI.Core.Entities.Customers;
+using System.Collections.Generic;
 
 namespace OptimalyAI.ViewModels
 {
@@ -141,6 +142,10 @@ namespace OptimalyAI.ViewModels
         public decimal? CreditLimit { get; set; }
         public decimal CurrentDebt { get; set; }
         public int PaymentTermDays { get; set; }
+        
+        // Soft delete
+        public bool IsDeleted { get; set; }
+        public DateTime? DeletedAt { get; set; }
         
         // Související data
         public List<ContactViewModel> Contacts { get; set; } = new();

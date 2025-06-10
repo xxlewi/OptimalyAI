@@ -27,7 +27,8 @@
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-project-diagram"></i> Základní informace o projektu</h3>
                     </div>
-                    <form asp-action="Create" method="post">
+                    <form asp-action="Create" asp-controller="Projects" method="post" id="createProjectForm">
+                        @Html.AntiForgeryToken()
                         <div class="card-body">
                             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                             
@@ -35,7 +36,7 @@
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label asp-for="Name" class="control-label">Název projektu</label>
-                                        <input asp-for="Name" class="form-control" placeholder="Např. Automatizace e-shopu XY" />
+                                        <input asp-for="Name" id="Name" class="form-control" placeholder="Např. Automatizace e-shopu XY" />
                                         <span asp-validation-for="Name" class="text-danger"></span>
                                     </div>
                                 </div>
@@ -55,31 +56,42 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
-                                <label asp-for="CustomerName" class="control-label">Zákazník</label>
-                                <input asp-for="CustomerName" class="form-control" placeholder="Název firmy nebo jméno zákazníka" />
-                                <span asp-validation-for="CustomerName" class="text-danger"></span>
-                            </div>
-
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-8">
                                     <div class="form-group">
-                                        <label asp-for="CustomerEmail" class="control-label">E-mail zákazníka</label>
-                                        <input asp-for="CustomerEmail" class="form-control" type="email" placeholder="zakaznik@firma.cz" />
-                                        <span asp-validation-for="CustomerEmail" class="text-danger"></span>
+                                        <label asp-for="CustomerId" class="control-label">Zákazník</label>
+                                        <select asp-for="CustomerId" asp-items="ViewBag.Customers" class="form-control" id="customerSelect">
+                                            <option value="">-- Vyberte zákazníka --</option>
+                                        </select>
+                                        <span asp-validation-for="CustomerId" class="text-danger"></span>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="form-group">
-                                        <label for="CustomerPhone" class="control-label">Telefon (nepovinné)</label>
-                                        <input name="CustomerPhone" class="form-control" placeholder="+420 123 456 789" />
+                                        <label class="control-label">&nbsp;</label>
+                                        <a asp-controller="Customers" asp-action="Create" class="btn btn-outline-primary form-control">
+                                            <i class="fas fa-plus"></i> Nový zákazník
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Hidden fields for customer data -->
+                            <input asp-for="CustomerName" type="hidden" />
+                            <input asp-for="CustomerEmail" type="hidden" />
+
+                            <div class="row" id="customerInfo" style="display: none;">
+                                <div class="col-md-12">
+                                    <div class="alert alert-info">
+                                        <strong>Vybraný zákazník:</strong> <span id="selectedCustomerName"></span><br>
+                                        <strong>Email:</strong> <span id="selectedCustomerEmail"></span>
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="form-group">
                                 <label asp-for="Description" class="control-label">Požadavek zákazníka</label>
-                                <textarea asp-for="Description" class="form-control" rows="6" 
+                                <textarea asp-for="Description" id="Description" class="form-control" rows="6" 
                                           placeholder="Detailně popište, co zákazník potřebuje. Např:&#10;&#10;Zákazník provozuje e-shop s oblečením a potřebuje automatizovat zpracování produktových fotografií:&#10;- Odstranění pozadí&#10;- Úprava velikosti na 1000x1000px&#10;- Přidání vodoznaku&#10;- Export do různých formátů&#10;&#10;Denně zpracovává cca 50-100 fotek."></textarea>
                                 <span asp-validation-for="Description" class="text-danger"></span>
                                 <small class="form-text text-muted">Čím podrobnější popis, tím lépe dokážeme navrhnout řešení</small>
@@ -148,4 +160,77 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        $(document).ready(function() {
+            console.log('Create Project page loaded');
+            
+            // Form submission handling - zjednodušená verze
+            $('#createProjectForm').on('submit', function(e) {
+                console.log('Form is being submitted');
+                
+                // Zkontrolovat povinná pole
+                var name = $('#Name').val();
+                var description = $('#Description').val();
+                
+                if (!name || !description) {
+                    e.preventDefault();
+                    
+                    // Zobrazit toast s chybou
+                    toastr.error('Prosím vyplňte všechna povinná pole (Název a Popis)');
+                    
+                    if (!name) {
+                        $('#Name').focus();
+                    } else if (!description) {
+                        $('#Description').focus();
+                    }
+                    
+                    return false;
+                }
+                
+                // Zobrazit loading toast
+                toastr.info('Vytváření projektu...', '', {
+                    timeOut: 0,
+                    extendedTimeOut: 0,
+                    closeButton: false,
+                    tapToDismiss: false
+                });
+                
+                // Povolit odeslání formuláře
+                return true;
+            });
+            
+            // Customer data from server
+            var customersData = @Html.Raw(Json.Serialize(ViewBag.CustomersData ?? new Dictionary<string, object>()));
+
+            // Handle customer selection
+            $('#customerSelect').change(function() {
+                var customerId = $(this).val();
+                
+                if (customerId && customersData[customerId]) {
+                    var customer = customersData[customerId];
+                    
+                    // Update hidden fields
+                    $('input[name="CustomerName"]').val(customer.name);
+                    $('input[name="CustomerEmail"]').val(customer.email);
+                    
+                    // Show customer info
+                    $('#selectedCustomerName').text(customer.name);
+                    $('#selectedCustomerEmail').text(customer.email);
+                    $('#customerInfo').show();
+                } else {
+                    // Clear hidden fields
+                    $('input[name="CustomerName"]').val('');
+                    $('input[name="CustomerEmail"]').val('');
+                    
+                    // Hide customer info
+                    $('#customerInfo').hide();
+                }
+            });
+
+            // Initialize if customer is pre-selected
+            if ($('#customerSelect').val()) {
+                $('#customerSelect').trigger('change');
+            }
+        });
+    </script>
 }

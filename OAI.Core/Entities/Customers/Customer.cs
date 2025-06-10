@@ -133,6 +133,16 @@ namespace OAI.Core.Entities.Customers
         /// </summary>
         public int PaymentTermDays { get; set; } = 14;
 
+        /// <summary>
+        /// Soft delete - označuje zda je zákazník smazán
+        /// </summary>
+        public bool IsDeleted { get; set; } = false;
+
+        /// <summary>
+        /// Datum smazání zákazníka
+        /// </summary>
+        public DateTime? DeletedAt { get; set; }
+
         // Navigační vlastnosti
         public virtual ICollection<Projects.Project> Projects { get; set; }
         public virtual ICollection<CustomerRequest> Requests { get; set; }

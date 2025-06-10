@@ -39,6 +39,7 @@ namespace OAI.ServiceLayer.Mapping.Projects
                 UpdatedAt = entity.UpdatedAt,
                 Name = entity.Name,
                 Description = entity.Description,
+                CustomerId = entity.CustomerId,
                 CustomerName = entity.CustomerName,
                 CustomerEmail = entity.CustomerEmail,
                 CustomerPhone = entity.CustomerPhone,
@@ -94,6 +95,7 @@ namespace OAI.ServiceLayer.Mapping.Projects
                 UpdatedAt = dto.UpdatedAt ?? DateTime.UtcNow,
                 Name = dto.Name,
                 Description = dto.Description,
+                CustomerId = dto.CustomerId,
                 CustomerName = dto.CustomerName,
                 CustomerEmail = dto.CustomerEmail,
                 CustomerPhone = dto.CustomerPhone,
@@ -171,6 +173,7 @@ namespace OAI.ServiceLayer.Mapping.Projects
             {
                 Name = dto.Name,
                 Description = dto.Description,
+                CustomerId = dto.CustomerId,
                 CustomerName = dto.CustomerName,
                 CustomerEmail = dto.CustomerEmail,
                 CustomerPhone = dto.CustomerPhone,

@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="~/css/adminlte.min.css">
     <!-- SweetAlert2 -->
     <link rel="stylesheet" href="~/plugins/sweetalert2-theme-bootstrap-4/bootstrap-4.min.css">
+    <!-- Toastr -->
+    <link rel="stylesheet" href="~/plugins/toastr/toastr.min.css">
     <!-- Custom styles -->
     <link rel="stylesheet" href="~/css/site.css">
     <style>
@@ -146,12 +148,6 @@
                             <a asp-controller="Customers" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-users"></i>
                                 <p>Seznam zákazníků</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Customers" asp-action="Create" class="nav-link">
-                                <i class="nav-icon fas fa-user-plus"></i>
-                                <p>Nový zákazník</p>
                             </a>
                         </li>
                         
@@ -386,6 +382,8 @@
     <script src="~/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
     <!-- SweetAlert2 -->
     <script src="~/plugins/sweetalert2/sweetalert2.min.js"></script>
+    <!-- Toastr -->
+    <script src="~/plugins/toastr/toastr.min.js"></script>
     <!-- AdminLTE App -->
     <script src="~/js/adminlte.min.js"></script>
     
@@ -537,6 +535,56 @@
                 });
             }
         }
+    </script>
+    
+    <!-- TempData Toast Notifications -->
+    <script>
+        $(document).ready(function() {
+            // Configure toastr
+            toastr.options = {
+                "closeButton": true,
+                "debug": false,
+                "newestOnTop": true,
+                "progressBar": true,
+                "positionClass": "toast-top-right",
+                "preventDuplicates": false,
+                "onclick": null,
+                "showDuration": "300",
+                "hideDuration": "1000",
+                "timeOut": "5000",
+                "extendedTimeOut": "1000",
+                "showEasing": "swing",
+                "hideEasing": "linear",
+                "showMethod": "fadeIn",
+                "hideMethod": "fadeOut"
+            };
+            
+            // Display TempData messages
+            @if (TempData["Success"] != null)
+            {
+                <text>
+                    toastr.success('@Html.Raw(TempData["Success"].ToString().Replace("'", "\\'"))');
+                </text>
+            }
+            @if (TempData["Error"] != null)
+            {
+                <text>
+                    toastr.error('@Html.Raw(TempData["Error"].ToString().Replace("'", "\\'"))');
+                </text>
+            }
+            @if (TempData["Warning"] != null)
+            {
+                <text>
+                    toastr.warning('@Html.Raw(TempData["Warning"].ToString().Replace("'", "\\'"))');
+                </text>
+            }
+            @if (TempData["Info"] != null)
+            {
+                <text>
+                    toastr.info('@Html.Raw(TempData["Info"].ToString().Replace("'", "\\'"))');
+                </text>
+            }
+        });
     </script>
     
     @await RenderSectionAsync("Scripts", required: false)

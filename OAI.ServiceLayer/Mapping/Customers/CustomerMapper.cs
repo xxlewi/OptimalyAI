@@ -3,6 +3,7 @@ using OAI.Core.DTOs.Customers;
 using OAI.Core.Entities.Customers;
 using OAI.Core.Interfaces;
 using OAI.Core.Mapping;
+using static OAI.Core.Entities.Customers.CustomerRequest;
 
 namespace OAI.ServiceLayer.Mapping.Customers
 {
@@ -66,7 +67,9 @@ namespace OAI.ServiceLayer.Mapping.Customers
                 AverageProjectSuccessRate = entity.AverageProjectSuccessRate,
                 CreditLimit = entity.CreditLimit,
                 CurrentDebt = entity.CurrentDebt,
-                PaymentTermDays = entity.PaymentTermDays
+                PaymentTermDays = entity.PaymentTermDays,
+                IsDeleted = entity.IsDeleted,
+                DeletedAt = entity.DeletedAt
             };
         }
 
@@ -107,7 +110,9 @@ namespace OAI.ServiceLayer.Mapping.Customers
                 AverageProjectSuccessRate = dto.AverageProjectSuccessRate,
                 CreditLimit = dto.CreditLimit,
                 CurrentDebt = dto.CurrentDebt,
-                PaymentTermDays = dto.PaymentTermDays
+                PaymentTermDays = dto.PaymentTermDays,
+                IsDeleted = dto.IsDeleted,
+                DeletedAt = dto.DeletedAt
             };
         }
 
@@ -115,7 +120,13 @@ namespace OAI.ServiceLayer.Mapping.Customers
         {
             if (entity == null) return null;
 
+            var projectsCount = entity.Projects?.Count ?? 0;
             var activeProjects = entity.Projects?.Count(p => p.Status == OAI.Core.Entities.Projects.ProjectStatus.Active) ?? 0;
+            var requestsCount = entity.Requests?.Count ?? 0;
+            var activeRequests = entity.Requests?.Count(r => 
+                r.Status != RequestStatus.Resolved && 
+                r.Status != RequestStatus.Rejected &&
+                r.Status != RequestStatus.Cancelled) ?? 0;
 
             return new CustomerListDto
             {
@@ -129,10 +140,14 @@ namespace OAI.ServiceLayer.Mapping.Customers
                 Type = entity.Type,
                 Status = entity.Status,
                 Segment = entity.Segment,
-                ProjectsCount = entity.ProjectsCount,
+                ProjectsCount = projectsCount,
                 ActiveProjectsCount = activeProjects,
+                RequestsCount = requestsCount,
+                ActiveRequestsCount = activeRequests,
                 TotalProjectsValue = entity.TotalProjectsValue,
-                LastContactDate = entity.LastContactDate
+                LastContactDate = entity.LastContactDate,
+                IsDeleted = entity.IsDeleted,
+                DeletedAt = entity.DeletedAt
             };
         }
 

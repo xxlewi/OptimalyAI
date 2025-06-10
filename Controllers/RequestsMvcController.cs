@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using OAI.Core.DTOs.Business;
 using OAI.Core.Entities.Business;
 using OAI.ServiceLayer.Services.Business;
+using OAI.ServiceLayer.Services.Customers;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -14,15 +16,18 @@ namespace OptimalyAI.Controllers
         private readonly IBusinessRequestService _requestService;
         private readonly IWorkflowTemplateService _workflowService;
         private readonly IRequestExecutionService _executionService;
+        private readonly ICustomerService _customerService;
 
         public RequestsController(
             IBusinessRequestService requestService,
             IWorkflowTemplateService workflowService,
-            IRequestExecutionService executionService)
+            IRequestExecutionService executionService,
+            ICustomerService customerService)
         {
             _requestService = requestService;
             _workflowService = workflowService;
             _executionService = executionService;
+            _customerService = customerService;
         }
 
         // GET: /Requests
@@ -39,9 +44,21 @@ namespace OptimalyAI.Controllers
         // GET: /Requests/New
         [HttpGet]
         [Route("New")]
-        public IActionResult New()
+        public async Task<IActionResult> New(Guid? customerId = null)
         {
             ViewBag.Title = "Nový požadavek";
+            ViewBag.CustomerId = customerId;
+            
+            // Pokud je zadáno customerId, načti zákazníka
+            if (customerId.HasValue)
+            {
+                var customer = await _customerService.GetByIdAsync(customerId.Value);
+                if (customer != null)
+                {
+                    ViewBag.CustomerName = customer.Name;
+                    ViewBag.CustomerCompany = customer.CompanyName;
+                }
+            }
             ViewBag.RequestTypes = new SelectList(new[]
             {
                 new { Value = "ProductPhoto", Text = "Produktové foto" },

@@ -23,6 +23,8 @@ namespace OptimalyAI.ViewModels
 
     public class CreateProjectViewModel
     {
+        public Guid? CustomerId { get; set; }
+
         [Required(ErrorMessage = "Název projektu je povinný")]
         [StringLength(200, MinimumLength = 3)]
         public string Name { get; set; } = string.Empty;
@@ -60,19 +62,19 @@ namespace OptimalyAI.ViewModels
         public ProjectPriority Priority { get; set; }
         
         [Display(Name = "Jméno zákazníka")]
-        public string CustomerName { get; set; } = string.Empty;
+        public new string CustomerName { get; set; } = string.Empty;
         
         [Display(Name = "Email zákazníka")]
         [EmailAddress]
-        public string CustomerEmail { get; set; } = string.Empty;
+        public new string CustomerEmail { get; set; } = string.Empty;
         
         [Display(Name = "Odhadovaný počet hodin")]
         [Range(0, 10000)]
-        public decimal? EstimatedHours { get; set; }
+        public new decimal? EstimatedHours { get; set; }
         
         [Display(Name = "Hodinová sazba")]
         [Range(0, 100000)]
-        public decimal? HourlyRate { get; set; }
+        public new decimal? HourlyRate { get; set; }
     }
 
     public class ProjectConfiguration

@@ -30,10 +30,20 @@ namespace OptimalyAI.Controllers
         /// <summary>
         /// Seznam všech zákazníků
         /// </summary>
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(bool showDeleted = false)
         {
-            var customers = await _customerService.GetAllListAsync();
-            return View(customers);
+            if (showDeleted)
+            {
+                var deletedCustomers = await _customerService.GetDeletedAsync();
+                ViewBag.ShowDeleted = true;
+                return View(deletedCustomers);
+            }
+            else
+            {
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.ShowDeleted = false;
+                return View(customers);
+            }
         }
 
         /// <summary>
@@ -44,6 +54,8 @@ namespace OptimalyAI.Controllers
             try
             {
                 var customer = await _customerService.GetDetailedAsync(id);
+                
+                _logger.LogInformation("Customer {Id} has {ProjectCount} projects", id, customer.RecentProjects?.Count ?? 0);
                 
                 var viewModel = new CustomerDetailViewModel
                 {
@@ -71,7 +83,20 @@ namespace OptimalyAI.Controllers
                     CreditLimit = customer.CreditLimit,
                     CurrentDebt = customer.CurrentDebt,
                     PaymentTermDays = customer.PaymentTermDays,
-                    RecentProjects = customer.RecentProjects ?? new List<OAI.Core.DTOs.Projects.ProjectListDto>()
+                    IsDeleted = customer.IsDeleted,
+                    DeletedAt = customer.DeletedAt,
+                    RecentProjects = customer.RecentProjects ?? new List<OAI.Core.DTOs.Projects.ProjectListDto>(),
+                    RecentRequests = customer.RecentRequests?.Select(r => new RequestViewModel
+                    {
+                        Id = r.Id,
+                        Title = r.Title,
+                        Type = r.Type,
+                        Priority = r.Priority,
+                        Status = r.Status,
+                        ReceivedDate = r.ReceivedDate,
+                        RequestedDeadline = r.RequestedDeadline,
+                        ProjectId = r.ProjectId
+                    }).ToList() ?? new List<RequestViewModel>()
                 };
 
                 // Sestavení adres
@@ -331,6 +356,44 @@ namespace OptimalyAI.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating metrics for customer {Id}", id);
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Obnovení archivovaného zákazníka
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> Restore(Guid id)
+        {
+            try
+            {
+                await _customerService.RestoreAsync(id);
+                _logger.LogInformation("Restored customer: {Id}", id);
+                return Json(new { success = true, message = "Zákazník byl obnoven." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error restoring customer {Id}", id);
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Trvalé smazání zákazníka
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> PermanentDelete(Guid id)
+        {
+            try
+            {
+                await _customerService.PermanentDeleteAsync(id);
+                _logger.LogInformation("Permanently deleted customer: {Id}", id);
+                return Json(new { success = true, message = "Zákazník byl trvale smazán." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error permanently deleting customer {Id}", id);
                 return Json(new { success = false, message = ex.Message });
             }
         }

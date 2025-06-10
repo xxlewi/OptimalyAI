@@ -115,14 +115,14 @@
                                     <div class="form-group">
                                         <label>Klient ID</label>
                                         <input type="text" class="form-control" id="clientId" name="clientId" 
-                                               placeholder="CL-001">
+                                               placeholder="CL-001" value="@ViewBag.CustomerId" readonly="@(ViewBag.CustomerId != null)">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label>Název klienta</label>
                                         <input type="text" class="form-control" id="clientName" name="clientName" 
-                                               placeholder="Název společnosti">
+                                               placeholder="Název společnosti" value="@(ViewBag.CustomerName ?? "") @(ViewBag.CustomerCompany != null ? $"({ViewBag.CustomerCompany})" : "")">
                                     </div>
                                 </div>
                             </div>
@@ -480,7 +480,7 @@
             };
             
             $.ajax({
-                url: '/api/requests',
+                url: '/api/requestsapi',
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(formData),
