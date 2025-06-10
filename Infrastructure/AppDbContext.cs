@@ -106,11 +106,20 @@ public class AppDbContext : DbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        // Automatické nastavení UpdatedAt pro modifikované entity
-        var entries = ChangeTracker.Entries<BaseEntity>()
+        // Automatické nastavení UpdatedAt pro modifikované BaseEntity
+        var baseEntries = ChangeTracker.Entries<BaseEntity>()
             .Where(e => e.State == EntityState.Modified);
 
-        foreach (var entry in entries)
+        foreach (var entry in baseEntries)
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Automatické nastavení UpdatedAt pro modifikované BaseGuidEntity
+        var guidEntries = ChangeTracker.Entries<BaseGuidEntity>()
+            .Where(e => e.State == EntityState.Modified);
+
+        foreach (var entry in guidEntries)
         {
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }

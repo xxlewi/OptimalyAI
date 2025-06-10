@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -43,7 +44,66 @@ namespace OptimalyAI.Controllers
             try
             {
                 var customer = await _customerService.GetDetailedAsync(id);
-                return View(customer);
+                
+                var viewModel = new CustomerDetailViewModel
+                {
+                    Id = customer.Id,
+                    Name = customer.Name,
+                    CompanyName = customer.CompanyName,
+                    ICO = customer.ICO,
+                    DIC = customer.DIC,
+                    Email = customer.Email,
+                    Phone = customer.Phone,
+                    Mobile = customer.Mobile,
+                    ContactPerson = customer.ContactPerson,
+                    Type = customer.Type,
+                    Status = customer.Status,
+                    Segment = customer.Segment,
+                    PreferredCommunication = customer.PreferredCommunication,
+                    Notes = customer.Notes,
+                    FirstContactDate = customer.FirstContactDate,
+                    LastContactDate = customer.LastContactDate,
+                    TotalProjectsValue = customer.TotalProjectsValue,
+                    ProjectsCount = customer.ProjectsCount,
+                    ActiveProjectsCount = customer.RecentProjects?.Count(p => p.Status != OAI.Core.Entities.Projects.ProjectStatus.Completed && 
+                                                                               p.Status != OAI.Core.Entities.Projects.ProjectStatus.Archived) ?? 0,
+                    AverageProjectSuccessRate = customer.AverageProjectSuccessRate,
+                    CreditLimit = customer.CreditLimit,
+                    CurrentDebt = customer.CurrentDebt,
+                    PaymentTermDays = customer.PaymentTermDays,
+                    RecentProjects = customer.RecentProjects ?? new List<OAI.Core.DTOs.Projects.ProjectListDto>()
+                };
+
+                // Sestavení adres
+                if (!string.IsNullOrEmpty(customer.BillingStreet) || !string.IsNullOrEmpty(customer.BillingCity))
+                {
+                    var billingParts = new List<string>();
+                    if (!string.IsNullOrEmpty(customer.BillingStreet)) billingParts.Add(customer.BillingStreet);
+                    if (!string.IsNullOrEmpty(customer.BillingCity)) 
+                    {
+                        var cityLine = customer.BillingCity;
+                        if (!string.IsNullOrEmpty(customer.BillingZip)) cityLine = $"{customer.BillingZip} {cityLine}";
+                        billingParts.Add(cityLine);
+                    }
+                    if (!string.IsNullOrEmpty(customer.BillingCountry)) billingParts.Add(customer.BillingCountry);
+                    viewModel.BillingAddress = string.Join("\n", billingParts);
+                }
+
+                if (!string.IsNullOrEmpty(customer.DeliveryStreet) || !string.IsNullOrEmpty(customer.DeliveryCity))
+                {
+                    var deliveryParts = new List<string>();
+                    if (!string.IsNullOrEmpty(customer.DeliveryStreet)) deliveryParts.Add(customer.DeliveryStreet);
+                    if (!string.IsNullOrEmpty(customer.DeliveryCity)) 
+                    {
+                        var cityLine = customer.DeliveryCity;
+                        if (!string.IsNullOrEmpty(customer.DeliveryZip)) cityLine = $"{customer.DeliveryZip} {cityLine}";
+                        deliveryParts.Add(cityLine);
+                    }
+                    if (!string.IsNullOrEmpty(customer.DeliveryCountry)) deliveryParts.Add(customer.DeliveryCountry);
+                    viewModel.DeliveryAddress = string.Join("\n", deliveryParts);
+                }
+
+                return View(viewModel);
             }
             catch (Exception ex)
             {

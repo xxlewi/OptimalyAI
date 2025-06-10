@@ -1,0 +1,394 @@
+@model OptimalyAI.ViewModels.CustomerDetailViewModel
+@using OAI.Core.Entities.Customers
+@{
+    ViewData["Title"] = "Detail zákazníka";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Detail zákazníka</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-action="Index">Zákazníci</a></li>
+                    <li class="breadcrumb-item active">@Model.Name</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Základní informace -->
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-user"></i> Základní údaje</h3>
+                        <div class="card-tools">
+                            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning btn-sm">
+                                <i class="fas fa-edit"></i> Upravit
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Jméno/Název:</strong>
+                                <p class="text-muted">@Model.Name</p>
+                            </div>
+                            @if (!string.IsNullOrEmpty(Model.CompanyName))
+                            {
+                                <div class="col-md-6">
+                                    <strong>Společnost:</strong>
+                                    <p class="text-muted">@Model.CompanyName</p>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="row">
+                            @if (!string.IsNullOrEmpty(Model.ICO))
+                            {
+                                <div class="col-md-3">
+                                    <strong>IČO:</strong>
+                                    <p class="text-muted">@Model.ICO</p>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.DIC))
+                            {
+                                <div class="col-md-3">
+                                    <strong>DIČ:</strong>
+                                    <p class="text-muted">@Model.DIC</p>
+                                </div>
+                            }
+                            <div class="col-md-3">
+                                <strong>Typ:</strong>
+                                <p class="text-muted">
+                                    <span class="badge badge-@(Model.Type switch {
+                                        CustomerType.Individual => "info",
+                                        CustomerType.Company => "primary",
+                                        CustomerType.Government => "warning",
+                                        CustomerType.NonProfit => "success",
+                                        _ => "secondary"
+                                    })">@GetTypeText(Model.Type)</span>
+                                </p>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Segment:</strong>
+                                <p class="text-muted">
+                                    <span class="badge badge-@(Model.Segment switch {
+                                        CustomerSegment.VIP => "danger",
+                                        CustomerSegment.Premium => "warning",
+                                        CustomerSegment.Strategic => "purple",
+                                        _ => "secondary"
+                                    })">@GetSegmentText(Model.Segment)</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <strong>Status:</strong>
+                                <p class="text-muted">
+                                    <span class="badge badge-@(Model.Status switch {
+                                        CustomerStatus.Active => "success",
+                                        CustomerStatus.Lead => "info",
+                                        CustomerStatus.Inactive => "secondary",
+                                        CustomerStatus.Suspended => "warning",
+                                        CustomerStatus.Blacklisted => "danger",
+                                        _ => "secondary"
+                                    })">@GetStatusText(Model.Status)</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kontaktní údaje -->
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-phone"></i> Kontaktní údaje</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            @if (!string.IsNullOrEmpty(Model.Email))
+                            {
+                                <div class="col-md-4">
+                                    <strong>Email:</strong>
+                                    <p class="text-muted">
+                                        <a href="mailto:@Model.Email">@Model.Email</a>
+                                    </p>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.Phone))
+                            {
+                                <div class="col-md-4">
+                                    <strong>Telefon:</strong>
+                                    <p class="text-muted">
+                                        <a href="tel:@Model.Phone">@Model.Phone</a>
+                                    </p>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.Mobile))
+                            {
+                                <div class="col-md-4">
+                                    <strong>Mobil:</strong>
+                                    <p class="text-muted">
+                                        <a href="tel:@Model.Mobile">@Model.Mobile</a>
+                                    </p>
+                                </div>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(Model.ContactPerson))
+                        {
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Kontaktní osoba:</strong>
+                                    <p class="text-muted">@Model.ContactPerson</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Preferovaná komunikace:</strong>
+                                    <p class="text-muted">@GetCommunicationText(Model.PreferredCommunication)</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Adresy -->
+                <div class="card card-warning">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-map-marker-alt"></i> Adresy</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(Model.BillingAddress))
+                        {
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Fakturační adresa:</strong>
+                                    <p class="text-muted">@Html.Raw(Model.BillingAddress.Replace("\n", "<br />"))</p>
+                                </div>
+                                @if (!string.IsNullOrEmpty(Model.DeliveryAddress))
+                                {
+                                    <div class="col-md-6">
+                                        <strong>Dodací adresa:</strong>
+                                        <p class="text-muted">@Html.Raw(Model.DeliveryAddress.Replace("\n", "<br />"))</p>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(Model.Notes))
+                {
+                    <!-- Poznámky -->
+                    <div class="card card-secondary">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-sticky-note"></i> Poznámky</h3>
+                        </div>
+                        <div class="card-body">
+                            <p>@Model.Notes</p>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-4">
+                <!-- Metriky -->
+                <div class="card card-success">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-chart-bar"></i> Statistiky</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-box mb-3">
+                            <span class="info-box-icon bg-info"><i class="fas fa-project-diagram"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Celkem projektů</span>
+                                <span class="info-box-number">@Model.ProjectsCount</span>
+                            </div>
+                        </div>
+
+                        <div class="info-box mb-3">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-play"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Aktivní projekty</span>
+                                <span class="info-box-number">@Model.ActiveProjectsCount</span>
+                            </div>
+                        </div>
+
+                        <div class="info-box mb-3">
+                            <span class="info-box-icon bg-success"><i class="fas fa-dollar-sign"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Celková hodnota</span>
+                                <span class="info-box-number">@Model.TotalProjectsValue.ToString("C0")</span>
+                            </div>
+                        </div>
+
+                        @if (Model.AverageProjectSuccessRate > 0)
+                        {
+                            <div class="info-box mb-3">
+                                <span class="info-box-icon bg-primary"><i class="fas fa-percentage"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">Úspěšnost</span>
+                                    <span class="info-box-number">@Model.AverageProjectSuccessRate.ToString("F1")%</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Obchodní podmínky -->
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-money-check-alt"></i> Obchodní podmínky</h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.CreditLimit.HasValue)
+                        {
+                            <p><strong>Credit limit:</strong> @Model.CreditLimit.Value.ToString("C0")</p>
+                        }
+                        <p><strong>Aktuální dluh:</strong> @Model.CurrentDebt.ToString("C0")</p>
+                        <p><strong>Splatnost faktur:</strong> @Model.PaymentTermDays dní</p>
+                        
+                        @if (Model.FirstContactDate.HasValue)
+                        {
+                            <p><strong>První kontakt:</strong> @Model.FirstContactDate.Value.ToString("dd.MM.yyyy")</p>
+                        }
+                        @if (Model.LastContactDate.HasValue)
+                        {
+                            <p><strong>Poslední kontakt:</strong> @Model.LastContactDate.Value.ToString("dd.MM.yyyy")</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Akce -->
+                <div class="card">
+                    <div class="card-body">
+                        <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@Model.Id" class="btn btn-success btn-block">
+                            <i class="fas fa-plus"></i> Nový projekt
+                        </a>
+                        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning btn-block">
+                            <i class="fas fa-edit"></i> Upravit zákazníka
+                        </a>
+                        <a asp-action="Index" class="btn btn-default btn-block">
+                            <i class="fas fa-arrow-left"></i> Zpět na seznam
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nedávné projekty -->
+        @if (Model.RecentProjects.Any())
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-project-diagram"></i> Nedávné projekty</h3>
+                            <div class="card-tools">
+                                <a asp-controller="Projects" asp-action="Index" asp-route-customerId="@Model.Id" class="btn btn-sm btn-primary">
+                                    Zobrazit všechny projekty
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th>Název</th>
+                                        <th>Status</th>
+                                        <th>Priorita</th>
+                                        <th>Vytvořen</th>
+                                        <th>Termín</th>
+                                        <th>Akce</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var project in Model.RecentProjects)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-controller="Projects" asp-action="Details" asp-route-id="@project.Id" class="text-primary">
+                                                    @project.Name
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-secondary">@project.Status</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-secondary">@project.Priority</span>
+                                            </td>
+                                            <td>@project.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                            <td>
+                                                @if (project.DueDate.HasValue)
+                                                {
+                                                    @project.DueDate.Value.ToString("dd.MM.yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a asp-controller="Projects" asp-action="Details" asp-route-id="@project.Id" class="btn btn-info btn-sm">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@functions {
+    string GetTypeText(CustomerType type) => type switch
+    {
+        CustomerType.Individual => "Fyzická osoba",
+        CustomerType.Company => "Firma",
+        CustomerType.Government => "Státní správa",
+        CustomerType.NonProfit => "Neziskovka",
+        _ => "Neznámý"
+    };
+
+    string GetSegmentText(CustomerSegment segment) => segment switch
+    {
+        CustomerSegment.Small => "Malý",
+        CustomerSegment.Standard => "Standardní",
+        CustomerSegment.Premium => "Prémiový",
+        CustomerSegment.VIP => "VIP",
+        CustomerSegment.Strategic => "Strategický",
+        _ => "Neznámý"
+    };
+
+    string GetStatusText(CustomerStatus status) => status switch
+    {
+        CustomerStatus.Lead => "Potenciální",
+        CustomerStatus.Active => "Aktivní",
+        CustomerStatus.Inactive => "Neaktivní",
+        CustomerStatus.Suspended => "Pozastavený",
+        CustomerStatus.Blacklisted => "Blacklist",
+        _ => "Neznámý"
+    };
+
+    string GetCommunicationText(CommunicationPreference pref) => pref switch
+    {
+        CommunicationPreference.Email => "Email",
+        CommunicationPreference.Phone => "Telefon",
+        CommunicationPreference.SMS => "SMS",
+        CommunicationPreference.InPerson => "Osobně",
+        CommunicationPreference.NoPreference => "Bez preference",
+        _ => "Neznámé"
+    };
+}

@@ -23,11 +23,10 @@ namespace OptimalyAI.ViewModels
         [Display(Name = "DIČ")]
         public string? DIC { get; set; }
 
-        [Required(ErrorMessage = "Email je povinný")]
         [EmailAddress(ErrorMessage = "Neplatný formát emailu")]
         [MaxLength(100)]
         [Display(Name = "Email")]
-        public string Email { get; set; }
+        public string? Email { get; set; }
 
         [Phone(ErrorMessage = "Neplatný formát telefonu")]
         [MaxLength(50)]
@@ -116,7 +115,7 @@ namespace OptimalyAI.ViewModels
         public string? CompanyName { get; set; }
         public string? ICO { get; set; }
         public string? DIC { get; set; }
-        public string Email { get; set; }
+        public string? Email { get; set; }
         public string? Phone { get; set; }
         public string? Mobile { get; set; }
         public string? ContactPerson { get; set; }
@@ -146,7 +145,7 @@ namespace OptimalyAI.ViewModels
         // Související data
         public List<ContactViewModel> Contacts { get; set; } = new();
         public List<RequestViewModel> RecentRequests { get; set; } = new();
-        public List<ProjectViewModel> RecentProjects { get; set; } = new();
+        public List<OAI.Core.DTOs.Projects.ProjectListDto> RecentProjects { get; set; } = new();
     }
 
     public class ContactViewModel
@@ -154,7 +153,7 @@ namespace OptimalyAI.ViewModels
         public Guid Id { get; set; }
         public string FullName { get; set; }
         public string? Position { get; set; }
-        public string Email { get; set; }
+        public string? Email { get; set; }
         public string? Phone { get; set; }
         public string? Mobile { get; set; }
         public bool IsPrimary { get; set; }

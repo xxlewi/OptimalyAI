@@ -10,7 +10,7 @@ namespace OAI.Core.DTOs.Customers
         public string? CompanyName { get; set; }
         public string? ICO { get; set; }
         public string? DIC { get; set; }
-        public string Email { get; set; }
+        public string? Email { get; set; }
         public string? Phone { get; set; }
         public string? Mobile { get; set; }
         public string? ContactPerson { get; set; }
@@ -54,7 +54,7 @@ namespace OAI.Core.DTOs.Customers
     {
         public string Name { get; set; }
         public string? CompanyName { get; set; }
-        public string Email { get; set; }
+        public string? Email { get; set; }
         public string? Phone { get; set; }
         public CustomerType Type { get; set; }
         public CustomerStatus Status { get; set; }
@@ -73,7 +73,7 @@ namespace OAI.Core.DTOs.Customers
         public string? CompanyName { get; set; }
         public string? ICO { get; set; }
         public string? DIC { get; set; }
-        public string Email { get; set; }
+        public string? Email { get; set; }
         public string? Phone { get; set; }
         public string? Mobile { get; set; }
         public string? ContactPerson { get; set; }
@@ -106,7 +106,7 @@ namespace OAI.Core.DTOs.Customers
         public string? CompanyName { get; set; }
         public string? ICO { get; set; }
         public string? DIC { get; set; }
-        public string Email { get; set; }
+        public string? Email { get; set; }
         public string? Phone { get; set; }
         public string? Mobile { get; set; }
         public string? ContactPerson { get; set; }

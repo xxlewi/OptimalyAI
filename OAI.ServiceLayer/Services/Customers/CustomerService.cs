@@ -63,7 +63,7 @@ namespace OAI.ServiceLayer.Services.Customers
 
             // Kontrola duplicit
             var exists = await _repository.ExistsAsync(c => 
-                c.Email == dto.Email || 
+                (!string.IsNullOrEmpty(dto.Email) && c.Email == dto.Email) || 
                 (!string.IsNullOrEmpty(dto.ICO) && c.ICO == dto.ICO));
 
             if (exists)
@@ -88,7 +88,7 @@ namespace OAI.ServiceLayer.Services.Customers
             // Kontrola duplicit
             var duplicateExists = await _repository.ExistsAsync(c => 
                 c.Id != id && 
-                (c.Email == dto.Email || 
+                ((!string.IsNullOrEmpty(dto.Email) && c.Email == dto.Email) || 
                 (!string.IsNullOrEmpty(dto.ICO) && c.ICO == dto.ICO)));
 
             if (duplicateExists)
@@ -294,9 +294,9 @@ namespace OAI.ServiceLayer.Services.Customers
 
             var customers = await _repository.GetAsync(
                 filter: c => c.Name.Contains(query) || 
-                            c.CompanyName.Contains(query) || 
-                            c.Email.Contains(query) ||
-                            c.ICO.Contains(query),
+                            (c.CompanyName != null && c.CompanyName.Contains(query)) || 
+                            (c.Email != null && c.Email.Contains(query)) ||
+                            (c.ICO != null && c.ICO.Contains(query)),
                 include: q => q.Include(c => c.Projects),
                 orderBy: q => q.OrderBy(c => c.Name))
                 .ToListAsync();
