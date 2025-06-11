@@ -943,6 +943,9 @@ namespace OptimalyAI.Migrations
                     b.Property<decimal?>("HourlyRate")
                         .HasColumnType("numeric");
 
+                    b.Property<bool>("IsTemplate")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Metadata")
                         .HasColumnType("text");
 
@@ -967,6 +970,10 @@ namespace OptimalyAI.Migrations
                     b.Property<DateTime?>("RequestedDeadline")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Schedule")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -977,10 +984,20 @@ namespace OptimalyAI.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("TemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TriggerType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WorkflowVersion")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -1324,6 +1341,155 @@ namespace OptimalyAI.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("ProjectOrchestrators");
+                });
+
+            modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectStage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContinueCondition")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("ErrorHandling")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExecutionStrategy")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MaxRetries")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("OrchestratorConfiguration")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OrchestratorType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReActAgentConfiguration")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReActAgentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("TimeoutSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_ProjectStage_CreatedAt");
+
+                    b.HasIndex("ProjectId", "Order");
+
+                    b.ToTable("ProjectStages");
+                });
+
+            modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectStageTool", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Configuration")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("ExecutionCondition")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExpectedOutputFormat")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("InputMapping")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MaxRetries")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OutputMapping")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("TimeoutSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ToolId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ToolName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_ProjectStageTool_CreatedAt");
+
+                    b.HasIndex("ProjectStageId", "Order");
+
+                    b.ToTable("ProjectStageTools");
                 });
 
             modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectTool", b =>
@@ -1926,6 +2092,28 @@ namespace OptimalyAI.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectStage", b =>
+                {
+                    b.HasOne("OAI.Core.Entities.Projects.Project", "Project")
+                        .WithMany("Stages")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectStageTool", b =>
+                {
+                    b.HasOne("OAI.Core.Entities.Projects.ProjectStage", "ProjectStage")
+                        .WithMany("StageTools")
+                        .HasForeignKey("ProjectStageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectStage");
+                });
+
             modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectTool", b =>
                 {
                     b.HasOne("OAI.Core.Entities.Projects.Project", "Project")
@@ -2008,7 +2196,14 @@ namespace OptimalyAI.Migrations
 
                     b.Navigation("ProjectTools");
 
+                    b.Navigation("Stages");
+
                     b.Navigation("Workflows");
+                });
+
+            modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectStage", b =>
+                {
+                    b.Navigation("StageTools");
                 });
 
             modelBuilder.Entity("OAI.Core.Entities.Projects.ProjectWorkflow", b =>

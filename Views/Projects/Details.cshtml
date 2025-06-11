@@ -9,6 +9,15 @@
             <div class="card-header">
                 <h3 class="card-title">@Model.Name</h3>
                 <div class="card-tools">
+                    <a href="/WorkflowDesigner?projectId=@Model.Id" class="btn btn-primary btn-sm mr-2">
+                        <i class="fas fa-project-diagram"></i> Workflow Designer
+                    </a>
+                    <button type="button" class="btn btn-success btn-sm mr-2" data-toggle="modal" data-target="#executeWorkflowModal">
+                        <i class="fas fa-play"></i> Spustit Workflow
+                    </button>
+                    <button type="button" class="btn btn-info btn-sm mr-2" onclick="window.location.href='/ProjectWorkflows/Monitor?projectId=@Model.Id'">
+                        <i class="fas fa-chart-line"></i> Monitor
+                    </button>
                     <span class="badge badge-@(Model.Status switch { 
                         ProjectStatus.Active => "success",
                         ProjectStatus.Failed => "danger",
@@ -145,3 +154,96 @@
         </div>
     </div>
 </div>
+
+<!-- Execute Workflow Modal -->
+<div class="modal fade" id="executeWorkflowModal" tabindex="-1" role="dialog" aria-labelledby="executeWorkflowModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="executeWorkflowModalLabel">Spustit Workflow</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="executeWorkflowForm">
+                    <div class="form-group">
+                        <label for="parameters">Vstupní parametry (JSON)</label>
+                        <textarea class="form-control" id="parameters" name="parameters" rows="5" placeholder='{"key": "value"}'>{}</textarea>
+                        <small class="form-text text-muted">Zadejte parametry ve formátu JSON</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="initiatedBy">Spuštěno kým</label>
+                        <input type="text" class="form-control" id="initiatedBy" name="initiatedBy" value="@User.Identity.Name" />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-success" onclick="executeWorkflow()">
+                    <i class="fas fa-play"></i> Spustit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function executeWorkflow() {
+            const projectId = '@Model.Id';
+            const parameters = document.getElementById('parameters').value;
+            const initiatedBy = document.getElementById('initiatedBy').value;
+            
+            let parsedParams = {};
+            try {
+                if (parameters.trim()) {
+                    parsedParams = JSON.parse(parameters);
+                }
+            } catch (e) {
+                toastr.error('Neplatný JSON formát parametrů');
+                return;
+            }
+            
+            const data = {
+                parameters: parsedParams,
+                initiatedBy: initiatedBy
+            };
+            
+            // Disable button during execution
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spouštím...';
+            
+            fetch(`/api/workflow/${projectId}/execute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.isSuccess) {
+                    toastr.success('Workflow byl úspěšně spuštěn');
+                    $('#executeWorkflowModal').modal('hide');
+                    
+                    // Redirect to monitor page
+                    setTimeout(() => {
+                        window.location.href = `/ProjectWorkflows/Monitor?executionId=${result.data.executionId}`;
+                    }, 1500);
+                } else {
+                    toastr.error(result.error || 'Chyba při spouštění workflow');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-play"></i> Spustit';
+                }
+            })
+            .catch(error => {
+                toastr.error('Chyba při komunikaci se serverem');
+                console.error('Error:', error);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play"></i> Spustit';
+            });
+        }
+    </script>
+}

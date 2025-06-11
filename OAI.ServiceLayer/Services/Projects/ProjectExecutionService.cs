@@ -4,6 +4,7 @@ using OAI.Core.DTOs.Projects;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
 using OAI.Core.Interfaces;
+using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Mapping.Projects;
 using System.Text.Json;
 
@@ -17,6 +18,7 @@ namespace OAI.ServiceLayer.Services.Projects
         Task<ProjectExecutionDto> UpdateStatusAsync(Guid id, ExecutionStatus status, string message = null);
         Task<string> GetExecutionLogAsync(Guid id);
         Task<IEnumerable<ProjectExecutionListDto>> GetActiveExecutionsAsync();
+        Task<ProjectExecutionDto> StartWorkflowExecutionAsync(Guid projectId, Dictionary<string, object> parameters, string initiatedBy);
     }
 
     public class ProjectExecutionService : IProjectExecutionService
@@ -24,26 +26,35 @@ namespace OAI.ServiceLayer.Services.Projects
         private readonly IGuidRepository<ProjectExecution> _executionRepository;
         private readonly IGuidRepository<Project> _projectRepository;
         private readonly IGuidRepository<ProjectWorkflow> _workflowRepository;
+        private readonly IGuidRepository<ProjectStage> _stageRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IProjectExecutionMapper _executionMapper;
         private readonly IProjectWorkflowService _workflowService;
+        private readonly IWorkflowDesignerService _workflowDesignerService;
+        private readonly IWorkflowExecutionService _workflowExecutionService;
         private readonly ILogger<ProjectExecutionService> _logger;
 
         public ProjectExecutionService(
             IGuidRepository<ProjectExecution> executionRepository,
             IGuidRepository<Project> projectRepository,
             IGuidRepository<ProjectWorkflow> workflowRepository,
+            IGuidRepository<ProjectStage> stageRepository,
             IUnitOfWork unitOfWork,
             IProjectExecutionMapper executionMapper,
             IProjectWorkflowService workflowService,
+            IWorkflowDesignerService workflowDesignerService,
+            IWorkflowExecutionService workflowExecutionService,
             ILogger<ProjectExecutionService> logger)
         {
             _executionRepository = executionRepository;
             _projectRepository = projectRepository;
             _workflowRepository = workflowRepository;
+            _stageRepository = stageRepository;
             _unitOfWork = unitOfWork;
             _executionMapper = executionMapper;
             _workflowService = workflowService;
+            _workflowDesignerService = workflowDesignerService;
+            _workflowExecutionService = workflowExecutionService;
             _logger = logger;
         }
 
@@ -202,6 +213,22 @@ namespace OAI.ServiceLayer.Services.Projects
                 .ToListAsync();
 
             return executions.Select(_executionMapper.ToListDto);
+        }
+
+        public async Task<ProjectExecutionDto> StartWorkflowExecutionAsync(Guid projectId, Dictionary<string, object> parameters, string initiatedBy)
+        {
+            _logger.LogInformation("Starting workflow execution for project {ProjectId}", projectId);
+
+            // Delegovat na WorkflowExecutionService
+            var result = await _workflowExecutionService.ExecuteWorkflowAsync(projectId, parameters, initiatedBy);
+
+            // Získat execution záznam pro vrácení DTO
+            var execution = await _executionRepository.GetAsync(
+                filter: e => e.Id == result.ExecutionId,
+                include: q => q.Include(e => e.Project))
+                .FirstOrDefaultAsync();
+
+            return _executionMapper.ToDto(execution);
         }
     }
 }

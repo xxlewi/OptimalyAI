@@ -6,6 +6,7 @@ using OAI.Core.DTOs.Projects;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
 using OAI.Core.Interfaces;
+using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Mapping.Projects;
 
 namespace OAI.ServiceLayer.Services.Projects
@@ -22,6 +23,8 @@ namespace OAI.ServiceLayer.Services.Projects
         Task<ProjectMetricsDto> GetMetricsAsync(Guid id);
         Task<IEnumerable<ProjectHistoryDto>> GetHistoryAsync(Guid id);
         Task<bool> ExistsAsync(Guid id);
+        Task<ProjectDto> CreateWithWorkflowAsync(CreateProjectDto dto, List<CreateProjectStageDto> stages);
+        Task<bool> ValidateProjectWorkflowAsync(Guid id);
     }
 
     public class ProjectService : IProjectService
@@ -33,6 +36,8 @@ namespace OAI.ServiceLayer.Services.Projects
         private readonly IUnitOfWork _unitOfWork;
         private readonly IProjectMapper _projectMapper;
         private readonly IProjectHistoryMapper _historyMapper;
+        private readonly IWorkflowDesignerService _workflowService;
+        private readonly IProjectStageService _stageService;
         private readonly ILogger<ProjectService> _logger;
 
         public ProjectService(
@@ -43,6 +48,8 @@ namespace OAI.ServiceLayer.Services.Projects
             IUnitOfWork unitOfWork,
             IProjectMapper projectMapper,
             IProjectHistoryMapper historyMapper,
+            IWorkflowDesignerService workflowService,
+            IProjectStageService stageService,
             ILogger<ProjectService> logger)
         {
             _projectRepository = projectRepository;
@@ -52,6 +59,8 @@ namespace OAI.ServiceLayer.Services.Projects
             _unitOfWork = unitOfWork;
             _projectMapper = projectMapper;
             _historyMapper = historyMapper;
+            _workflowService = workflowService;
+            _stageService = stageService;
             _logger = logger;
         }
 
@@ -336,6 +345,40 @@ namespace OAI.ServiceLayer.Services.Projects
             {
                 throw new BusinessException($"Neplatný přechod statusu z {from} na {to}");
             }
+        }
+
+        public async Task<ProjectDto> CreateWithWorkflowAsync(CreateProjectDto dto, List<CreateProjectStageDto> stages)
+        {
+            _logger.LogInformation("Creating new project with workflow: {Name}", dto.Name);
+
+            // Vytvořit projekt
+            var project = await CreateAsync(dto);
+
+            // Vytvořit workflow stages
+            if (stages != null && stages.Any())
+            {
+                foreach (var stageDto in stages)
+                {
+                    stageDto.ProjectId = project.Id;
+                    await _stageService.CreateStageAsync(stageDto);
+                }
+            }
+
+            // Znovu načíst projekt s workflow
+            return await GetByIdAsync(project.Id);
+        }
+
+        public async Task<bool> ValidateProjectWorkflowAsync(Guid id)
+        {
+            _logger.LogInformation("Validating workflow for project {ProjectId}", id);
+
+            var projectExists = await ExistsAsync(id);
+            if (!projectExists)
+            {
+                throw new NotFoundException("Project", id);
+            }
+
+            return await _workflowService.ValidateWorkflowAsync(id);
         }
     }
 }

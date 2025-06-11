@@ -13,16 +13,20 @@ namespace OAI.Core.Interfaces
     public interface IGuidRepository<T> where T : BaseGuidEntity
     {
         Task<T?> GetByIdAsync(Guid id);
+        Task<T?> GetByIdAsync(Guid id, Func<IQueryable<T>, IQueryable<T>> include);
         Task<IEnumerable<T>> GetAllAsync();
         Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate);
+        Task<T> AddAsync(T entity);
         Task<T> CreateAsync(T entity);
         Task<T> UpdateAsync(T entity);
+        void Update(T entity);
+        void Delete(T entity);
         Task DeleteAsync(Guid id);
         Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate);
         Task<int> CountAsync();
         
         // Advanced query methods
-        IQueryable<T> GetAsync(
+        Task<IEnumerable<T>> GetAsync(
             Expression<Func<T, bool>>? filter = null,
             Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null,
             Func<IQueryable<T>, IQueryable<T>>? include = null,

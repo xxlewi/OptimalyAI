@@ -25,6 +25,13 @@ namespace OAI.ServiceLayer.Infrastructure
             return await _dbSet.FindAsync(id);
         }
 
+        public async Task<T?> GetByIdAsync(Guid id, Func<IQueryable<T>, IQueryable<T>> include)
+        {
+            IQueryable<T> query = _dbSet;
+            query = include(query);
+            return await query.FirstOrDefaultAsync(e => e.Id == id);
+        }
+
         public async Task<IEnumerable<T>> GetAllAsync()
         {
             return await _dbSet.ToListAsync();
@@ -33,6 +40,12 @@ namespace OAI.ServiceLayer.Infrastructure
         public async Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate)
         {
             return await _dbSet.Where(predicate).ToListAsync();
+        }
+
+        public async Task<T> AddAsync(T entity)
+        {
+            await _dbSet.AddAsync(entity);
+            return entity;
         }
 
         public async Task<T> CreateAsync(T entity)
@@ -45,6 +58,16 @@ namespace OAI.ServiceLayer.Infrastructure
         {
             _dbSet.Update(entity);
             return entity;
+        }
+
+        public void Update(T entity)
+        {
+            _dbSet.Update(entity);
+        }
+
+        public void Delete(T entity)
+        {
+            _dbSet.Remove(entity);
         }
 
         public async Task DeleteAsync(Guid id)
@@ -66,7 +89,7 @@ namespace OAI.ServiceLayer.Infrastructure
             return await _dbSet.CountAsync();
         }
 
-        public IQueryable<T> GetAsync(
+        public async Task<IEnumerable<T>> GetAsync(
             Expression<Func<T, bool>>? filter = null,
             Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null,
             Func<IQueryable<T>, IQueryable<T>>? include = null,
@@ -100,7 +123,7 @@ namespace OAI.ServiceLayer.Infrastructure
                 query = query.Take(take.Value);
             }
 
-            return query;
+            return await query.ToListAsync();
         }
     }
 }

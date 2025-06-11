@@ -1,0 +1,157 @@
+@model OAI.Core.DTOs.Projects.TestProjectWorkflowDto
+
+<div class="modal fade" id="testWorkflowModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Testovat Workflow - @ViewBag.Project.Name</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Režim testu</label>
+                    <select class="form-control" id="testMode">
+                        <option value="full">Celé workflow</option>
+                        <option value="stage">Konkrétní krok</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="stageSelectContainer" style="display: none;">
+                    <label>Vyberte krok</label>
+                    <select class="form-control" id="testStageId">
+                        <option value="">-- Vyberte krok --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Testovací data (JSON)</label>
+                    <textarea class="form-control" id="testData" rows="5">{
+  "input": "Testovací vstup",
+  "parameters": {}
+}</textarea>
+                </div>
+                
+                <div id="testResults" style="display: none;">
+                    <hr />
+                    <h6>Výsledky testu</h6>
+                    <div id="testResultsContent"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                <button type="button" class="btn btn-primary" id="btnRunTest">
+                    <i class="fas fa-play"></i> Spustit test
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const testProjectId = '@Model.ProjectId';
+    
+    $('#testMode').on('change', function() {
+        if ($(this).val() === 'stage') {
+            $('#stageSelectContainer').show();
+            loadStages();
+        } else {
+            $('#stageSelectContainer').hide();
+        }
+    });
+    
+    function loadStages() {
+        $.get(`/api/workflow/${testProjectId}/stages`, function(response) {
+            const select = $('#testStageId');
+            select.empty();
+            select.append('<option value="">-- Vyberte krok --</option>');
+            
+            response.data.forEach(stage => {
+                select.append(`<option value="${stage.id}">${stage.order}. ${stage.name}</option>`);
+            });
+        });
+    }
+    
+    $('#btnRunTest').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Testování...');
+        
+        const testDto = {
+            projectId: testProjectId,
+            stageId: $('#testMode').val() === 'stage' ? $('#testStageId').val() : null,
+            testData: JSON.parse($('#testData').val())
+        };
+        
+        $.ajax({
+            url: '/api/workflow/test',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(testDto),
+            success: function(response) {
+                displayTestResults(response.data);
+                btn.prop('disabled', false);
+                btn.html('<i class="fas fa-play"></i> Spustit test');
+            },
+            error: function(xhr) {
+                toastr.error('Chyba při testování workflow');
+                btn.prop('disabled', false);
+                btn.html('<i class="fas fa-play"></i> Spustit test');
+            }
+        });
+    });
+    
+    function displayTestResults(results) {
+        $('#testResults').show();
+        const content = $('#testResultsContent');
+        content.empty();
+        
+        const html = `
+            <div class="alert ${results.success ? 'alert-success' : 'alert-danger'}">
+                <strong>Status:</strong> ${results.success ? 'Úspěch' : 'Chyba'}<br>
+                <strong>Doba trvání:</strong> ${results.duration}
+            </div>
+            
+            <h6>Výsledky jednotlivých kroků:</h6>
+            <div class="accordion" id="stageResultsAccordion">
+                ${results.stageResults.map((stage, index) => `
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="mb-0">
+                                <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#stage${index}">
+                                    ${stage.stageName} - ${stage.success ? '✅ Úspěch' : '❌ Chyba'}
+                                </button>
+                            </h2>
+                        </div>
+                        <div id="stage${index}" class="collapse" data-parent="#stageResultsAccordion">
+                            <div class="card-body">
+                                <p><strong>Doba trvání:</strong> ${stage.duration}</p>
+                                ${stage.error ? `<p class="text-danger"><strong>Chyba:</strong> ${stage.error}</p>` : ''}
+                                
+                                <h6>Výsledky nástrojů:</h6>
+                                <ul>
+                                    ${stage.toolResults.map(tool => `
+                                        <li>
+                                            <strong>${tool.toolName}:</strong> 
+                                            ${tool.success ? '✅' : '❌'} 
+                                            (${tool.duration})
+                                            ${tool.error ? `<br><span class="text-danger">${tool.error}</span>` : ''}
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                                
+                                ${stage.outputData ? `
+                                    <h6>Výstupní data:</h6>
+                                    <pre>${JSON.stringify(stage.outputData, null, 2)}</pre>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        content.html(html);
+    }
+</script>

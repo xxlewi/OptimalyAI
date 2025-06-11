@@ -48,6 +48,7 @@ try
     // Map SignalR hubs
     app.MapHub<MonitoringHub>("/monitoringHub");
     app.MapHub<ChatHub>("/chatHub");
+    app.MapHub<WorkflowHub>("/workflowHub");
 
     Log.Information("OptimalyAI application started successfully");
     app.Run();

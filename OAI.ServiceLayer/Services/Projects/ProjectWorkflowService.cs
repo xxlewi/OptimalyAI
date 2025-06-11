@@ -4,6 +4,7 @@ using OAI.Core.DTOs.Projects;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
 using OAI.Core.Interfaces;
+using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Mapping.Projects;
 
 namespace OAI.ServiceLayer.Services.Projects

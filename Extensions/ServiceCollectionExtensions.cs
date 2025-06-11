@@ -8,6 +8,7 @@ using OptimalyAI.Configuration;
 using OptimalyAI.Validation;
 using OptimalyAI.Services.AI;
 using OptimalyAI.Services.AI.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace OptimalyAI.Extensions;
 
@@ -115,6 +116,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectExecutionService, OAI.ServiceLayer.Services.Projects.ProjectExecutionService>();
         services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectMetricsService, OAI.ServiceLayer.Services.Projects.ProjectMetricsService>();
         services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectContextService, OAI.ServiceLayer.Services.Projects.ProjectContextService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectStageService, OAI.ServiceLayer.Services.Projects.ProjectStageService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IWorkflowDesignerService, OAI.ServiceLayer.Services.Projects.WorkflowDesignerService>();
+        
+        // Register notification services
+        services.AddScoped<OptimalyAI.Services.Workflow.IWorkflowNotificationService, OptimalyAI.Services.Workflow.WorkflowNotificationService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IWorkflowExecutionNotificationHandler, OptimalyAI.Services.Workflow.WorkflowNotificationAdapter>();
+        
+        // Register WorkflowExecutionService with notification handler
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IWorkflowExecutionService, OAI.ServiceLayer.Services.Projects.WorkflowExecutionService>();
 
         // Explicitní registrace zákaznických služeb
         services.AddScoped<OAI.ServiceLayer.Services.Customers.ICustomerService, OAI.ServiceLayer.Services.Customers.CustomerService>();
@@ -272,6 +282,10 @@ public static class ServiceCollectionExtensions
         // Register tool chain orchestrator
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.ToolChainOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
             OAI.ServiceLayer.Services.Orchestration.Implementations.ToolChainOrchestrator>();
+            
+        // Register project stage orchestrator
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorRequest, OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorResponse>, 
+            OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestrator>();
         
         // Register conversation manager interface for orchestrator
         services.AddScoped<OAI.ServiceLayer.Services.AI.Interfaces.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();

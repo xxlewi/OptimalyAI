@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
 using OAI.Core.Entities.Business;
+using OAI.Core.Entities.Projects;
 using OptimalyAI.Extensions;
 using System.Reflection;
 
@@ -15,6 +16,10 @@ public class AppDbContext : DbContext
     // DbSets se přidají automaticky pro všechny entity dědící z BaseEntity
     // Nebo můžete přidat explicitně:
     // public DbSet<YourEntity> YourEntities { get; set; }
+    
+    // Explicit DbSets for workflow entities
+    public DbSet<ProjectStage> ProjectStages { get; set; }
+    public DbSet<ProjectStageTool> ProjectStageTools { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +56,9 @@ public class AppDbContext : DbContext
             
         // Configure Business entities
         ConfigureBusinessEntities(modelBuilder);
+        
+        // Configure Workflow entities
+        ConfigureWorkflowEntities(modelBuilder);
     }
     
     private void ConfigureBusinessEntities(ModelBuilder modelBuilder)
@@ -102,6 +110,29 @@ public class AppDbContext : DbContext
         // RequestFile configuration
         modelBuilder.Entity<RequestFile>()
             .HasIndex(rf => rf.StoragePath);
+    }
+    
+    private void ConfigureWorkflowEntities(ModelBuilder modelBuilder)
+    {
+        // ProjectStage configuration
+        modelBuilder.Entity<ProjectStage>()
+            .HasOne(ps => ps.Project)
+            .WithMany(p => p.Stages)
+            .HasForeignKey(ps => ps.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<ProjectStage>()
+            .HasIndex(ps => new { ps.ProjectId, ps.Order });
+            
+        // ProjectStageTool configuration
+        modelBuilder.Entity<ProjectStageTool>()
+            .HasOne(pst => pst.ProjectStage)
+            .WithMany(ps => ps.StageTools)
+            .HasForeignKey(pst => pst.ProjectStageId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<ProjectStageTool>()
+            .HasIndex(pst => new { pst.ProjectStageId, pst.Order });
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

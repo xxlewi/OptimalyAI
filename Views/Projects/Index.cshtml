@@ -97,6 +97,9 @@
                                                     <a asp-action="Details" asp-route-id="@project.Id" class="btn btn-default">
                                                         <i class="fas fa-eye"></i> Detail
                                                     </a>
+                                                    <a href="/WorkflowDesigner?projectId=@project.Id" class="btn btn-primary">
+                                                        <i class="fas fa-project-diagram"></i> Workflow
+                                                    </a>
                                                     @if (project.Status == ProjectStatus.Active)
                                                     {
                                                         <button onclick="pauseProject('@project.Id')" class="btn btn-warning">

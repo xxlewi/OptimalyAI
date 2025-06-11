@@ -4,6 +4,7 @@ using OAI.Core.DTOs.Projects;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
 using OAI.Core.Interfaces;
+using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Mapping.Projects;
 
 namespace OAI.ServiceLayer.Services.Projects
@@ -57,8 +58,9 @@ namespace OAI.ServiceLayer.Services.Projects
                     filter: m => m.ProjectId == projectId && m.MetricType == metricType);
             }
 
-            var metrics = await query.OrderByDescending(m => m.MeasuredAt).ToListAsync();
-            return metrics.Select(_metricMapper.ToDto);
+            var metricsList = await query;
+            var orderedMetrics = metricsList.OrderByDescending(m => m.MeasuredAt);
+            return orderedMetrics.Select(_metricMapper.ToDto);
         }
 
         public async Task<ProjectMetricDto> CreateAsync(CreateProjectMetricDto dto)

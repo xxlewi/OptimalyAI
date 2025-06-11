@@ -44,7 +44,6 @@ namespace OAI.ServiceLayer.Mapping.Business
                 ActualCost = entity.ActualCost,
                 WorkflowTemplateId = entity.WorkflowTemplateId,
                 WorkflowTemplateName = entity.WorkflowTemplate?.Name,
-                Metadata = entity.Metadata,
                 Executions = entity.Executions?.Select(_executionMapper.ToDto).ToList(),
                 Files = entity.Files?.Select(_fileMapper.ToDto).ToList()
             };
@@ -70,8 +69,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Deadline = dto.Deadline,
                 EstimatedCost = dto.EstimatedCost,
                 ActualCost = dto.ActualCost,
-                WorkflowTemplateId = dto.WorkflowTemplateId,
-                Metadata = dto.Metadata
+                WorkflowTemplateId = dto.WorkflowTemplateId
             };
         }
 
@@ -90,7 +88,6 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Deadline = dto.Deadline,
                 EstimatedCost = dto.EstimatedCost,
                 WorkflowTemplateId = dto.WorkflowTemplateId,
-                Metadata = dto.Metadata,
                 Status = RequestStatus.Draft
             };
         }
@@ -105,6 +102,9 @@ namespace OAI.ServiceLayer.Mapping.Business
             if (dto.Description != null)
                 entity.Description = dto.Description;
 
+            if (!string.IsNullOrEmpty(dto.RequestType))
+                entity.RequestType = dto.RequestType;
+
             if (dto.Status.HasValue)
                 entity.Status = dto.Status.Value;
 
@@ -112,18 +112,20 @@ namespace OAI.ServiceLayer.Mapping.Business
                 entity.Priority = dto.Priority.Value;
 
             if (dto.Deadline.HasValue)
-                entity.Deadline = dto.Deadline;
+                entity.Deadline = dto.Deadline.Value.ToUniversalTime();
+            else
+                entity.Deadline = null;
 
             if (dto.EstimatedCost.HasValue)
                 entity.EstimatedCost = dto.EstimatedCost;
 
-            if (dto.WorkflowTemplateId.HasValue)
-                entity.WorkflowTemplateId = dto.WorkflowTemplateId;
+            if (!string.IsNullOrEmpty(dto.ClientId))
+                entity.ClientId = dto.ClientId;
 
-            if (dto.Metadata != null)
-                entity.Metadata = dto.Metadata;
+            if (!string.IsNullOrEmpty(dto.ClientName))
+                entity.ClientName = dto.ClientName;
 
-            entity.UpdatedAt = System.DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
         }
     }
 }

@@ -122,8 +122,36 @@ namespace OAI.Core.Entities.Projects
         /// </summary>
         public string? Notes { get; set; }
 
+        /// <summary>
+        /// Verze workflow (pro sledování změn)
+        /// </summary>
+        public int WorkflowVersion { get; set; } = 1;
+
+        /// <summary>
+        /// Zda je projekt šablona
+        /// </summary>
+        public bool IsTemplate { get; set; } = false;
+
+        /// <summary>
+        /// ID šablony, ze které byl projekt vytvořen
+        /// </summary>
+        public Guid? TemplateId { get; set; }
+
+        /// <summary>
+        /// Typ triggeru pro spouštění workflow
+        /// </summary>
+        [MaxLength(50)]
+        public string? TriggerType { get; set; }
+
+        /// <summary>
+        /// Cron expression pro plánované spouštění
+        /// </summary>
+        [MaxLength(100)]
+        public string? Schedule { get; set; }
+
         // Navigační vlastnosti
         public virtual Customers.Customer? Customer { get; set; }
+        public virtual ICollection<ProjectStage> Stages { get; set; }
         public virtual ICollection<ProjectOrchestrator> ProjectOrchestrators { get; set; }
         public virtual ICollection<ProjectTool> ProjectTools { get; set; }
         public virtual ICollection<ProjectWorkflow> Workflows { get; set; }
@@ -134,6 +162,7 @@ namespace OAI.Core.Entities.Projects
 
         public Project()
         {
+            Stages = new HashSet<ProjectStage>();
             ProjectOrchestrators = new HashSet<ProjectOrchestrator>();
             ProjectTools = new HashSet<ProjectTool>();
             Workflows = new HashSet<ProjectWorkflow>();

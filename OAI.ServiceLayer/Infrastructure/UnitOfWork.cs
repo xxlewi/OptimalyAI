@@ -61,6 +61,23 @@ public class UnitOfWork : IUnitOfWork
         return (IRepository<T>)_repositories[type];
     }
 
+    public IGuidRepository<T> GetGuidRepository<T>() where T : BaseGuidEntity
+    {
+        var type = typeof(T);
+        if (!_repositories.ContainsKey(type))
+        {
+            var repositoryType = typeof(GuidRepository<>).MakeGenericType(type);
+            var repository = Activator.CreateInstance(repositoryType, _context);
+            _repositories[type] = repository!;
+        }
+        return (IGuidRepository<T>)_repositories[type];
+    }
+
+    public async Task<int> CommitAsync()
+    {
+        return await SaveChangesAsync();
+    }
+
     public void Dispose()
     {
         _transaction?.Dispose();

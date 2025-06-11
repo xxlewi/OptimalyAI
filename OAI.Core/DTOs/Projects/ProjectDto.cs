@@ -29,6 +29,13 @@ namespace OAI.Core.DTOs.Projects
         public string ProjectContext { get; set; }
         public int Version { get; set; }
         public string Notes { get; set; }
+        
+        // Workflow properties
+        public int WorkflowVersion { get; set; }
+        public bool IsTemplate { get; set; }
+        public Guid? TemplateId { get; set; }
+        public string TriggerType { get; set; }
+        public string Schedule { get; set; }
 
         // Vypočítané vlastnosti
         public decimal? EstimatedCost => EstimatedHours.HasValue && HourlyRate.HasValue 
@@ -44,6 +51,7 @@ namespace OAI.Core.DTOs.Projects
             : 0;
 
         // Kolekce pro detailní zobrazení
+        public List<ProjectStageDto> Stages { get; set; }
         public List<ProjectOrchestratorDto> Orchestrators { get; set; }
         public List<ProjectToolDto> Tools { get; set; }
         public List<ProjectWorkflowDto> Workflows { get; set; }

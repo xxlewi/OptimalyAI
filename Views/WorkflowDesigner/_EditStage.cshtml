@@ -1,0 +1,305 @@
+@model OAI.Core.DTOs.Projects.ProjectStageDto
+
+<div class="modal fade" id="editStageModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <form id="editStageForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upravit krok: @Model.Name</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="stageId" value="@Model.Id" />
+                    
+                    <ul class="nav nav-tabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-toggle="tab" href="#basicTab">Základní</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-toggle="tab" href="#toolsTab">Nástroje</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-toggle="tab" href="#configTab">Konfigurace</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-toggle="tab" href="#advancedTab">Pokročilé</a>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content mt-3">
+                        <!-- Basic Tab -->
+                        <div class="tab-pane fade show active" id="basicTab">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Název kroku <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" id="stageName" value="@Model.Name" required />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Typ kroku</label>
+                                        <select class="form-control" id="stageType">
+                                            @foreach (var type in ViewBag.Components["stageTypes"])
+                                            {
+                                                @if (Model.Type.ToString() == type.ToString())
+                                                {
+                                                    <option value="@type" selected>@type</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@type">@type</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Popis</label>
+                                <textarea class="form-control" id="stageDescription" rows="3">@Model.Description</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Orchestrátor <span class="text-danger">*</span></label>
+                                        <select class="form-control" id="orchestratorType" required>
+                                            @foreach (var orchestrator in ViewBag.Components["orchestrators"])
+                                            {
+                                                <option value="@orchestrator" selected="@(Model.OrchestratorType == orchestrator)">@orchestrator</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>ReAct Agent (volitelné)</label>
+                                        <select class="form-control" id="reactAgentType">
+                                            <option value="">-- Žádný --</option>
+                                            @foreach (var agent in ViewBag.Components["reactAgents"])
+                                            {
+                                                <option value="@agent" selected="@(Model.ReActAgentType == agent)">@agent</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Strategie vykonávání</label>
+                                <select class="form-control" id="executionStrategy">
+                                    @foreach (var strategy in ViewBag.Components["executionStrategies"])
+                                    {
+                                        <option value="@strategy" selected="@(Model.ExecutionStrategy == strategy)">@strategy</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Tools Tab -->
+                        <div class="tab-pane fade" id="toolsTab">
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-success btn-sm" onclick="showAddToolModal()">
+                                    <i class="fas fa-plus"></i> Přidat nástroj
+                                </button>
+                            </div>
+                            
+                            <div id="toolsList">
+                                @if (Model.Tools.Any())
+                                {
+                                    <table class="table table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Pořadí</th>
+                                                <th>Nástroj</th>
+                                                <th>Povinný</th>
+                                                <th>Podmínka</th>
+                                                <th>Akce</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="toolsTableBody">
+                                            @foreach (var tool in Model.Tools.OrderBy(t => t.Order))
+                                            {
+                                                <tr data-tool-id="@tool.Id">
+                                                    <td>@tool.Order</td>
+                                                    <td>@tool.ToolName</td>
+                                                    <td>
+                                                        <span class="badge @(tool.IsRequired ? "badge-danger" : "badge-secondary")">
+                                                            @(tool.IsRequired ? "Ano" : "Ne")
+                                                        </span>
+                                                    </td>
+                                                    <td>@tool.ExecutionCondition</td>
+                                                    <td>
+                                                        <button type="button" class="btn btn-sm btn-info" onclick="editTool('@tool.Id')">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeTool('@tool.Id')">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> Zatím nejsou přidány žádné nástroje
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        
+                        <!-- Configuration Tab -->
+                        <div class="tab-pane fade" id="configTab">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Konfigurace orchestrátoru (JSON)</label>
+                                        <textarea class="form-control" id="orchestratorConfig" rows="10">@Model.OrchestratorConfiguration</textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Konfigurace ReAct agenta (JSON)</label>
+                                        <textarea class="form-control" id="reactAgentConfig" rows="10">@Model.ReActAgentConfiguration</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Advanced Tab -->
+                        <div class="tab-pane fade" id="advancedTab">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Maximální počet pokusů</label>
+                                        <input type="number" class="form-control" id="maxRetries" value="@Model.MaxRetries" min="0" max="10" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Timeout (sekundy)</label>
+                                        <input type="number" class="form-control" id="timeoutSeconds" value="@Model.TimeoutSeconds" min="1" max="3600" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Zpracování chyb</label>
+                                        <select class="form-control" id="errorHandling">
+                                            <option value="StopOnError" selected="@(Model.ErrorHandling == OAI.Core.Entities.Projects.ErrorHandlingStrategy.StopOnError)">Zastavit</option>
+                                            <option value="ContinueOnError" selected="@(Model.ErrorHandling == OAI.Core.Entities.Projects.ErrorHandlingStrategy.ContinueOnError)">Pokračovat</option>
+                                            <option value="SkipOnError" selected="@(Model.ErrorHandling == OAI.Core.Entities.Projects.ErrorHandlingStrategy.SkipOnError)">Přeskočit</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Podmínka pokračování</label>
+                                <input type="text" class="form-control" id="continueCondition" value="@Model.ContinueCondition" 
+                                       placeholder="např. result.success === true" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Metadata (JSON)</label>
+                                <textarea class="form-control" id="metadata" rows="4">@Model.Metadata</textarea>
+                            </div>
+                            
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="isActive" @(Model.IsActive ? "checked" : "") />
+                                <label class="form-check-label" for="isActive">
+                                    Krok je aktivní
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Uložit změny
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    $('#editStageForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const stageData = {
+            name: $('#stageName').val(),
+            description: $('#stageDescription').val(),
+            type: $('#stageType').val(),
+            orchestratorType: $('#orchestratorType').val(),
+            orchestratorConfiguration: $('#orchestratorConfig').val(),
+            reactAgentType: $('#reactAgentType').val() || null,
+            reactAgentConfiguration: $('#reactAgentConfig').val(),
+            executionStrategy: $('#executionStrategy').val(),
+            maxRetries: parseInt($('#maxRetries').val()),
+            timeoutSeconds: parseInt($('#timeoutSeconds').val()),
+            errorHandling: $('#errorHandling').val(),
+            continueCondition: $('#continueCondition').val(),
+            metadata: $('#metadata').val(),
+            isActive: $('#isActive').is(':checked')
+        };
+        
+        const stageId = $('#stageId').val();
+        
+        $.ajax({
+            url: `/api/workflow/stages/${stageId}`,
+            type: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify(stageData),
+            success: function(response) {
+                toastr.success('Krok byl aktualizován');
+                $('#editStageModal').modal('hide');
+                location.reload();
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON;
+                if (error && error.errors) {
+                    const messages = Object.values(error.errors).flat().join('<br>');
+                    toastr.error(messages);
+                } else {
+                    toastr.error('Chyba při aktualizaci kroku');
+                }
+            }
+        });
+    });
+    
+    function showAddToolModal() {
+        // TODO: Implement add tool modal
+        toastr.info('Přidávání nástrojů bude implementováno');
+    }
+    
+    function editTool(toolId) {
+        // TODO: Implement edit tool
+        toastr.info('Editace nástroje bude implementována');
+    }
+    
+    function removeTool(toolId) {
+        if (confirm('Opravdu chcete odebrat tento nástroj?')) {
+            const stageId = $('#stageId').val();
+            $.ajax({
+                url: `/api/workflow/stages/${stageId}/tools/${toolId}`,
+                type: 'DELETE',
+                success: function() {
+                    toastr.success('Nástroj byl odebrán');
+                    location.reload();
+                },
+                error: function() {
+                    toastr.error('Chyba při odebírání nástroje');
+                }
+            });
+        }
+    }
+</script>

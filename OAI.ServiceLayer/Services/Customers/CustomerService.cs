@@ -10,6 +10,7 @@ using OAI.Core.Entities.Customers;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
 using OAI.Core.Interfaces;
+using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Infrastructure;
 using OAI.ServiceLayer.Interfaces;
 using OAI.ServiceLayer.Mapping.Customers;
