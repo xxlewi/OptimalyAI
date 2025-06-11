@@ -98,6 +98,26 @@
                         <i class="fas fa-moon" id="dark-mode-icon"></i>
                     </a>
                 </li>
+                
+                <!-- User Menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link" data-toggle="dropdown" href="#" role="button">
+                        <img src="~/img/user2-160x160.jpg" class="img-circle elevation-2" alt="User Image" style="width: 25px; height: 25px;">
+                        <span class="ml-1">Administrátor</span>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right">
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-user mr-2"></i> Profil
+                        </a>
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-cog mr-2"></i> Nastavení
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-sign-out-alt mr-2"></i> Odhlásit se
+                        </a>
+                    </div>
+                </li>
             </ul>
         </nav>
         <!-- /.navbar -->
@@ -112,15 +132,6 @@
 
             <!-- Sidebar -->
             <div class="sidebar">
-                <!-- Sidebar user (optional) -->
-                <div class="user-panel mt-3 pb-3 mb-3 d-flex">
-                    <div class="image">
-                        <img src="~/img/user2-160x160.jpg" class="img-circle elevation-2" alt="User Image">
-                    </div>
-                    <div class="info">
-                        <a href="#" class="d-block">Administrátor</a>
-                    </div>
-                </div>
 
                 <!-- SidebarSearch Form -->
                 <div class="form-inline">
@@ -137,31 +148,11 @@
                 <!-- Sidebar Menu -->
                 <nav class="mt-2">
                     <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-                        <li class="nav-item">
-                            <a asp-controller="Home" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-tachometer-alt"></i>
-                                <p>Dashboard</p>
-                            </a>
-                        </li>
                         <li class="nav-header">ZÁKAZNÍCI</li>
                         <li class="nav-item">
                             <a asp-controller="Customers" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-users"></i>
                                 <p>Seznam zákazníků</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-header">PROJEKTY</li>
-                        <li class="nav-item">
-                            <a asp-controller="Projects" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-project-diagram"></i>
-                                <p>Seznam projektů</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="ProjectWorkflows" asp-action="Templates" class="nav-link">
-                                <i class="nav-icon fas fa-layer-group"></i>
-                                <p>Workflow šablony</p>
                             </a>
                         </li>
                         
@@ -191,7 +182,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="Queue" class="nav-link">
+                            <a asp-controller="Requests" asp-action="Submitted" class="nav-link">
                                 <i class="nav-icon fas fa-paper-plane"></i>
                                 <p>
                                     Odeslané
@@ -227,6 +218,49 @@
                             </a>
                         </li>
                         
+                        <li class="nav-header">PROJEKTY</li>
+                        <li class="nav-item">
+                            <a asp-controller="Projects" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-project-diagram"></i>
+                                <p>Seznam projektů</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="ProjectWorkflows" asp-action="Templates" class="nav-link">
+                                <i class="nav-icon fas fa-layer-group"></i>
+                                <p>Workflow šablony</p>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-header">CHAT</li>
+                        <li class="nav-item has-treeview menu-open" id="chat-menu">
+                            <a href="#" class="nav-link">
+                                <i class="nav-icon fas fa-comments"></i>
+                                <p>
+                                    AI Chat
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview" style="display: block;">
+                                <li class="nav-item">
+                                    <a asp-controller="Chat" asp-action="New" class="nav-link">
+                                        <i class="fas fa-plus nav-icon"></i>
+                                        <p>Nový chat</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Chat" asp-action="List" class="nav-link">
+                                        <i class="fas fa-history nav-icon"></i>
+                                        <p>Historie chatů</p>
+                                    </a>
+                                </li>
+                                <li class="nav-divider"></li>
+                                <li id="recent-chats-container">
+                                    <!-- Zde budou dynamicky načítány nedávné chaty -->
+                                </li>
+                            </ul>
+                        </li>
+                        
                         <li class="nav-header">NÁSTROJE</li>
                         <li class="nav-item">
                             <a asp-controller="Tools" asp-action="Index" class="nav-link">
@@ -255,7 +289,7 @@
                         
                         <li class="nav-header">ORCHESTRACE</li>
                         <li class="nav-item">
-                            <a href="/Orchestrators" class="nav-link">
+                            <a asp-controller="Orchestrators" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-project-diagram"></i>
                                 <p>Aktivní orchestrace</p>
                             </a>
@@ -279,29 +313,17 @@
                             </a>
                         </li>
                         
-                        <li class="nav-header">INTEGRACE</li>
+                        <li class="nav-header">AI MODELY</li>
                         <li class="nav-item">
-                            <a asp-controller="Integrations" asp-action="Eshop" class="nav-link">
-                                <i class="nav-icon fas fa-shopping-cart"></i>
-                                <p>E-shop platformy</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Integrations" asp-action="AI" class="nav-link">
+                            <a asp-controller="Models" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-robot"></i>
-                                <p>AI modely</p>
+                                <p>Správa modelů</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a asp-controller="Integrations" asp-action="Storage" class="nav-link">
-                                <i class="nav-icon fas fa-database"></i>
-                                <p>Úložiště</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Integrations" asp-action="Notifications" class="nav-link">
-                                <i class="nav-icon fas fa-bell"></i>
-                                <p>Notifikace</p>
+                            <a asp-controller="AITest" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-flask"></i>
+                                <p>Test AI modelů</p>
                             </a>
                         </li>
                         
@@ -311,34 +333,6 @@
                                 <i class="nav-icon fas fa-file-alt"></i>
                                 <p>Application Logs</p>
                             </a>
-                        </li>
-                        <li class="nav-header">CHAT</li>
-                        <li class="nav-item has-treeview menu-open" id="chat-menu">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon fas fa-comments"></i>
-                                <p>
-                                    AI Chat
-                                    <i class="right fas fa-angle-left"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview" style="display: block;">
-                                <li class="nav-item">
-                                    <a asp-controller="Chat" asp-action="New" class="nav-link">
-                                        <i class="fas fa-plus nav-icon"></i>
-                                        <p>Nový chat</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="Chat" asp-action="List" class="nav-link">
-                                        <i class="fas fa-history nav-icon"></i>
-                                        <p>Historie chatů</p>
-                                    </a>
-                                </li>
-                                <li class="nav-divider"></li>
-                                <li id="recent-chats-container">
-                                    <!-- Zde budou dynamicky načítány nedávné chaty -->
-                                </li>
-                            </ul>
                         </li>
                     </ul>
                 </nav>

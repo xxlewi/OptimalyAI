@@ -87,6 +87,9 @@ namespace OAI.ServiceLayer.Services.Projects
                 Status = ExecutionStatus.Running,
                 StartedAt = DateTime.UtcNow,
                 InputParameters = JsonSerializer.Serialize(parameters),
+                OutputData = "{}",  // Initialize as empty JSON object
+                ErrorMessage = "",  // Initialize as empty string
+                ErrorStackTrace = "",  // Initialize as empty string
                 InitiatedBy = initiatedBy,
                 ExecutionLog = JsonSerializer.Serialize(new List<ProjectExecutionLogDto>())
             };

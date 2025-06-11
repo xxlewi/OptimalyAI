@@ -53,5 +53,7 @@ namespace OAI.Core.DTOs.Projects
         public string? ProjectContext { get; set; }
 
         public string? Notes { get; set; }
+
+        public bool IsTemplate { get; set; } = false;
     }
 }

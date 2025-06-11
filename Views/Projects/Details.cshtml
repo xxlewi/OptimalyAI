@@ -1,159 +1,291 @@
 @model OptimalyAI.ViewModels.ProjectViewModel
+@using OAI.Core.Entities.Projects
 @{
     ViewData["Title"] = $"Projekt: {Model.Name}";
 }
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">@Model.Name</h3>
-                <div class="card-tools">
-                    <a href="/WorkflowDesigner?projectId=@Model.Id" class="btn btn-primary btn-sm mr-2">
-                        <i class="fas fa-project-diagram"></i> Workflow Designer
-                    </a>
-                    <button type="button" class="btn btn-success btn-sm mr-2" data-toggle="modal" data-target="#executeWorkflowModal">
-                        <i class="fas fa-play"></i> Spustit Workflow
-                    </button>
-                    <button type="button" class="btn btn-info btn-sm mr-2" onclick="window.location.href='/ProjectWorkflows/Monitor?projectId=@Model.Id'">
-                        <i class="fas fa-chart-line"></i> Monitor
-                    </button>
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    @Model.Name
                     <span class="badge badge-@(Model.Status switch { 
                         ProjectStatus.Active => "success",
                         ProjectStatus.Failed => "danger",
                         ProjectStatus.Paused => "warning",
                         ProjectStatus.Completed => "info",
                         _ => "secondary"
-                    })">@Model.Status</span>
-                </div>
+                    }) ml-2">
+                        <i class="fas fa-@(Model.Status switch {
+                            ProjectStatus.Active => "play-circle",
+                            ProjectStatus.Failed => "times-circle",
+                            ProjectStatus.Paused => "pause-circle",
+                            ProjectStatus.Completed => "check-circle",
+                            ProjectStatus.Draft => "pencil-alt",
+                            _ => "flag"
+                        })"></i> @Model.Status
+                    </span>
+                </h1>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <h5>Popis projektu</h5>
-                        <p>@Model.Description</p>
-                        
-                        <h5 class="mt-4">Workflow kroky</h5>
-                        <div class="timeline">
-                            @foreach (var step in Model.Workflow.OrderBy(s => s.Order))
-                            {
-                                <div>
-                                    <i class="fas fa-@(step.Status == "completed" ? "check-circle text-success" : "circle") bg-gray"></i>
-                                    <div class="timeline-item">
-                                        <h3 class="timeline-header">@step.Name</h3>
-                                        <div class="timeline-body">
-                                            @step.Description
-                                            <br />
-                                            <small class="text-muted">Tool: @step.ToolId</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                        
-                        <h5 class="mt-4">Konfigurace</h5>
-                        <dl class="row">
-                            <dt class="col-sm-3">Zdroje:</dt>
-                            <dd class="col-sm-9">
-                                @foreach (var source in Model.Configuration.Sources)
-                                {
-                                    <span class="badge badge-info">@source</span>
-                                }
-                            </dd>
-                            
-                            <dt class="col-sm-3">Klíčová slova:</dt>
-                            <dd class="col-sm-9">
-                                @foreach (var keyword in Model.Configuration.Keywords)
-                                {
-                                    <span class="badge badge-primary">@keyword</span>
-                                }
-                            </dd>
-                            
-                            <dt class="col-sm-3">CRM integrace:</dt>
-                            <dd class="col-sm-9">@(string.IsNullOrEmpty(Model.Configuration.CrmIntegration) ? "Není nastavena" : Model.Configuration.CrmIntegration)</dd>
-                            
-                            <dt class="col-sm-3">Notifikační email:</dt>
-                            <dd class="col-sm-9">@(string.IsNullOrEmpty(Model.Configuration.NotificationEmail) ? "Není nastaven" : Model.Configuration.NotificationEmail)</dd>
-                        </dl>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <div class="info-box">
-                            <span class="info-box-icon bg-info"><i class="fas fa-clock"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Plánování</span>
-                                <span class="info-box-number">@Model.Schedule</span>
-                            </div>
-                        </div>
-                        
-                        <div class="info-box">
-                            <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Úspěšnost</span>
-                                <span class="info-box-number">@Model.Metrics.SuccessRate.ToString("F1")%</span>
-                                <div class="progress">
-                                    <div class="progress-bar bg-success" style="width: @Model.Metrics.SuccessRate%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="info-box">
-                            <span class="info-box-icon bg-warning"><i class="fas fa-tasks"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Zpracováno položek</span>
-                                <span class="info-box-number">@Model.Metrics.ItemsProcessed</span>
-                                <span class="progress-description">
-                                    Shoda: @Model.Metrics.ItemsMatched položek
-                                </span>
-                            </div>
-                        </div>
-                        
-                        <div class="info-box">
-                            <span class="info-box-icon bg-primary"><i class="fas fa-hourglass-half"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Průměrný čas běhu</span>
-                                <span class="info-box-number">@Model.Metrics.AverageRunTime.TotalMinutes.ToString("F1") min</span>
-                            </div>
-                        </div>
-                        
-                        @if (Model.LastRun.HasValue)
-                        {
-                            <div class="info-box">
-                                <span class="info-box-icon bg-secondary"><i class="fas fa-history"></i></span>
-                                <div class="info-box-content">
-                                    <span class="info-box-text">Poslední běh</span>
-                                    <span class="info-box-number">@Model.LastRun.Value.ToString("dd.MM.yyyy HH:mm")</span>
-                                </div>
-                            </div>
-                        }
-                        
-                        @if (Model.NextRun.HasValue)
-                        {
-                            <div class="info-box">
-                                <span class="info-box-icon bg-info"><i class="fas fa-calendar-alt"></i></span>
-                                <div class="info-box-content">
-                                    <span class="info-box-text">Další běh</span>
-                                    <span class="info-box-number">@Model.NextRun.Value.ToString("dd.MM.yyyy HH:mm")</span>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-            <div class="card-footer">
-                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary">
-                    <i class="fas fa-edit"></i> Upravit
-                </a>
-                <a asp-action="RunNow" asp-route-id="@Model.Id" class="btn btn-success">
-                    <i class="fas fa-play"></i> Spustit nyní
-                </a>
-                <a asp-action="Index" class="btn btn-default">
-                    <i class="fas fa-arrow-left"></i> Zpět na seznam
-                </a>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-action="Index">Projekty</a></li>
+                    <li class="breadcrumb-item active">@Model.Name</li>
+                </ol>
             </div>
         </div>
     </div>
 </div>
+
+<section class="content">
+    <div class="container-fluid">
+        @* Show welcome message for new projects *@
+        @if (Model.Status == ProjectStatus.Draft && Model.Workflow.Count == 0)
+        {
+            <div class="alert alert-info alert-dismissible">
+                <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+                <h5><i class="icon fas fa-info"></i> Projekt byl úspěšně vytvořen!</h5>
+                Co chcete udělat dál?
+            </div>
+        }
+
+        <div class="row">
+            @* Project overview card *@
+            <div class="col-md-12">
+                <div class="card card-primary card-outline">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <p class="lead">@Model.Description</p>
+                                
+                                @* Customer information *@
+                                <div class="mt-3">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Zákazník:</strong>
+                                            @if (Model.CustomerId.HasValue)
+                                            {
+                                                <a href="@Url.Action("Details", "Customers", new { id = Model.CustomerId })" class="text-primary">
+                                                    <i class="fas fa-user"></i> @Model.CustomerName
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">@Model.CustomerName</span>
+                                            }
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Vytvořeno:</strong>
+                                            <span class="text-muted">@Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</span>
+                                        </div>
+                                    </div>
+                                    
+                                    @if (Model.CustomerId.HasValue)
+                                    {
+                                        <div class="row mt-2">
+                                            @if (!string.IsNullOrEmpty(Model.CustomerEmail))
+                                            {
+                                                <div class="col-md-6">
+                                                    <strong>Email:</strong>
+                                                    <span class="text-muted">
+                                                        <i class="fas fa-envelope"></i> @Model.CustomerEmail
+                                                    </span>
+                                                </div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(Model.CustomerPhone))
+                                            {
+                                                <div class="col-md-6">
+                                                    <strong>Telefon:</strong>
+                                                    <span class="text-muted">
+                                                        <i class="fas fa-phone"></i> @Model.CustomerPhone
+                                                    </span>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-right">
+                                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-primary">
+                                    <i class="fas fa-edit"></i> Upravit základní informace
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Action cards for new projects *@
+        @if (Model.Status == ProjectStatus.Draft && Model.Workflow.Count == 0)
+        {
+            <div class="row">
+                <div class="col-lg-4 col-md-6">
+                    <div class="card card-widget widget-user-2">
+                        <div class="widget-user-header bg-gradient-primary">
+                            <h3 class="widget-user-username">
+                                <i class="fas fa-magic"></i> Nastavit workflow
+                            </h3>
+                            <h5 class="widget-user-desc">Definujte kroky zpracování</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>Vytvořte automatický proces pro zpracování vašeho projektu - definujte jednotlivé kroky, nástroje a podmínky.</p>
+                            <a asp-action="WorkflowDesigner" asp-route-id="@Model.Id" class="btn btn-primary btn-block">
+                                <i class="fas fa-project-diagram"></i> Otevřít Workflow Designer
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <div class="card card-widget widget-user-2">
+                        <div class="widget-user-header bg-gradient-success">
+                            <h3 class="widget-user-username">
+                                <i class="fas fa-play"></i> Rychlé spuštění
+                            </h3>
+                            <h5 class="widget-user-desc">Spusťte projekt ručně</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>Pokud máte workflow připravené, můžete projekt spustit okamžitě a sledovat jeho průběh v reálném čase.</p>
+                            <button class="btn btn-success btn-block" disabled>
+                                <i class="fas fa-play"></i> Nejdřív nastavte workflow
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <div class="card card-widget widget-user-2">
+                        <div class="widget-user-header bg-gradient-info">
+                            <h3 class="widget-user-username">
+                                <i class="fas fa-clock"></i> Automatizace
+                            </h3>
+                            <h5 class="widget-user-desc">Naplánujte pravidelné spouštění</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>Nastavte automatické spouštění projektu - každou hodinu, denně, týdně nebo podle vlastního plánu.</p>
+                            <button class="btn btn-info btn-block" disabled>
+                                <i class="fas fa-calendar-alt"></i> Nejdřív nastavte workflow
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Workflow section for projects with workflow *@
+        @if (Model.Workflow.Count > 0)
+        {
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-project-diagram"></i> Workflow
+                            </h3>
+                            <div class="card-tools">
+                                <a asp-action="WorkflowDesigner" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-edit"></i> Upravit
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="timeline timeline-inverse">
+                                @foreach (var step in Model.Workflow.OrderBy(s => s.Order))
+                                {
+                                    <div>
+                                        <i class="fas fa-@(step.Status == "completed" ? "check-circle" : "circle") bg-@(step.Status == "active" ? "primary" : step.Status == "completed" ? "success" : "gray")"></i>
+                                        <div class="timeline-item">
+                                            <h3 class="timeline-header">@step.Name</h3>
+                                            @if (!string.IsNullOrEmpty(step.Description))
+                                            {
+                                                <div class="timeline-body">
+                                                    @step.Description
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                <div>
+                                    <i class="fas fa-flag-checkered bg-green"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    @* Action buttons *@
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-cogs"></i> Akce
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <button type="button" class="btn btn-success btn-block mb-2" onclick="executeProject()">
+                                <i class="fas fa-play"></i> Spustit nyní
+                            </button>
+                            <a href="/ProjectWorkflows/Monitor?projectId=@Model.Id" class="btn btn-info btn-block mb-2">
+                                <i class="fas fa-chart-line"></i> Sledovat průběh
+                            </a>
+                            <button type="button" class="btn btn-warning btn-block mb-2" onclick="scheduleProject()">
+                                <i class="fas fa-clock"></i> Nastavit plánování
+                            </button>
+                        </div>
+                    </div>
+
+                    @* Metrics *@
+                    @if (Model.Metrics.TotalRuns > 0)
+                    {
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="fas fa-chart-bar"></i> Statistiky
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>Celkem spuštění:</span>
+                                    <span class="font-weight-bold">@Model.Metrics.TotalRuns</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>Úspěšnost:</span>
+                                    <span class="font-weight-bold text-success">@Model.Metrics.SuccessRate.ToString("F0")%</span>
+                                </div>
+                                <div class="progress progress-sm mb-3">
+                                    <div class="progress-bar bg-success" style="width: @Model.Metrics.SuccessRate%"></div>
+                                </div>
+                                @if (Model.LastRun.HasValue)
+                                {
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Poslední běh:</span>
+                                        <span class="text-muted">@Model.LastRun.Value.ToString("dd.MM. HH:mm")</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Help section *@
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="callout callout-info">
+                    <h5><i class="fas fa-info"></i> Potřebujete pomoc?</h5>
+                    <p>
+                        <strong>Workflow Designer</strong> - Vytváří automatické procesy s podmínkami a větvením<br>
+                        <strong>Spustit nyní</strong> - Okamžité jednorázové spuštění projektu<br>
+                        <strong>Nastavit plánování</strong> - Pravidelné automatické spouštění (každou hodinu, denně, atd.)
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 <!-- Execute Workflow Modal -->
 <div class="modal fade" id="executeWorkflowModal" tabindex="-1" role="dialog" aria-labelledby="executeWorkflowModalLabel" aria-hidden="true">
@@ -190,6 +322,55 @@
 
 @section Scripts {
     <script>
+        function executeProject() {
+            const projectId = '@Model.Id';
+            
+            if (!confirm('Opravdu chcete spustit projekt nyní?')) {
+                return;
+            }
+            
+            // Show loading on button
+            const btn = event.target;
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spouštím...';
+            
+            fetch(`/Projects/Execute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                },
+                body: JSON.stringify({ id: projectId })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    toastr.success(result.message || 'Projekt byl úspěšně spuštěn');
+                    
+                    // Redirect to monitor page after short delay
+                    setTimeout(() => {
+                        window.location.href = `/ProjectWorkflows/Monitor?projectId=${projectId}`;
+                    }, 1500);
+                } else {
+                    toastr.error(result.message || 'Chyba při spouštění projektu');
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            })
+            .catch(error => {
+                toastr.error('Chyba při komunikaci se serverem');
+                console.error('Error:', error);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            });
+        }
+
+        function scheduleProject() {
+            // For now, just redirect to workflow designer where scheduling can be set
+            window.location.href = '@Url.Action("WorkflowDesigner", new { id = Model.Id })&tab=schedule';
+        }
+
         function executeWorkflow() {
             const projectId = '@Model.Id';
             const parameters = document.getElementById('parameters').value;

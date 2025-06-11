@@ -19,6 +19,12 @@ namespace OptimalyAI.ViewModels
         public ProjectConfiguration Configuration { get; set; } = new();
         public List<WorkflowStep> Workflow { get; set; } = new();
         public ProjectMetrics Metrics { get; set; } = new();
+        
+        // Customer information
+        public Guid? CustomerId { get; set; }
+        public string CustomerName { get; set; } = string.Empty;
+        public string CustomerEmail { get; set; } = string.Empty;
+        public string CustomerPhone { get; set; } = string.Empty;
     }
 
     public class CreateProjectViewModel
@@ -51,13 +57,20 @@ namespace OptimalyAI.ViewModels
         [Display(Name = "Hodinová sazba")]
         [Range(0, 100000)]
         public decimal? HourlyRate { get; set; }
+        
+        [Display(Name = "Priorita")]
+        public ProjectPriority Priority { get; set; } = ProjectPriority.Medium;
     }
 
     public class EditProjectViewModel : CreateProjectViewModel
     {
         public Guid Id { get; set; }
+        
+        [Display(Name = "Status")]
         public ProjectStatus Status { get; set; }
-        public ProjectPriority Priority { get; set; }
+        
+        [Display(Name = "Priorita")]
+        public new ProjectPriority Priority { get; set; }
         
         [Display(Name = "Jméno zákazníka")]
         public new string CustomerName { get; set; } = string.Empty;

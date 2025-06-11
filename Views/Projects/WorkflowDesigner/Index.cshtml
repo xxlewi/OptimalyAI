@@ -1,0 +1,732 @@
+@model OAI.Core.DTOs.Projects.ProjectWorkflowDesignDto
+@{
+    ViewData["Title"] = "Workflow Designer - " + ViewBag.Project.Name;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/workflow-designer.css" asp-append-version="true" />
+    <style>
+        /* Modern Workflow Designer Styles */
+        .workflow-designer {
+            min-height: 700px;
+            background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+            padding: 30px;
+            border-radius: 16px;
+            position: relative;
+        }
+        
+        /* Stage Cards */
+        .stage-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .stage-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 8px 24px rgba(0,123,255,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .stage-card.selected {
+            border-color: #007bff;
+            box-shadow: 0 0 0 4px rgba(0,123,255,0.1);
+        }
+        
+        .stage-card.dragging {
+            opacity: 0.6;
+            transform: rotate(2deg);
+            cursor: move;
+        }
+        
+        /* Stage Components */
+        .stage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .stage-number {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 12px;
+            font-size: 1.2rem;
+        }
+        
+        .stage-content {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .stage-info {
+            flex: 1;
+        }
+        
+        .stage-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        /* Badges */
+        .orchestrator-badge, .react-agent-badge, .tool-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .orchestrator-badge {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .react-agent-badge {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        .tool-badge {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        
+        /* Flow Connector */
+        .stage-connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 60px;
+            position: relative;
+        }
+        
+        .stage-connector::before {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: linear-gradient(to bottom, #007bff, transparent);
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .stage-connector i {
+            background: white;
+            padding: 8px;
+            border-radius: 50%;
+            color: #007bff;
+            z-index: 1;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 100px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            opacity: 0.2;
+        }
+        
+        /* Templates Section */
+        .templates-container {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .template-card {
+            background: #f8f9fa;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .template-card:hover {
+            border-color: #28a745;
+            background: #e8f5e9;
+            transform: translateY(-2px);
+        }
+        
+        .template-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            display: block;
+        }
+        
+        .template-card h6 {
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        
+        .template-card p {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin: 0;
+        }
+        
+        /* Sidebar */
+        .workflow-sidebar {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 20px;
+        }
+        
+        .component-section {
+            margin-bottom: 24px;
+        }
+        
+        .component-section h6 {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #495057;
+        }
+        
+        .component-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: move;
+            transition: all 0.2s ease;
+        }
+        
+        .component-item:hover {
+            background: #e9ecef;
+            transform: translateX(4px);
+        }
+        
+        .component-item i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        /* Add Button */
+        .add-stage-button {
+            width: 100%;
+            padding: 20px;
+            border: 2px dashed #28a745;
+            background: rgba(40, 167, 69, 0.05);
+            border-radius: 12px;
+            color: #28a745;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .add-stage-button:hover {
+            background: rgba(40, 167, 69, 0.1);
+            border-color: #218838;
+            color: #218838;
+        }
+        
+        /* Workflow Info */
+        .workflow-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 0.85rem;
+        }
+        
+        .workflow-info dt {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .workflow-info dd {
+            margin-bottom: 8px;
+            color: #6c757d;
+        }
+        
+        /* Animation moved to external CSS file */
+    </style>
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Workflow Designer - @ViewBag.Project.Name</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveWorkflow">
+                        <i class="fas fa-save"></i> Uložit Workflow
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="btnTestWorkflow">
+                        <i class="fas fa-play"></i> Testovat
+                    </button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnValidateWorkflow">
+                        <i class="fas fa-check"></i> Validovat
+                    </button>
+                    <a href="/Projects/Details/@ViewBag.Project.Id" class="btn btn-default btn-sm">
+                        <i class="fas fa-arrow-left"></i> Zpět
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Main Designer Area -->
+                    <div class="col-md-9">
+                        <!-- Templates Section -->
+                        <div class="templates-container" id="templatesSection">
+                            <h5><i class="fas fa-magic text-primary"></i> Rychlé šablony workflow</h5>
+                            <p class="text-muted">Vyberte šablonu pro rychlé vytvoření workflow nebo začněte od nuly</p>
+                            <div class="template-grid">
+                                <div class="template-card" onclick="applyTemplate('product-search')">
+                                    <i class="fas fa-search template-icon text-primary"></i>
+                                    <h6>Vyhledávání produktů</h6>
+                                    <p>Analýza fotek → Hledání → Export</p>
+                                </div>
+                                <div class="template-card" onclick="applyTemplate('customer-analysis')">
+                                    <i class="fas fa-user-chart template-icon text-info"></i>
+                                    <h6>Analýza zákazníka</h6>
+                                    <p>Sběr dat → Analýza → Report</p>
+                                </div>
+                                <div class="template-card" onclick="applyTemplate('content-generation')">
+                                    <i class="fas fa-pen-fancy template-icon text-success"></i>
+                                    <h6>Generování obsahu</h6>
+                                    <p>Vstup → AI generování → Publikace</p>
+                                </div>
+                                <div class="template-card" onclick="applyTemplate('data-processing')">
+                                    <i class="fas fa-database template-icon text-warning"></i>
+                                    <h6>Zpracování dat</h6>
+                                    <p>Import → Transformace → Export</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Workflow Configuration -->
+                        <div class="workflow-designer" id="workflowDesigner">
+                            <div class="mb-4">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label class="font-weight-bold">Způsob spuštění:</label>
+                                        <select class="form-control form-control-lg" id="triggerType">
+                                            <option value="Manual" selected="@(Model.TriggerType == "Manual")">🖱️ Manuální spuštění</option>
+                                            <option value="Schedule" selected="@(Model.TriggerType == "Schedule")">⏰ Plánované spouštění</option>
+                                            <option value="Event" selected="@(Model.TriggerType == "Event")">⚡ Událostmi řízené</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6" id="scheduleContainer" style="display: @(Model.TriggerType == "Schedule" ? "block" : "none")">
+                                        <label class="font-weight-bold">Plán spouštění (Cron):</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control form-control-lg" id="schedule" value="@Model.Schedule" placeholder="0 0 * * *">
+                                            <div class="input-group-append">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="showCronHelp()">
+                                                    <i class="fas fa-question-circle"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4" />
+                            
+                            <div id="stagesList">
+                                @if (Model.Stages.Any())
+                                {
+                                    @foreach (var stage in Model.Stages.OrderBy(s => s.Order))
+                                    {
+                                        <div class="stage-card" data-stage-id="@stage.Id" data-order="@stage.Order">
+                                            <div class="stage-header">
+                                                <div class="stage-content">
+                                                    <span class="stage-number">@stage.Order</span>
+                                                    <div class="stage-info">
+                                                        <h5 class="mb-1">@stage.Name</h5>
+                                                        @if (!string.IsNullOrEmpty(stage.Description))
+                                                        {
+                                                            <p class="text-muted mb-2" style="font-size: 0.9rem;">@stage.Description</p>
+                                                        }
+                                                        <div class="stage-components">
+                                                            @if (!string.IsNullOrEmpty(stage.OrchestratorType))
+                                                            {
+                                                                <span class="orchestrator-badge">
+                                                                    <i class="fas fa-robot"></i> @stage.OrchestratorType
+                                                                </span>
+                                                            }
+                                                            @if (!string.IsNullOrEmpty(stage.ReActAgentType))
+                                                            {
+                                                                <span class="react-agent-badge">
+                                                                    <i class="fas fa-brain"></i> @stage.ReActAgentType
+                                                                </span>
+                                                            }
+                                                            <span class="badge badge-secondary">@stage.ExecutionStrategy</span>
+                                                        </div>
+                                                        @if (stage.Tools.Any())
+                                                        {
+                                                            <div class="stage-tools mt-2">
+                                                                @foreach (var tool in stage.Tools.OrderBy(t => t.Order))
+                                                                {
+                                                                    <span class="tool-badge" title="@tool.ToolName">
+                                                                        <i class="fas fa-wrench"></i> @tool.ToolName
+                                                                    </span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="stage-actions">
+                                                    <button class="btn btn-sm btn-info" onclick="editStage('@stage.Id')" title="Upravit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-warning" onclick="duplicateStage('@stage.Id')" title="Duplikovat">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" onclick="deleteStage('@stage.Id')" title="Smazat">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-secondary drag-handle" title="Přesunout">
+                                                        <i class="fas fa-grip-vertical"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        @if (stage != Model.Stages.Last())
+                                        {
+                                            <div class="stage-connector">
+                                                <i class="fas fa-chevron-down fa-2x"></i>
+                                            </div>
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="empty-state">
+                                        <i class="fas fa-layer-group fa-5x mb-4"></i>
+                                        <h3>Začněte vytvářet workflow</h3>
+                                        <p class="lead mb-4">Vyberte šablonu výše nebo přidejte první krok</p>
+                                        <button class="btn btn-success btn-lg" onclick="createStage()">
+                                            <i class="fas fa-plus-circle"></i> Přidat první krok
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                            
+                            <div class="mt-4">
+                                <button class="add-stage-button btn" onclick="createStage()">
+                                    <i class="fas fa-plus-circle"></i> Přidat další krok workflow
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sidebar with Components -->
+                    <div class="col-md-3">
+                        <div class="workflow-sidebar">
+                            <h5 class="mb-4">🧰 Komponenty</h5>
+                            
+                            <div class="component-section">
+                                <h6><i class="fas fa-robot"></i> Orchestrátory</h6>
+                                @foreach (var orchestrator in ViewBag.Components["orchestrators"])
+                                {
+                                    <div class="component-item" data-type="orchestrator" data-value="@orchestrator" draggable="true">
+                                        <i class="fas fa-robot"></i> @orchestrator
+                                    </div>
+                                }
+                            </div>
+                            
+                            <div class="component-section">
+                                <h6><i class="fas fa-brain"></i> ReAct Agenti</h6>
+                                @foreach (var agent in ViewBag.Components["reactAgents"])
+                                {
+                                    <div class="component-item" data-type="agent" data-value="@agent" draggable="true">
+                                        <i class="fas fa-brain"></i> @agent
+                                    </div>
+                                }
+                            </div>
+                            
+                            <div class="component-section">
+                                <h6><i class="fas fa-wrench"></i> Nástroje</h6>
+                                @foreach (var tool in ViewBag.Components["tools"])
+                                {
+                                    <div class="component-item" data-type="tool" data-value="@tool" draggable="true">
+                                        <i class="fas fa-wrench"></i> @tool
+                                    </div>
+                                }
+                            </div>
+                            
+                            <hr class="my-4" />
+                            
+                            <div class="workflow-info">
+                                <h6 class="mb-3">📊 Informace o workflow</h6>
+                                <dl>
+                                    <dt>Verze:</dt>
+                                    <dd>@Model.WorkflowVersion</dd>
+                                    <dt>Naposledy upraveno:</dt>
+                                    <dd>@(Model.LastModified?.ToString("dd.MM.yyyy HH:mm") ?? "Nikdy")</dd>
+                                    <dt>Upravil:</dt>
+                                    <dd>@(Model.ModifiedBy ?? "Systém")</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal placeholder -->
+<div id="modalContainer"></div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="~/js/workflow-designer.js" asp-append-version="true"></script>
+    <script src="~/js/workflow-validator.js" asp-append-version="true"></script>
+    <script>
+        const projectId = '@ViewBag.Project.Id';
+        let workflowData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model));
+        let validator = new WorkflowValidator();
+        
+        // Workflow Templates
+        const workflowTemplates = {
+            'product-search': {
+                name: 'Vyhledávání produktů podle fotek',
+                description: 'Automatické vyhledávání podobných produktů na e-commerce platformách',
+                stages: [
+                    {
+                        name: 'Analýza vstupních fotek',
+                        description: 'Extrakce vizualizace vlastnosti, barvy, stylu a kategorie produktů',
+                        type: 'Analysis',
+                        orchestratorType: 'ConversationOrchestrator',
+                        reactAgentType: 'ConversationReActAgent',
+                        executionStrategy: 'Sequential',
+                        tools: ['image_analyzer', 'style_extractor']
+                    },
+                    {
+                        name: 'Vyhledávání na platformách',
+                        description: 'Paralelní vyhledávání produktů na Aliexpress, Alibaba a dalších',
+                        type: 'Search',
+                        orchestratorType: 'ToolChainOrchestrator',
+                        executionStrategy: 'Parallel',
+                        tools: ['aliexpress_search', 'alibaba_search', 'web_search']
+                    },
+                    {
+                        name: 'Filtrování a hodnocení',
+                        description: 'Výběr nejlepších produktů podle ceny, hodnocení a podobnosti',
+                        type: 'Processing',
+                        orchestratorType: 'ConversationOrchestrator',
+                        reactAgentType: 'AnalysisReActAgent',
+                        executionStrategy: 'Sequential',
+                        tools: ['product_filter', 'similarity_scorer']
+                    },
+                    {
+                        name: 'Export výsledků',
+                        description: 'Vytvoření Excel reportu a uložení do databáze',
+                        type: 'Export',
+                        orchestratorType: 'ToolChainOrchestrator',
+                        executionStrategy: 'Sequential',
+                        tools: ['excel_exporter', 'database_saver']
+                    }
+                ]
+            },
+            'customer-analysis': {
+                name: 'Analýza zákazníka',
+                description: 'Komplexní analýza zákaznických dat a chování',
+                stages: [
+                    {
+                        name: 'Sběr dat',
+                        type: 'DataCollection',
+                        orchestratorType: 'ToolChainOrchestrator',
+                        executionStrategy: 'Parallel',
+                        tools: ['database_query', 'api_fetcher']
+                    },
+                    {
+                        name: 'Analýza',
+                        type: 'Analysis',
+                        orchestratorType: 'ConversationOrchestrator',
+                        reactAgentType: 'AnalysisReActAgent',
+                        executionStrategy: 'Sequential',
+                        tools: ['data_analyzer', 'pattern_detector']
+                    },
+                    {
+                        name: 'Generování reportu',
+                        type: 'Reporting',
+                        orchestratorType: 'ConversationOrchestrator',
+                        executionStrategy: 'Sequential',
+                        tools: ['report_generator', 'chart_creator']
+                    }
+                ]
+            }
+        };
+        
+        // Apply template function
+        window.applyTemplate = function(templateId) {
+            const template = workflowTemplates[templateId];
+            if (!template) return;
+            
+            if (confirm(`Opravdu chcete použít šablonu "${template.name}"? Současné workflow bude nahrazeno.`)) {
+                // Hide templates section
+                $('#templatesSection').slideUp();
+                
+                // Apply template stages
+                template.stages.forEach((stage, index) => {
+                    stage.order = index + 1;
+                    stage.projectId = projectId;
+                });
+                
+                // Update workflow data
+                workflowData.stages = template.stages;
+                
+                // Re-render workflow
+                if (workflowDesigner) {
+                    workflowDesigner.stages = template.stages;
+                    workflowDesigner.renderWorkflow(workflowData);
+                }
+                
+                toastr.success(`Šablona "${template.name}" byla aplikována`);
+            }
+        };
+        
+        // Globální funkce pro použití v HTML
+        window.createStage = function() {
+            $.get(`/Projects/CreateStage?projectId=${projectId}`, function(html) {
+                $('#modalContainer').html(html);
+                $('#createStageModal').modal('show');
+                
+                // Připojit validátor k formuláři
+                validator.attachToForm('createStageForm');
+            });
+        };
+        
+        window.editStage = function(stageId) {
+            $.get(`/Projects/EditStage?stageId=${stageId}`, function(html) {
+                $('#modalContainer').html(html);
+                $('#editStageModal').modal('show');
+                
+                // Připojit validátor k formuláři
+                validator.attachToForm('editStageForm');
+            });
+        };
+        
+        window.testWorkflow = function() {
+            $.get(`/Projects/WorkflowDesigner/TestWorkflow?projectId=${projectId}`, function(html) {
+                $('#modalContainer').html(html);
+                $('#testWorkflowModal').modal('show');
+            });
+        };
+        
+        window.showCronHelp = function() {
+            const modal = $(`
+                <div class="modal fade" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Nápověda pro Cron výrazy</h5>
+                                <button type="button" class="close" data-dismiss="modal">
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <p>Cron výraz má 5 částí: <code>minuta hodina den měsíc den-v-týdnu</code></p>
+                                <h6>Příklady:</h6>
+                                <ul>
+                                    <li><code>0 0 * * *</code> - Každý den o půlnoci</li>
+                                    <li><code>0 8 * * 1-5</code> - Každý všední den v 8:00</li>
+                                    <li><code>*/15 * * * *</code> - Každých 15 minut</li>
+                                    <li><code>0 0 1 * *</code> - První den v měsíci</li>
+                                </ul>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `);
+            $('body').append(modal);
+            modal.modal('show');
+            modal.on('hidden.bs.modal', function() {
+                modal.remove();
+            });
+        };
+        
+        // Save workflow button
+        $('#btnSaveWorkflow').on('click', function() {
+            if (workflowDesigner) {
+                workflowDesigner.saveWorkflow();
+            }
+        });
+        
+        // Test workflow button
+        $('#btnTestWorkflow').on('click', function() {
+            testWorkflow();
+        });
+        
+        // Validate workflow button
+        $('#btnValidateWorkflow').on('click', function() {
+            // Client-side validace
+            const validationResult = validator.validateWorkflow(workflowData);
+            
+            if (!validationResult.isValid) {
+                // Zobrazit výsledky validace
+                const modal = $(`
+                    <div class="modal fade" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Výsledky validace workflow</h5>
+                                    <button type="button" class="close" data-dismiss="modal">
+                                        <span>&times;</span>
+                                    </button>
+                                </div>
+                                <div class="modal-body" id="validationResults"></div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                
+                $('body').append(modal);
+                validator.showValidationResults('validationResults');
+                modal.modal('show');
+                modal.on('hidden.bs.modal', function() {
+                    modal.remove();
+                });
+            } else {
+                // Server-side validace
+                if (workflowDesigner) {
+                    workflowDesigner.validateWorkflow();
+                }
+            }
+        });
+    </script>
+}

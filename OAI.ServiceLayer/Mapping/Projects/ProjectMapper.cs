@@ -56,7 +56,14 @@ namespace OAI.ServiceLayer.Mapping.Projects
                 Configuration = entity.Configuration,
                 ProjectContext = entity.ProjectContext,
                 Version = entity.Version,
-                Notes = entity.Notes
+                Notes = entity.Notes,
+                
+                // Workflow properties
+                WorkflowVersion = entity.WorkflowVersion,
+                IsTemplate = entity.IsTemplate,
+                TemplateId = entity.TemplateId,
+                TriggerType = entity.TriggerType,
+                Schedule = entity.Schedule
             };
 
             // Mapování kolekcí pokud jsou načtené
@@ -188,7 +195,8 @@ namespace OAI.ServiceLayer.Mapping.Projects
                 Configuration = dto.Configuration ?? "{}",
                 ProjectContext = dto.ProjectContext ?? "",
                 Notes = dto.Notes,
-                Version = 1
+                Version = 1,
+                IsTemplate = dto.IsTemplate
             };
         }
 

@@ -48,8 +48,12 @@ class WorkflowDesigner {
             const response = await fetch(`/api/workflow/${this.projectId}/design`);
             const result = await response.json();
             
-            if (result.success) {
+            if (result.success && result.data) {
                 this.renderWorkflow(result.data);
+                // Hide templates section if workflow has stages
+                if (result.data.stages && result.data.stages.length > 0) {
+                    $('#templatesSection').slideUp();
+                }
             }
         } catch (error) {
             console.error('Error loading workflow:', error);
@@ -87,58 +91,68 @@ class WorkflowDesigner {
         div.dataset.order = stage.order;
         div.dataset.index = index;
         
+        // Handle tools that might be strings or objects
+        const toolsList = stage.tools || [];
+        const toolsHtml = toolsList.map(tool => {
+            const toolName = typeof tool === 'string' ? tool : tool.toolName;
+            return `
+                <span class="tool-badge" title="${toolName}">
+                    <i class="fas fa-wrench"></i> ${toolName}
+                </span>
+            `;
+        }).join('');
+        
         div.innerHTML = `
             <div class="stage-header">
-                <div>
-                    <h5 class="mb-0">
-                        <span class="stage-order">${stage.order}.</span>
-                        <span class="stage-name">${stage.name}</span>
-                    </h5>
-                    ${stage.description ? `<small class="text-muted">${stage.description}</small>` : ''}
+                <div class="stage-content">
+                    <span class="stage-number">${stage.order}</span>
+                    <div class="stage-info">
+                        <h5 class="mb-1">${stage.name}</h5>
+                        ${stage.description ? `<p class="text-muted mb-2" style="font-size: 0.9rem;">${stage.description}</p>` : ''}
+                        <div class="stage-components">
+                            ${stage.orchestratorType ? `
+                                <span class="orchestrator-badge">
+                                    <i class="fas fa-robot"></i> ${stage.orchestratorType}
+                                </span>
+                            ` : ''}
+                            ${stage.reactAgentType ? `
+                                <span class="react-agent-badge">
+                                    <i class="fas fa-brain"></i> ${stage.reactAgentType}
+                                </span>
+                            ` : ''}
+                            <span class="badge badge-secondary">${stage.executionStrategy || 'Sequential'}</span>
+                        </div>
+                        ${toolsList.length > 0 ? `
+                            <div class="stage-tools mt-2">
+                                ${toolsHtml}
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
-                <div>
-                    <button class="btn btn-sm btn-info" onclick="workflowDesigner.editStage('${stage.id}')">
+                <div class="stage-actions">
+                    <button class="btn btn-sm btn-info" onclick="editStage('${stage.id}')" title="Upravit">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-warning" onclick="workflowDesigner.duplicateStage('${stage.id}')">
+                    <button class="btn btn-sm btn-warning" onclick="workflowDesigner.duplicateStage('${stage.id}')" title="Duplikovat">
                         <i class="fas fa-copy"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger" onclick="workflowDesigner.deleteStage('${stage.id}')">
+                    <button class="btn btn-sm btn-danger" onclick="workflowDesigner.deleteStage('${stage.id}')" title="Smazat">
                         <i class="fas fa-trash"></i>
                     </button>
-                    <button class="btn btn-sm btn-secondary drag-handle">
+                    <button class="btn btn-sm btn-secondary drag-handle" title="Přesunout">
                         <i class="fas fa-grip-vertical"></i>
                     </button>
                 </div>
             </div>
-            
-            <div class="stage-details">
-                ${stage.orchestratorType ? `
-                    <span class="orchestrator-badge">
-                        <i class="fas fa-robot"></i> ${stage.orchestratorType}
-                    </span>
-                ` : ''}
-                ${stage.reactAgentType ? `
-                    <span class="react-agent-badge">
-                        <i class="fas fa-brain"></i> ${stage.reactAgentType}
-                    </span>
-                ` : ''}
-                <span class="badge badge-secondary">${stage.executionStrategy}</span>
-            </div>
-            
-            ${stage.tools && stage.tools.length > 0 ? `
-                <div class="stage-tools">
-                    ${stage.tools.map(tool => `
-                        <span class="tool-badge" title="${tool.toolName}">
-                            <i class="fas fa-wrench"></i> ${tool.toolName}
-                        </span>
-                    `).join('')}
-                </div>
-            ` : ''}
         `;
         
         // Přidání event listenerů
-        div.addEventListener('click', () => this.selectStage(stage));
+        div.addEventListener('click', (e) => {
+            // Zabránit kliknutí na tlačítka
+            if (!e.target.closest('.stage-actions')) {
+                this.selectStage(stage);
+            }
+        });
         div.addEventListener('dragstart', (e) => this.handleDragStart(e, stage));
         div.addEventListener('dragend', (e) => this.handleDragEnd(e));
         
@@ -148,16 +162,19 @@ class WorkflowDesigner {
     createConnectorElement() {
         const div = document.createElement('div');
         div.className = 'stage-connector';
-        div.innerHTML = '<i class="fas fa-arrow-down fa-2x"></i>';
+        div.innerHTML = '<i class="fas fa-chevron-down fa-2x"></i>';
         return div;
     }
 
     getEmptyStateHtml() {
         return `
             <div class="empty-state">
-                <i class="fas fa-layer-group fa-4x mb-3"></i>
-                <h4>Zatím žádné kroky workflow</h4>
-                <p>Klikněte na tlačítko "Přidat krok" pro vytvoření prvního kroku workflow</p>
+                <i class="fas fa-layer-group fa-5x mb-4"></i>
+                <h3>Začněte vytvářet workflow</h3>
+                <p class="lead mb-4">Vyberte šablonu výše nebo přidejte první krok</p>
+                <button class="btn btn-success btn-lg" onclick="createStage()">
+                    <i class="fas fa-plus-circle"></i> Přidat první krok
+                </button>
             </div>
         `;
     }
@@ -212,16 +229,8 @@ class WorkflowDesigner {
     }
 
     async editStage(stageId) {
-        try {
-            const response = await fetch(`/WorkflowDesigner/EditStage?stageId=${stageId}`);
-            const html = await response.text();
-            
-            document.getElementById('modalContainer').innerHTML = html;
-            $('#editStageModal').modal('show');
-        } catch (error) {
-            console.error('Error loading edit stage modal:', error);
-            toastr.error('Chyba při načítání editoru');
-        }
+        // This is now handled by global editStage function
+        window.editStage(stageId);
     }
 
     async duplicateStage(stageId) {
@@ -268,11 +277,14 @@ class WorkflowDesigner {
         const triggerType = document.getElementById('triggerType').value;
         const schedule = document.getElementById('schedule').value;
         
+        // Get current workflow data
+        const stages = await this.getWorkflowStages();
+        
         const workflowDto = {
             projectId: this.projectId,
             triggerType: triggerType,
             schedule: schedule || null,
-            stages: this.stages
+            stages: stages
         };
         
         try {
@@ -288,14 +300,33 @@ class WorkflowDesigner {
             
             if (result.success) {
                 toastr.success('Workflow bylo uloženo');
-                this.stages = result.data.stages;
+                if (result.data && result.data.stages) {
+                    this.stages = result.data.stages;
+                }
             } else {
-                toastr.error('Chyba při ukládání workflow');
+                toastr.error(result.message || 'Chyba při ukládání workflow');
             }
         } catch (error) {
             console.error('Error saving workflow:', error);
             toastr.error('Chyba při ukládání workflow');
         }
+    }
+    
+    async getWorkflowStages() {
+        // Get stages from current UI state
+        const stageElements = document.querySelectorAll('.stage-card');
+        const stages = [];
+        
+        for (let i = 0; i < stageElements.length; i++) {
+            const stageId = stageElements[i].dataset.stageId;
+            const stage = this.stages.find(s => s.id === stageId);
+            if (stage) {
+                stage.order = i + 1;
+                stages.push(stage);
+            }
+        }
+        
+        return stages;
     }
 
     async validateWorkflow() {
@@ -319,14 +350,98 @@ class WorkflowDesigner {
         const stagesList = document.getElementById('stagesList');
         if (!stagesList) return;
         
+        // Initialize Sortable for drag & drop reordering
         new Sortable(stagesList, {
             handle: '.drag-handle',
             animation: 150,
             ghostClass: 'dragging',
+            filter: '.stage-connector',
             onEnd: (evt) => {
                 this.reorderStages();
             }
         });
+        
+        // Initialize drag & drop for components from sidebar
+        this.initComponentDragDrop();
+    }
+    
+    initComponentDragDrop() {
+        // Make component items draggable
+        document.querySelectorAll('.component-item[draggable="true"]').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('component-type', item.dataset.type);
+                e.dataTransfer.setData('component-value', item.dataset.value);
+                item.style.opacity = '0.5';
+            });
+            
+            item.addEventListener('dragend', (e) => {
+                item.style.opacity = '';
+            });
+        });
+        
+        // Make stages droppable for components
+        const stagesList = document.getElementById('stagesList');
+        if (stagesList) {
+            stagesList.addEventListener('dragover', (e) => {
+                if (e.dataTransfer.types.includes('component-type')) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
+                }
+            });
+            
+            stagesList.addEventListener('drop', (e) => {
+                if (e.dataTransfer.types.includes('component-type')) {
+                    e.preventDefault();
+                    const type = e.dataTransfer.getData('component-type');
+                    const value = e.dataTransfer.getData('component-value');
+                    
+                    // Find which stage was dropped on
+                    const stageCard = e.target.closest('.stage-card');
+                    if (stageCard) {
+                        const stageId = stageCard.dataset.stageId;
+                        this.addComponentToStage(stageId, type, value);
+                    }
+                }
+            });
+        }
+    }
+    
+    async addComponentToStage(stageId, componentType, componentValue) {
+        // Handle adding component to stage
+        if (componentType === 'tool') {
+            // Add tool to stage
+            try {
+                const dto = {
+                    toolName: componentValue,
+                    configuration: {},
+                    order: 0
+                };
+                
+                const response = await fetch(`/api/workflow/stages/${stageId}/tools`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dto)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    toastr.success(`Nástroj ${componentValue} byl přidán`);
+                    await this.loadWorkflow();
+                } else {
+                    toastr.error(result.message || 'Chyba při přidávání nástroje');
+                }
+            } catch (error) {
+                console.error('Error adding tool:', error);
+                toastr.error('Chyba při přidávání nástroje');
+            }
+        } else {
+            toastr.info(`Pro změnu ${componentType} upravte krok`);
+            this.editStage(stageId);
+        }
     }
 
     handleDragStart(e, stage) {

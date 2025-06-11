@@ -1,61 +1,128 @@
 @model OptimalyAI.ViewModels.EditProjectViewModel
+@using OAI.Core.Entities.Projects
 @{
     ViewData["Title"] = $"Upravit projekt: {Model.Name}";
 }
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Upravit projekt</h3>
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Upravit projekt</h1>
             </div>
-            <form asp-action="Edit" method="post">
-                <input asp-for="Id" type="hidden" />
-                <div class="card-body">
-                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                    
-                    <div class="form-group">
-                        <label asp-for="Name" class="control-label"></label>
-                        <input asp-for="Name" class="form-control" />
-                        <span asp-validation-for="Name" class="text-danger"></span>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label asp-for="Description" class="control-label"></label>
-                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
-                        <span asp-validation-for="Description" class="text-danger"></span>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label asp-for="Status" class="control-label"></label>
-                        <select asp-for="Status" class="form-control" asp-items="Html.GetEnumSelectList<ProjectStatus>()"></select>
-                        <span asp-validation-for="Status" class="text-danger"></span>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label asp-for="ProjectType" class="control-label"></label>
-                        <select asp-for="ProjectType" class="form-control">
-                            <option value="DemandAnalyzer">Analyzátor poptávek</option>
-                            <option value="ContentGenerator">Generátor obsahu</option>
-                            <option value="DataProcessor">Zpracování dat</option>
-                            <option value="Custom">Vlastní</option>
-                        </select>
-                        <span asp-validation-for="ProjectType" class="text-danger"></span>
-                    </div>
-                    
-                </div>
-                <div class="card-footer">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Uložit změny
-                    </button>
-                    <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-default">
-                        <i class="fas fa-times"></i> Zrušit
-                    </a>
-                </div>
-            </form>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-action="Index">Projekty</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.Id">@Model.Name</a></li>
+                    <li class="breadcrumb-item active">Upravit</li>
+                </ol>
+            </div>
         </div>
     </div>
 </div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-9">
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-edit"></i> Úprava projektu
+                        </h3>
+                    </div>
+                    <form asp-action="Edit" method="post">
+                        <input asp-for="Id" type="hidden" />
+                        <div class="card-body">
+                            <div asp-validation-summary="ModelOnly" class="text-danger alert alert-danger"></div>
+                            
+                            <div class="form-group">
+                                <label asp-for="Name" class="control-label">
+                                    <i class="fas fa-tag"></i> Název projektu *
+                                </label>
+                                <input asp-for="Name" class="form-control" placeholder="Zadejte název projektu" />
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label asp-for="Description" class="control-label">
+                                    <i class="fas fa-align-left"></i> Popis projektu *
+                                </label>
+                                <textarea asp-for="Description" class="form-control" rows="4" placeholder="Popište co má projekt dělat"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label asp-for="Status" class="control-label">
+                                    <i class="fas fa-flag"></i> Status projektu
+                                </label>
+                                <select asp-for="Status" class="form-control" asp-items="Html.GetEnumSelectList<ProjectStatus>()"></select>
+                                <span asp-validation-for="Status" class="text-danger"></span>
+                            </div>
+                            
+                            @if (!string.IsNullOrEmpty(Model.CustomerName) && Model.CustomerName != "Interní projekt")
+                            {
+                                <div class="form-group">
+                                    <label class="control-label">
+                                        <i class="fas fa-user"></i> Zákazník
+                                    </label>
+                                    <input value="@Model.CustomerName" class="form-control" readonly />
+                                    <small class="form-text text-muted">Zákazníka nelze změnit po vytvoření projektu</small>
+                                </div>
+                            }
+                            
+                            <!-- Hidden fields for properties we don't want to edit -->
+                            <input asp-for="ProjectType" type="hidden" />
+                            <input asp-for="Priority" type="hidden" />
+                            <input asp-for="EstimatedHours" type="hidden" />
+                            <input asp-for="HourlyRate" type="hidden" />
+                            <input asp-for="CustomerName" type="hidden" />
+                            <input asp-for="CustomerEmail" type="hidden" />
+                        </div>
+                        
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save"></i> Uložit změny
+                            </button>
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary btn-lg ml-2">
+                                <i class="fas fa-arrow-left"></i> Zpět na detail
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-info-circle"></i> Nápověda
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Název projektu:</strong> Můžete změnit název projektu</p>
+                        <p><strong>Popis:</strong> Aktualizujte popis nebo požadavky</p>
+                        <p><strong>Status:</strong> Změňte aktuální stav projektu</p>
+                        <hr>
+                        <h6>Možné statusy:</h6>
+                        <ul class="small">
+                            <li><strong>Draft</strong> - Rozpracovaný</li>
+                            <li><strong>Active</strong> - Aktivní</li>
+                            <li><strong>Paused</strong> - Pozastavený</li>
+                            <li><strong>Completed</strong> - Dokončený</li>
+                        </ul>
+                        <hr>
+                        <p class="text-muted">
+                            <i class="fas fa-magic"></i> 
+                            Pro pokročilé nastavení (workflow, milníky, atd.) použijte 
+                            <a href="@Url.Action("WorkflowDesigner", "Projects", new { id = Model.Id })" class="text-primary">Workflow Designer</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}

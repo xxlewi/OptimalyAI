@@ -1,4 +1,5 @@
 @model OptimalyAI.ViewModels.CreateProjectViewModel
+@using OAI.Core.Entities.Projects
 @{
     ViewData["Title"] = "Nový projekt";
 }
@@ -22,63 +23,72 @@
 <section class="content">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-md-6">
-                <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-rocket"></i> Rychlé vytvoření projektu</h3>
-                    </div>
-                    <form asp-action="Create" asp-controller="Projects" method="post" id="createProjectForm">
-                        @Html.AntiForgeryToken()
-                        <div class="card-body">
-                            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="col-md-8 offset-md-2">
+                <div class="card card-primary card-outline">
+                    <div class="card-body">
+                        <form asp-action="Create" method="post">
+                            <div asp-validation-summary="ModelOnly" class="text-danger alert alert-danger"></div>
                             
                             <div class="form-group">
-                                <label asp-for="Name" class="control-label">Název projektu <span class="text-danger">*</span></label>
-                                <input asp-for="Name" id="Name" class="form-control form-control-lg" 
-                                       placeholder="např. Redesign webu ABC" 
-                                       autofocus />
+                                <label asp-for="Name" class="control-label">
+                                    Název projektu <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="Name" class="form-control form-control-lg" placeholder="např. Redesign webových stránek" autofocus />
                                 <span asp-validation-for="Name" class="text-danger"></span>
-                                <small class="form-text text-muted">Zadejte krátký a výstižný název projektu</small>
                             </div>
-
+                            
+                            <div class="form-group">
+                                <label asp-for="Description" class="control-label">
+                                    Co má projekt řešit? <span class="text-danger">*</span>
+                                </label>
+                                <textarea asp-for="Description" class="form-control" rows="5" placeholder="Popište co potřebujete udělat, jaký problém řešíte, co je cílem projektu..."></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label asp-for="CustomerId" class="control-label">
+                                    <i class="fas fa-user"></i> Pro koho je projekt?
+                                </label>
+                                <select asp-for="CustomerId" class="form-control">
+                                    <option value="">Interní projekt (pro naši firmu)</option>
+                                    @if (ViewBag.Customers != null)
+                                    {
+                                        <optgroup label="Zákazníci">
+                                            @foreach (var customer in ViewBag.Customers)
+                                            {
+                                                @if (Model.CustomerId == customer.Id)
+                                                {
+                                                    <option value="@customer.Id" selected>@customer.Name</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@customer.Id">@customer.Name</option>
+                                                }
+                                            }
+                                        </optgroup>
+                                    }
+                                </select>
+                                <span asp-validation-for="CustomerId" class="text-danger"></span>
+                            </div>
+                            
                             <!-- Hidden fields -->
-                            <input asp-for="CustomerId" type="hidden" />
-                            <input asp-for="CustomerName" type="hidden" value="Doplnit později" />
-                            <input asp-for="CustomerEmail" type="hidden" />
-                            <input asp-for="Description" type="hidden" value=" " />
-                            <input asp-for="ProjectType" type="hidden" value="Custom" />
-
-                        </div>
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-check"></i> Vytvořit projekt
-                            </button>
-                            <a asp-action="Index" class="btn btn-default">
-                                Zrušit
-                            </a>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            
-            <div class="col-md-6">
-                <div class="card card-info">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-lightbulb"></i> Tip</h3>
-                    </div>
-                    <div class="card-body">
-                        <p class="lead">Po vytvoření projektu můžete:</p>
-                        <ul class="fa-ul">
-                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Přiřadit projekt zákazníkovi</li>
-                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Doplnit detailní popis a požadavky</li>
-                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Nastavit termíny a priority</li>
-                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Přidat odhad hodin a rozpočet</li>
-                            <li><span class="fa-li"><i class="fas fa-check text-success"></i></span>Sledovat postup realizace</li>
-                        </ul>
-                        
-                        <div class="alert alert-warning mt-3">
-                            <i class="fas fa-info-circle"></i> <strong>Poznámka:</strong> Všechny detaily můžete doplnit později v editaci projektu.
-                        </div>
+                            <input asp-for="ProjectType" type="hidden" value="Standard" />
+                            <input asp-for="Priority" type="hidden" value="Medium" />
+                            @if (!string.IsNullOrEmpty(Model.CustomerName))
+                            {
+                                <input asp-for="CustomerName" type="hidden" />
+                                <input asp-for="CustomerEmail" type="hidden" />
+                            }
+                            
+                            <div class="form-group mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-plus-circle"></i> Vytvořit projekt
+                                </button>
+                                <a asp-action="Index" class="btn btn-outline-secondary btn-lg ml-2">
+                                    Zrušit
+                                </a>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -88,32 +98,4 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-    <script>
-        $(document).ready(function() {
-            // Automatický focus na název
-            $('#Name').focus();
-            
-            // Jednoduchá validace
-            $('#createProjectForm').on('submit', function(e) {
-                var name = $('#Name').val().trim();
-                
-                if (!name) {
-                    e.preventDefault();
-                    toastr.error('Zadejte název projektu');
-                    $('#Name').focus();
-                    return false;
-                }
-                
-                // Zobrazit loading
-                toastr.info('Vytváření projektu...', '', {
-                    timeOut: 0,
-                    extendedTimeOut: 0,
-                    closeButton: false,
-                    tapToDismiss: false
-                });
-                
-                return true;
-            });
-        });
-    </script>
 }

@@ -15,18 +15,18 @@ namespace OptimalyAI.Controllers
     /// </summary>
     [Route("api/workflow")]
     [ApiController]
-    public class WorkflowDesignerController : BaseApiController
+    public class WorkflowDesignerApiController : BaseApiController
     {
         private readonly IWorkflowDesignerService _workflowService;
         private readonly IProjectStageService _stageService;
         private readonly IWorkflowExecutionService _executionService;
-        private readonly ILogger<WorkflowDesignerController> _logger;
+        private readonly ILogger<WorkflowDesignerApiController> _logger;
 
-        public WorkflowDesignerController(
+        public WorkflowDesignerApiController(
             IWorkflowDesignerService workflowService,
             IProjectStageService stageService,
             IWorkflowExecutionService executionService,
-            ILogger<WorkflowDesignerController> logger)
+            ILogger<WorkflowDesignerApiController> logger)
         {
             _workflowService = workflowService;
             _stageService = stageService;

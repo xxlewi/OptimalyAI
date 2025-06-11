@@ -471,44 +471,11 @@ namespace OptimalyAI.Controllers
         [HttpGet]
         public async Task<IActionResult> CreateStage(Guid projectId)
         {
-            try 
-            {
-                // Verify project exists
-                var project = await _projectService.GetByIdAsync(projectId);
-                if (project == null)
-                {
-                    return NotFound("Project not found");
-                }
+            var components = await _workflowDesignerService.GetAvailableComponentsAsync();
+            ViewBag.Components = components;
+            ViewBag.ProjectId = projectId;
 
-                // Get available components with fallback values
-                Dictionary<string, List<string>> components;
-                try 
-                {
-                    components = await _workflowDesignerService.GetAvailableComponentsAsync();
-                }
-                catch (Exception)
-                {
-                    // Fallback to default components if service fails
-                    components = new Dictionary<string, List<string>>
-                    {
-                        ["orchestrators"] = new List<string> { "ConversationOrchestrator", "ToolChainOrchestrator", "CustomOrchestrator" },
-                        ["reactAgents"] = new List<string> { "ConversationReActAgent", "AnalysisReActAgent" },
-                        ["tools"] = new List<string> { "web_search", "image_analyzer", "data_analyzer", "excel_exporter" },
-                        ["stageTypes"] = new List<string> { "Analysis", "Search", "Processing", "Export", "Custom" },
-                        ["executionStrategies"] = new List<string> { "Sequential", "Parallel", "Conditional" }
-                    };
-                }
-
-                ViewBag.Components = components;
-                ViewBag.ProjectId = projectId;
-
-                return PartialView("~/Views/Projects/WorkflowDesigner/_CreateStage.cshtml", new CreateProjectStageDto { ProjectId = projectId });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading CreateStage form for project {ProjectId}", projectId);
-                return StatusCode(500, "Error loading create stage form");
-            }
+            return PartialView("~/Views/Projects/WorkflowDesigner/_CreateStage.cshtml", new CreateProjectStageDto { ProjectId = projectId });
         }
 
         /// <summary>
