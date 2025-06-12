@@ -348,6 +348,12 @@ namespace OptimalyAI.ViewModels
         public Dictionary<string, object> Variables { get; set; } = new(); // Global workflow variables
         public WorkflowTrigger Trigger { get; set; } = new();
         public WorkflowSettings Settings { get; set; } = new();
+        
+        // Store the orchestrator-compatible format
+        public object OrchestratorData { get; set; }
+        
+        // Visual designer metadata
+        public Dictionary<string, NodePosition> NodePositions { get; set; } = new();
     }
     
     // Workflow trigger configuration

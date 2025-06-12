@@ -40,6 +40,21 @@ namespace OptimalyAI.Controllers
             return View("SimpleWorkflowDesigner", workflow);
         }
         
+        [HttpGet]
+        public IActionResult LoadWorkflow(Guid projectId)
+        {
+            if (_workflows.ContainsKey(projectId))
+            {
+                var workflow = _workflows[projectId];
+                return Json(new { 
+                    success = true, 
+                    orchestratorData = workflow.Metadata?.OrchestratorData 
+                });
+            }
+            
+            return Json(new { success = false });
+        }
+        
         private WorkflowGraphViewModel CreateDefaultWorkflow(Guid projectId)
         {
             var workflow = new WorkflowGraphViewModel
@@ -96,17 +111,45 @@ namespace OptimalyAI.Controllers
         }
         
         [HttpPost]
-        public IActionResult SaveWorkflow([FromBody] WorkflowGraphViewModel workflow)
+        public IActionResult SaveWorkflow([FromBody] SaveWorkflowRequest request)
         {
-            if (workflow == null || workflow.ProjectId == Guid.Empty)
+            if (request == null || request.ProjectId == Guid.Empty)
             {
                 return Json(new { success = false, message = "Neplatná data" });
             }
             
-            _workflows[workflow.ProjectId] = workflow;
-            workflow.LastModified = DateTime.Now;
-            
-            return Json(new { success = true, message = "Workflow uloženo" });
+            try
+            {
+                // Convert the visual workflow data to our model
+                var workflow = new WorkflowGraphViewModel
+                {
+                    ProjectId = request.ProjectId,
+                    ProjectName = "Workflow " + request.ProjectId,
+                    LastModified = DateTime.Now,
+                    Nodes = new List<WorkflowNode>(),
+                    Edges = new List<WorkflowEdge>(),
+                    Metadata = new WorkflowMetadata
+                    {
+                        OrchestratorData = request.WorkflowData,
+                        Description = "Visual workflow"
+                    }
+                };
+                
+                // Store in memory for now (TODO: save to database)
+                _workflows[request.ProjectId] = workflow;
+                
+                return Json(new { success = true, message = "Workflow uloženo" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+        
+        public class SaveWorkflowRequest
+        {
+            public Guid ProjectId { get; set; }
+            public object WorkflowData { get; set; }
         }
         
         [HttpPost]

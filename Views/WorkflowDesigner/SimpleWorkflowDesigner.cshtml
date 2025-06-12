@@ -330,10 +330,10 @@
         transform: translateX(-50%);
     }
     
-    /* Hide connection dots for start node (it has no input) */
+    /* Start/End nodes are not used anymore
     .workflow-node.start .connection-dot.input {
         display: none;
-    }
+    } */
     
     .connection-dot.input:hover {
         transform: translateX(-50%) scale(1.2);
@@ -345,10 +345,10 @@
         transform: translateX(-50%);
     }
     
-    /* Hide connection dots for end node (it has no output) */
+    /* Start/End nodes are not used anymore
     .workflow-node.end .connection-dot.output {
         display: none;
-    }
+    } */
     
     .connection-dot.output:hover {
         transform: translateX(-50%) scale(1.2);
@@ -363,6 +363,20 @@
         gap: 10px;
         align-items: center;
     }
+    
+    .zoom-controls {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+        margin-left: auto;
+    }
+    
+    .zoom-level {
+        font-size: 14px;
+        color: #666;
+        min-width: 50px;
+        text-align: center;
+    }
 </style>
 
 <div class="content-header">
@@ -376,6 +390,9 @@
             </div>
             <div class="col-sm-6">
                 <div class="float-sm-right">
+                    <a href="/WorkflowPrototype/Details?projectId=@Model.ProjectId" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Zpět na projekt
+                    </a>
                     <button class="btn btn-success" onclick="saveWorkflow()">
                         <i class="fas fa-save"></i> Uložit
                     </button>
@@ -400,9 +417,18 @@
             <button class="btn btn-sm btn-secondary" onclick="autoLayout()">
                 <i class="fas fa-magic"></i> Automatické rozložení
             </button>
-            <span class="ml-auto text-muted">
-                Přetáhněte bloky z panelu nástrojů
-            </span>
+            <div class="zoom-controls">
+                <button class="btn btn-sm btn-outline-secondary" onclick="zoomOut()" title="Oddálit">
+                    <i class="fas fa-search-minus"></i>
+                </button>
+                <span class="zoom-level">100%</span>
+                <button class="btn btn-sm btn-outline-secondary" onclick="zoomIn()" title="Přiblížit">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="zoomReset()" title="Resetovat">
+                    <i class="fas fa-compress"></i>
+                </button>
+            </div>
         </div>
         
         <div class="designer-container">
@@ -411,6 +437,12 @@
                 <h5><i class="fas fa-toolbox"></i> Nástroje</h5>
                 
                 <h6>Základní uzly</h6>
+                <div class="tool-item" data-type="start" draggable="true" style="display: none;">
+                    <i class="fas fa-play"></i> Začátek
+                </div>
+                <div class="tool-item" data-type="end" draggable="true" style="display: none;">
+                    <i class="fas fa-stop"></i> Konec
+                </div>
                 <div class="tool-item" data-type="task" draggable="true">
                     <i class="fas fa-square"></i> Proces
                     <small style="display: block; font-size: 10px; color: #666;">Obdélník</small>
@@ -516,13 +548,20 @@
     let isConnecting = false;
     let connectionStart = null;
     const currentProjectId = '@Model.ProjectId';
+    let currentZoom = 1.0;
     
     // Initialize
     $(document).ready(function() {
         initializeDragAndDrop();
         initializeCanvas();
         initializeKeyboardShortcuts();
-        loadInitialWorkflow();
+        
+        // Start with 100% zoom
+        currentZoom = 1.0;
+        applyZoom();
+        
+        // Try to load saved workflow, or create default
+        loadWorkflowFromServer();
     });
     
     // Initialize drag and drop
@@ -569,10 +608,8 @@
                     // Delete selected node if any
                     if (selectedNode) {
                         const node = nodes[selectedNode];
-                        // Don't delete start/end nodes
-                        if (node && node.type !== 'start' && node.type !== 'end') {
-                            removeNode(selectedNode);
-                        }
+                        // Delete any selected node
+                        removeNode(selectedNode);
                     }
                 }
             }
@@ -583,25 +620,35 @@
     function createNode(type, x, y, tool) {
         const nodeId = 'node_' + nodeIdCounter++;
         
-        // Default descriptions - none for start/end
+        // Default descriptions
         const defaultDescriptions = {
-            'start': '',
-            'end': '',
             'task': 'Zpracování dat nebo operace',
             'condition': 'Rozhodovací bod (if/else)',
             'parallel': 'Paralelní zpracování',
             'ai-tool': 'Volání AI nástroje'
         };
         
-        // For vertical layout, center nodes horizontally
-        const centerX = $('#workflow-canvas').width() / 2 - 100; // 100 is half of min-width
+        // If no position provided, auto-position
+        if (!x || !y) {
+            const nodeCount = Object.keys(nodes).length;
+            x = 1000;  // Center horizontally
+            y = 100 + (nodeCount * 120);  // Stack vertically
+        }
         
-        // Adjust position for diamond shapes (condition and parallel)
-        let adjustedX = x - 90;
-        let adjustedY = y - 30;
+        // Adjust position to center the node at click/drop point
+        let adjustedX = x;
+        let adjustedY = y;
+        
+        // Offset based on node type to center at cursor
         if (type === 'condition' || type === 'parallel') {
             adjustedX = x - 70; // Half of diamond width
-            adjustedY = y - 70; // Half of diamond height
+            adjustedY = y - 70; // Half of diamond height  
+        } else if (type === 'start' || type === 'end') {
+            adjustedX = x - 90; // Approximate half width
+            adjustedY = y - 30; // Approximate half height
+        } else {
+            adjustedX = x - 90; // Half of normal node width
+            adjustedY = y - 30; // Approximate half height
         }
         
         const node = {
@@ -621,11 +668,10 @@
     // Get node type display name
     function getNodeTypeName(type) {
         const names = {
-            'start': 'Začátek',
-            'end': 'Konec',
             'task': 'Proces',
             'condition': 'Rozhodnutí',
-            'parallel': 'Paralelní brána'
+            'parallel': 'Paralelní brána',
+            'ai-tool': 'AI Nástroj'
         };
         return names[type] || type;
     }
@@ -654,13 +700,11 @@
         const header = $('<div>').addClass('node-header');
         header.append($('<span>').html(`<i class="${getNodeIcon(node.type)}"></i> ${node.name}`));
         
-        // Close button (not for start/end)
-        if (node.type !== 'start' && node.type !== 'end') {
-            header.append($('<span>').addClass('node-close').html('×').click(function(e) {
-                e.stopPropagation();
-                removeNode(node.id);
-            }));
-        }
+        // Close button for all nodes
+        header.append($('<span>').addClass('node-close').html('×').click(function(e) {
+            e.stopPropagation();
+            removeNode(node.id);
+        }));
         
         contentWrapper.append(header);
         
@@ -686,12 +730,10 @@
             contentWrapper.append(toolsDiv);
         }
         
-        // Connection dots
-        if (node.type !== 'start') {
-            nodeEl.append($('<div>').addClass('connection-dot input'));
-        }
-        if (node.type !== 'end') {
-            if (node.type === 'condition') {
+        // Connection dots - all nodes can have input and output
+        nodeEl.append($('<div>').addClass('connection-dot input'));
+        
+        if (node.type === 'condition') {
                 // Two outputs for condition - TRUE and FALSE
                 nodeEl.append($('<div>')
                     .addClass('connection-dot output true')
@@ -701,9 +743,8 @@
                     .addClass('connection-dot output false')
                     .attr('title', 'FALSE')
                     .attr('data-branch', 'false'));
-            } else {
-                nodeEl.append($('<div>').addClass('connection-dot output'));
-            }
+        } else {
+            nodeEl.append($('<div>').addClass('connection-dot output'));
         }
         
         // Events
@@ -732,7 +773,7 @@
         nodeEl.on('mouseup', '.connection-dot.input', function(e) {
             e.stopPropagation();
             e.preventDefault();
-            if (isConnecting && connectionStart !== node.id) {
+            if (isConnecting && connectionStart && connectionStart.nodeId !== node.id) {
                 endConnection(node.id);
             }
             return false;
@@ -824,11 +865,11 @@
             outputDot = startEl.find('.connection-dot.output');
         }
         
-        // Get exact position of the connection dot
-        const dotPos = outputDot.position();
-        const nodePos = startEl.position();
-        const startX = nodePos.left + dotPos.left + 6; // 6 is half of dot width
-        const startY = nodePos.top + dotPos.top + 6;
+        // Use getBoundingClientRect for accurate position
+        const canvasRect = $('#workflow-canvas')[0].getBoundingClientRect();
+        const outputDotRect = outputDot[0].getBoundingClientRect();
+        const startX = outputDotRect.left - canvasRect.left + (outputDotRect.width / 2);
+        const startY = outputDotRect.top - canvasRect.top + (outputDotRect.height / 2);
         
         // Mouse move to update temp line
         $(document).on('mousemove.connection', function(e) {
@@ -941,16 +982,16 @@
                 
                 const inputDot = toEl.find('.connection-dot.input');
                 
-                // Calculate exact positions
-                const fromNodePos = fromEl.position();
-                const outputDotPos = outputDot.position();
-                const x1 = fromNodePos.left + outputDotPos.left + 6;
-                const y1 = fromNodePos.top + outputDotPos.top + 6;
+                // Use getBoundingClientRect for accurate positions including transforms
+                const canvasRect = $('#workflow-canvas')[0].getBoundingClientRect();
+                const outputDotRect = outputDot[0].getBoundingClientRect();
+                const inputDotRect = inputDot[0].getBoundingClientRect();
                 
-                const toNodePos = toEl.position();
-                const inputDotPos = inputDot.position();
-                const x2 = toNodePos.left + inputDotPos.left + 6;
-                const y2 = toNodePos.top + inputDotPos.top + 6;
+                // Calculate positions relative to canvas
+                const x1 = outputDotRect.left - canvasRect.left + (outputDotRect.width / 2);
+                const y1 = outputDotRect.top - canvasRect.top + (outputDotRect.height / 2);
+                const x2 = inputDotRect.left - canvasRect.left + (inputDotRect.width / 2);
+                const y2 = inputDotRect.top - canvasRect.top + (inputDotRect.height / 2);
                 
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 line.setAttribute('x1', x1);
@@ -1051,20 +1092,25 @@
     
     // Load initial workflow
     function loadInitialWorkflow() {
-        // Center in visible viewport
-        const viewportWidth = $('.canvas-container').width();
-        const viewportHeight = $('.canvas-container').height();
-        const centerX = viewportWidth / 2;
+        // Simple fixed positions - no complex calculations
+        const canvasCenterX = 1000;  // Center of 2000px wide canvas
         
-        // Create start and end nodes - at top and bottom of viewport
-        createNode('start', centerX, 30);  // At the very top with small margin
-        createNode('end', centerX, viewportHeight - 50);  // At the very bottom with small margin
+        // Don't create any default nodes - let user build workflow from scratch
+        // Just scroll to center the canvas
+        setTimeout(() => {
+            const container = $('.canvas-container');
+            const containerWidth = container.width();
+            
+            // Center horizontally
+            const scrollLeft = canvasCenterX - (containerWidth / 2);
+            container.scrollLeft(scrollLeft);
+            container.scrollTop(0);
+        }, 100);
         
-        // Load existing nodes from model if any
+        // Load existing workflow if saved
         const model = @Html.Raw(Json.Serialize(Model));
-        if (model && model.nodes && model.nodes.length > 2) {
-            // Load additional nodes from model
-            // This is simplified - you'd map the model structure
+        if (model && model.metadata && model.metadata.orchestratorData) {
+            loadFromOrchestratorFormat(model.metadata.orchestratorData);
         }
     }
     
@@ -1135,28 +1181,25 @@
         });
         
         // Second pass - build connections
-        const startNode = Object.values(nodes).find(n => n.type === 'start');
-        const endNode = Object.values(nodes).find(n => n.type === 'end');
+        // Find nodes without incoming connections (entry points)
+        const nodesWithIncoming = new Set(connections.map(c => c.to));
+        const entryNodes = Object.keys(nodeMap).filter(id => !nodesWithIncoming.has(id));
+        const firstStepId = entryNodes[0] || Object.keys(nodeMap)[0];
         
-        // Find first step after start
-        const firstConnection = connections.find(c => c.from === startNode?.id);
-        const firstStepId = firstConnection ? firstConnection.to : null;
-        
-        // Find all connections to end node
-        const endConnections = connections.filter(c => c.to === endNode?.id);
-        const lastStepIds = endConnections.map(c => c.from);
+        // Find nodes without outgoing connections (exit points)
+        const nodesWithOutgoing = new Set(connections.map(c => c.from));
+        const lastStepIds = Object.keys(nodeMap).filter(id => !nodesWithOutgoing.has(id));
         
         // Build step sequence
         steps.forEach(step => {
             const outgoingConnections = connections.filter(c => c.from === step.id);
             
             if (step.type === 'condition') {
-                // For conditions, we need to determine true/false branches
-                outgoingConnections.forEach((conn, index) => {
+                // For conditions, use the branch info from connection
+                outgoingConnections.forEach(conn => {
                     const targetStep = nodeMap[conn.to];
                     if (targetStep) {
-                        // Simple logic: first connection is true, second is false
-                        const branch = index === 0 ? 'true' : 'false';
+                        const branch = conn.branch || 'true';
                         step.branches[branch].push(targetStep.id);
                     }
                 });
@@ -1169,16 +1212,13 @@
                 // For regular steps, find next step
                 const nextConnection = outgoingConnections[0];
                 if (nextConnection) {
-                    // Check if next is END node
-                    if (nextConnection.to === endNode?.id) {
-                        step.next = null; // This is a final step
-                        step.isFinal = true;
-                    } else {
-                        const nextStep = nodeMap[nextConnection.to];
-                        if (nextStep) {
-                            step.next = nextStep.id;
-                        }
+                    const nextStep = nodeMap[nextConnection.to];
+                    if (nextStep) {
+                        step.next = nextStep.id;
                     }
+                } else {
+                    // No outgoing connection - this is a final step
+                    step.isFinal = true;
                 }
             }
         });
@@ -1186,16 +1226,12 @@
         return {
             name: 'Workflow ' + new Date().toISOString(),
             description: 'Visual workflow designer output',
-            startNodeId: startNode?.id,
-            endNodeId: endNode?.id,
             firstStepId: firstStepId,
             lastStepIds: lastStepIds,
             steps: steps,
             metadata: {
                 createdWith: 'SimpleWorkflowDesigner',
                 createdAt: new Date().toISOString(),
-                hasValidStart: !!startNode,
-                hasValidEnd: !!endNode,
                 nodePositions: Object.values(nodes).reduce((acc, node) => {
                     acc[node.id] = { 
                         x: node.x, 
@@ -1221,22 +1257,21 @@
     function validateWorkflow() {
         const errors = [];
         
-        // Check for start node
-        const hasStart = Object.values(nodes).some(n => n.type === 'start');
-        if (!hasStart) errors.push('Chybí počáteční uzel');
+        // Check if there are any nodes
+        if (Object.keys(nodes).length === 0) {
+            errors.push('Workflow je prázdné');
+        }
         
-        // Check for end node  
-        const hasEnd = Object.values(nodes).some(n => n.type === 'end');
-        if (!hasEnd) errors.push('Chybí koncový uzel');
-        
-        // Check disconnected nodes
+        // Check disconnected nodes (but first/last nodes can have open connections)
         Object.values(nodes).forEach(node => {
-            if (node.type !== 'start' && node.type !== 'end') {
-                const hasInput = connections.some(c => c.to === node.id);
-                const hasOutput = connections.some(c => c.from === node.id);
-                
-                if (!hasInput) errors.push(`Uzel "${node.name}" nemá vstup`);
-                if (!hasOutput) errors.push(`Uzel "${node.name}" nemá výstup`);
+            const hasInput = connections.some(c => c.to === node.id);
+            const hasOutput = connections.some(c => c.from === node.id);
+            
+            // At least one node should be an entry point (no input)
+            // At least one node should be an exit point (no output)
+            // But not all nodes need both
+            if (!hasInput && !hasOutput && Object.keys(nodes).length > 1) {
+                errors.push(`Uzel "${node.name}" není propojený`);
             }
         });
         
@@ -1275,23 +1310,30 @@
             $('.workflow-node').remove();
             $('svg line').remove();
             
-            // Add back start and end
-            loadInitialWorkflow();
+            // Canvas is now empty - ready for new workflow
         }
     }
     
     function autoLayout() {
-        // Find start node
-        const startNode = Object.values(nodes).find(n => n.type === 'start');
-        if (!startNode) {
-            toastr.error('Chybí počáteční uzel');
+        // Check if there are any nodes
+        if (Object.keys(nodes).length === 0) {
+            toastr.warning('Nejsou žádné uzly k rozložení');
             return;
+        }
+        
+        // Find entry point - node without incoming connections
+        const nodesWithIncoming = new Set(connections.map(c => c.to));
+        let startNodeId = Object.keys(nodes).find(id => !nodesWithIncoming.has(id));
+        
+        // If no clear entry point, just use first node
+        if (!startNodeId) {
+            startNodeId = Object.keys(nodes)[0];
         }
         
         // Build ordered list based on connections
         const orderedNodes = [];
         const visited = new Set();
-        const queue = [startNode.id];
+        const queue = [startNodeId];
         
         while (queue.length > 0) {
             const currentId = queue.shift();
@@ -1312,18 +1354,21 @@
             }
         }
         
-        // Position nodes vertically in order - center in viewport
-        const viewportWidth = $('.canvas-container').width();
-        const scrollLeft = $('.canvas-container').scrollLeft();
-        const centerX = scrollLeft + (viewportWidth / 2) - 100;
+        // Position nodes vertically in order - center on canvas
+        const canvasWidth = $('#workflow-canvas').width();
+        const centerX = canvasWidth / 2;
         let y = 100;
         const spacing = 150;
         
         orderedNodes.forEach(node => {
-            // Center all nodes except diamonds which need offset
+            // Center all nodes properly
             let x = centerX;
             if (node.type === 'condition' || node.type === 'parallel') {
-                x = centerX + 30; // Offset for diamond shape centering
+                x = centerX - 70; // Half of diamond width (140px)
+            } else if (node.type === 'start' || node.type === 'end') {
+                x = centerX - 90; // Approximate half of start/end node width
+            } else {
+                x = centerX - 90; // Half of normal node min-width (180px)
             }
             
             node.x = x;
@@ -1337,6 +1382,146 @@
         
         updateConnections();
         toastr.success('Uzly byly automaticky rozmístěny');
+    }
+    
+    // Load workflow from orchestrator format
+    function loadFromOrchestratorFormat(data) {
+        if (!data || !data.steps) return;
+        
+        // Clear existing (except start/end)
+        Object.keys(nodes).forEach(nodeId => {
+            const node = nodes[nodeId];
+            if (node.type !== 'start' && node.type !== 'end') {
+                removeNode(nodeId);
+            }
+        });
+        connections = [];
+        
+        // Get node positions from metadata if available
+        const positions = data.metadata?.nodePositions || {};
+        
+        // Create nodes from steps
+        data.steps.forEach((step, index) => {
+            const pos = positions[step.id] || {
+                x: 1000,
+                y: 300 + (index * 150)
+            };
+            
+            // Map step type back to node type
+            let nodeType = 'task';
+            if (step.type === 'decision') nodeType = 'condition';
+            else if (step.type === 'parallel-gateway') nodeType = 'parallel';
+            else if (step.type === 'ai-tool') nodeType = 'ai-tool';
+            
+            // Create the node
+            const nodeId = step.id;
+            nodes[nodeId] = {
+                id: nodeId,
+                type: nodeType,
+                name: step.name,
+                x: pos.x,
+                y: pos.y,
+                tools: step.tools || [],
+                description: step.description || '',
+                condition: step.condition,
+                useReAct: step.useReAct
+            };
+            renderNode(nodes[nodeId]);
+        });
+        
+        // Recreate connections
+        
+        // Connect steps based on their next/branches
+        data.steps.forEach(step => {
+            if (step.type === 'decision' && step.branches) {
+                // Decision node connections
+                if (step.branches.true && step.branches.true.length > 0) {
+                    connections.push({
+                        from: step.id,
+                        to: step.branches.true[0],
+                        branch: 'true'
+                    });
+                }
+                if (step.branches.false && step.branches.false.length > 0) {
+                    connections.push({
+                        from: step.id,
+                        to: step.branches.false[0],
+                        branch: 'false'
+                    });
+                }
+            } else if (step.type === 'parallel-gateway' && step.branches) {
+                // Parallel gateway connections
+                step.branches.forEach(targetId => {
+                    connections.push({
+                        from: step.id,
+                        to: targetId
+                    });
+                });
+            } else if (step.next) {
+                // Regular step connection
+                connections.push({
+                    from: step.id,
+                    to: step.next
+                });
+            }
+            // Final steps just don't have outgoing connections
+        });
+        
+        updateConnections();
+        toastr.info('Workflow načteno');
+    }
+    
+    // Load workflow from server
+    function loadWorkflowFromServer() {
+        $.ajax({
+            url: '/WorkflowDesigner/LoadWorkflow',
+            type: 'GET',
+            data: { projectId: currentProjectId },
+            success: function(response) {
+                if (response.success && response.orchestratorData) {
+                    // Load saved workflow
+                    loadFromOrchestratorFormat(response.orchestratorData);
+                } else {
+                    // Create new workflow with start/end
+                    loadInitialWorkflow();
+                }
+            },
+            error: function() {
+                // Create new workflow on error
+                loadInitialWorkflow();
+            }
+        });
+    }
+    
+    // Zoom functions
+    function zoomIn() {
+        currentZoom = Math.min(currentZoom + 0.1, 2.0);
+        applyZoom();
+    }
+    
+    function zoomOut() {
+        currentZoom = Math.max(currentZoom - 0.1, 0.5);
+        applyZoom();
+    }
+    
+    function zoomReset() {
+        currentZoom = 1.0;
+        applyZoom();
+    }
+    
+    function applyZoom() {
+        $('#workflow-canvas').css('transform', `scale(${currentZoom})`);
+        $('#workflow-canvas').css('transform-origin', '0 0');
+        
+        // Also scale the SVG overlay
+        $('#connections-svg').css('transform', `scale(${currentZoom})`);
+        $('#connections-svg').css('transform-origin', '0 0');
+        
+        // Update zoom display
+        $('.zoom-level').text(Math.round(currentZoom * 100) + '%');
+        
+        // Adjust canvas size to prevent cutoff
+        $('.canvas-container').css('overflow', 'auto');
     }
 </script>
 }
