@@ -1,0 +1,715 @@
+@model OptimalyAI.ViewModels.WorkflowPrototypeViewModel
+@{
+    ViewData["Title"] = "Workflow Designer Prototype - " + Model.ProjectName;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/workflow-designer.css" asp-append-version="true" />
+    <style>
+        .prototype-banner {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 5px solid #e91e63;
+        }
+        
+        .workflow-type-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .workflow-type-card:hover {
+            border-color: #007bff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .workflow-type-card.selected {
+            border-color: #28a745;
+            background-color: #f8fff9;
+        }
+        
+        .stage-card-prototype {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .stage-card-prototype:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 12px rgba(0,123,255,0.15);
+        }
+        
+        .stage-number {
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .tool-badge {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin: 2px;
+            display: inline-block;
+        }
+        
+        .react-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #f3e5f5;
+            color: #7b1fa2;
+            padding: 4px 8px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+        }
+        
+        .empty-workflow {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+            border: 2px dashed #dee2e6;
+            border-radius: 12px;
+            background: #f8f9fa;
+        }
+    </style>
+}
+
+<div class="container-fluid">
+    <!-- Prototype Banner -->
+    <div class="prototype-banner">
+        <div class="row align-items-center">
+            <div class="col-md-9">
+                <h5><i class="fas fa-flask"></i> Prototype Mode - @Model.ProjectName</h5>
+                <p class="mb-0">Blueprint UI demo - žádná data se neukládají do databáze</p>
+            </div>
+            <div class="col-md-3 text-right">
+                <a href="@Url.Action("Index")" class="btn btn-outline-dark btn-sm">
+                    <i class="fas fa-arrow-left"></i> Zpět na přehled
+                </a>
+                <a href="@Url.Action("Clear", new { projectId = Model.ProjectId })" class="btn btn-outline-danger btn-sm">
+                    <i class="fas fa-trash"></i> Vymazat
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Designer Area -->
+        <div class="col-md-9">
+            <!-- Workflow Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle text-primary"></i> 1. Informace o workflow</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Název workflow <span class="text-danger">*</span>:</label>
+                                <input type="text" class="form-control" placeholder="Zadejte název workflow" value="@Model.ProjectName" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Popis workflow:</label>
+                                <input type="text" class="form-control" placeholder="Stručný popis účelu workflow" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow Configuration -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-cogs text-info"></i> 2. Konfigurace workflow</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Způsob spuštění:</label>
+                                <select class="form-control" id="triggerType" onchange="toggleScheduleOptions()">
+                                    <option value="Manual" selected>🖱️ Manuální spuštění</option>
+                                    <option value="Schedule">⏰ Plánované spouštění</option>
+                                    <option value="Event">⚡ Událostmi řízené</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6" id="scheduleOptions" style="display: none;">
+                            <div class="form-group">
+                                <label>Plán spouštění <span class="text-danger">*</span>:</label>
+                                <input type="text" class="form-control" id="cronExpression" placeholder="0 0 * * *" />
+                                <small class="text-muted">Cron výraz pro plánované spouštění</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6" id="eventOptions" style="display: none;">
+                            <div class="form-group">
+                                <label>Událost pro spuštění:</label>
+                                <select class="form-control" id="eventTrigger" onchange="toggleEventDetails()">
+                                    <option value="">Vyberte událost...</option>
+                                    <option value="FileUpload">📁 Nahrání souboru</option>
+                                    <option value="EmailReceived">📧 Přijetí emailu</option>
+                                    <option value="ApiCall">🔗 API volání</option>
+                                    <option value="WebhookReceived">🎯 Webhook</option>
+                                </select>
+                            </div>
+                            
+                            <!-- File Upload Details -->
+                            <div id="fileUploadDetails" class="event-details" style="display: none;">
+                                <div class="form-group">
+                                    <label>Povolené typy souborů:</label>
+                                    <input type="text" class="form-control" placeholder=".jpg,.png,.pdf" />
+                                    <small class="text-muted">Oddělené čárkou</small>
+                                </div>
+                                <div class="form-group">
+                                    <label>Maximální velikost (MB):</label>
+                                    <input type="number" class="form-control" value="10" min="1" max="100" />
+                                </div>
+                            </div>
+                            
+                            <!-- Email Details -->
+                            <div id="emailDetails" class="event-details" style="display: none;">
+                                <div class="form-group">
+                                    <label>Filtr odesílatele:</label>
+                                    <input type="text" class="form-control" placeholder="*@@example.com" />
+                                    <small class="text-muted">Wildcard podporován</small>
+                                </div>
+                                <div class="form-group">
+                                    <label>Filtr předmětu:</label>
+                                    <input type="text" class="form-control" placeholder="Objednávka*" />
+                                </div>
+                            </div>
+                            
+                            <!-- API Details -->
+                            <div id="apiDetails" class="event-details" style="display: none;">
+                                <div class="form-group">
+                                    <label>API Endpoint:</label>
+                                    <input type="text" class="form-control" placeholder="/api/workflow/trigger" readonly />
+                                    <small class="text-muted">Bude vygenerován automaticky</small>
+                                </div>
+                                <div class="form-group">
+                                    <label>Autentizace:</label>
+                                    <select class="form-control">
+                                        <option>API Key</option>
+                                        <option>Bearer Token</option>
+                                        <option>Basic Auth</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Webhook Details -->
+                            <div id="webhookDetails" class="event-details" style="display: none;">
+                                <div class="form-group">
+                                    <label>Webhook URL:</label>
+                                    <input type="text" class="form-control" placeholder="https://..." readonly />
+                                    <small class="text-muted">Bude vygenerován po uložení</small>
+                                </div>
+                                <div class="form-group">
+                                    <label>Secret pro ověření:</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="webhookSecret" readonly />
+                                        <div class="input-group-append">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="generateSecret()">
+                                                <i class="fas fa-sync"></i> Generovat
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow Output Configuration -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-sign-out-alt text-warning"></i> 3. Definice výstupu workflow</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Typ výstupu <span class="text-danger">*</span>:</label>
+                                <select class="form-control" id="outputType" onchange="toggleOutputDetails()">
+                                    <option value="">Vyberte typ výstupu...</option>
+                                    <option value="file">📁 Soubor (Excel, PDF, CSV)</option>
+                                    <option value="email">📧 Email s výsledky</option>
+                                    <option value="api">🔗 API Response</option>
+                                    <option value="database">💾 Uložení do databáze</option>
+                                    <option value="webhook">🎯 Webhook notifikace</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Očekávaný formát dat:</label>
+                                <select class="form-control" id="expectedFormat">
+                                    <option value="structured">Strukturovaná data (tabulka)</option>
+                                    <option value="document">Dokument (report)</option>
+                                    <option value="media">Média (obrázky/videa)</option>
+                                    <option value="mixed">Kombinovaný výstup</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- File Output Details -->
+                    <div id="fileOutputDetails" class="output-details" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Formát souboru:</label>
+                                    <select class="form-control">
+                                        <option value="excel">Excel (.xlsx)</option>
+                                        <option value="pdf">PDF Report</option>
+                                        <option value="csv">CSV</option>
+                                        <option value="json">JSON</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Šablona názvu souboru:</label>
+                                    <input type="text" class="form-control" placeholder="report_{date}_{time}" />
+                                    <small class="text-muted">Podporuje proměnné: {date}, {time}, {workflow_id}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Email Output Details -->
+                    <div id="emailOutputDetails" class="output-details" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Příjemce výsledků:</label>
+                                    <input type="email" class="form-control" placeholder="user@example.com" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Šablona předmětu:</label>
+                                    <input type="text" class="form-control" placeholder="Výsledky workflow: {workflow_name}" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Success Criteria -->
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <h6><i class="fas fa-check-circle text-success"></i> Kritéria úspěchu</h6>
+                        <div class="form-group">
+                            <label>Minimální počet výsledků:</label>
+                            <input type="number" class="form-control" id="minResults" value="1" min="0" />
+                            <small class="text-muted">Workflow selže, pokud vrátí méně výsledků</small>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="requireValidation" checked>
+                            <label class="form-check-label" for="requireValidation">
+                                Vyžadovat validaci výstupních dat
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow Stages -->
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-layer-group text-success"></i> 4. Kroky workflow</h5>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-success btn-sm" onclick="createStage()">
+                            <i class="fas fa-plus"></i> Přidat krok
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="workflowStages">
+                        @if (Model.Stages.Any())
+                        {
+                            @foreach (var stage in Model.Stages.OrderBy(s => s.Order))
+                            {
+                                <div class="stage-card-prototype" data-stage-id="@stage.Id">
+                                    <div class="stage-number">@stage.Order</div>
+                                    
+                                    @if (stage.UseReAct)
+                                    {
+                                        <div class="react-indicator">
+                                            <i class="fas fa-brain"></i> ReAct
+                                        </div>
+                                    }
+                                    
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <h6>@stage.Name</h6>
+                                            @if (!string.IsNullOrEmpty(stage.Description))
+                                            {
+                                                <p class="text-muted mb-2">@stage.Description</p>
+                                            }
+                                            
+                                            <div class="mb-2">
+                                                <span class="badge badge-info">@stage.Type</span>
+                                                <span class="badge badge-secondary">@stage.ExecutionStrategy</span>
+                                                <span class="badge badge-@(stage.Status == "Active" ? "success" : "warning")">@stage.Status</span>
+                                            </div>
+                                            
+                                            @if (stage.Tools.Any())
+                                            {
+                                                <div>
+                                                    <small class="text-muted">Nástroje:</small><br>
+                                                    @foreach (var tool in stage.Tools)
+                                                    {
+                                                        <span class="tool-badge">@tool</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="col-md-4 text-right">
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                        onclick="editStage('@stage.Id')" title="Upravit">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-info" 
+                                                        onclick="duplicateStage('@stage.Id')" title="Duplikovat">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                        onclick="deleteStage('@stage.Id')" title="Smazat">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                                        title="Přesunout">
+                                                    <i class="fas fa-grip-vertical"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="empty-workflow">
+                                <i class="fas fa-layer-group fa-4x mb-3"></i>
+                                <h4>Žádné kroky workflow</h4>
+                                <p class="lead mb-4">Začněte vytvořením prvního kroku nebo použijte šablonu</p>
+                                <button type="button" class="btn btn-success btn-lg" onclick="createStage()">
+                                    <i class="fas fa-plus-circle"></i> Vytvořit první krok
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-info-circle"></i> Informace o workflow</h6>
+                </div>
+                <div class="card-body">
+                    <dl class="mb-0">
+                        <dt>Workflow:</dt>
+                        <dd>@Model.ProjectName</dd>
+                        
+                        <dt>Počet kroků:</dt>
+                        <dd>@Model.Stages.Count</dd>
+                        
+                        <dt>Verze:</dt>
+                        <dd>@Model.WorkflowVersion</dd>
+                        
+                        <dt>Poslední změna:</dt>
+                        <dd>@Model.LastModified.ToString("dd.MM.yyyy HH:mm")</dd>
+                        
+                        <dt>Upravil:</dt>
+                        <dd>@Model.ModifiedBy</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-tools"></i> Akce</h6>
+                </div>
+                <div class="card-body">
+                    <button type="button" class="btn btn-primary btn-block mb-2" onclick="saveWorkflow()">
+                        <i class="fas fa-save"></i> Uložit workflow
+                    </button>
+                    <button type="button" class="btn btn-success btn-block mb-2" onclick="testWorkflow()">
+                        <i class="fas fa-play"></i> Testovat workflow
+                    </button>
+                    <button type="button" class="btn btn-info btn-block mb-2" onclick="validateWorkflow()">
+                        <i class="fas fa-check"></i> Validovat
+                    </button>
+                    <button type="button" class="btn btn-warning btn-block" onclick="saveAsTemplate()">
+                        <i class="fas fa-bookmark"></i> Uložit jako šablonu
+                    </button>
+                </div>
+            </div>
+
+            @if (Model.Stages.Any())
+            {
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-chart-pie"></i> Statistiky</h6>
+                    </div>
+                    <div class="card-body">
+                        <small>
+                            <strong>Typy kroků:</strong><br>
+                            @foreach (var group in Model.Stages.GroupBy(s => s.Type))
+                            {
+                                <span class="badge badge-light mr-1">@group.Key (@group.Count())</span>
+                            }
+                            <br><br>
+                            <strong>Nástroje celkem:</strong> @Model.Stages.SelectMany(s => s.Tools).Distinct().Count()<br>
+                            <strong>Kroky s ReAct:</strong> @Model.Stages.Count(s => s.UseReAct)
+                        </small>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal placeholder -->
+<div id="modalContainer"></div>
+
+@section Scripts {
+    <script>
+        const projectId = '@Model.ProjectId';
+        
+        
+        function toggleScheduleOptions() {
+            const triggerType = $('#triggerType').val();
+            const scheduleOptions = $('#scheduleOptions');
+            const eventOptions = $('#eventOptions');
+            
+            // Hide all options first
+            scheduleOptions.hide();
+            eventOptions.hide();
+            $('.event-details').hide();
+            
+            // Show relevant options based on selection
+            if (triggerType === 'Schedule') {
+                scheduleOptions.show();
+            } else if (triggerType === 'Event') {
+                eventOptions.show();
+            }
+        }
+        
+        function toggleEventDetails() {
+            const eventType = $('#eventTrigger').val();
+            
+            // Hide all event details first
+            $('.event-details').hide();
+            
+            // Show specific details based on event type
+            switch(eventType) {
+                case 'FileUpload':
+                    $('#fileUploadDetails').show();
+                    break;
+                case 'EmailReceived':
+                    $('#emailDetails').show();
+                    break;
+                case 'ApiCall':
+                    $('#apiDetails').show();
+                    break;
+                case 'WebhookReceived':
+                    $('#webhookDetails').show();
+                    generateSecret(); // Auto-generate on first show
+                    break;
+            }
+        }
+        
+        function generateSecret() {
+            const secret = 'whsec_' + Math.random().toString(36).substr(2, 32);
+            $('#webhookSecret').val(secret);
+        }
+        
+        function toggleOutputDetails() {
+            const outputType = $('#outputType').val();
+            
+            // Hide all output details first
+            $('.output-details').hide();
+            
+            // Show specific details based on output type
+            switch(outputType) {
+                case 'file':
+                    $('#fileOutputDetails').show();
+                    break;
+                case 'email':
+                    $('#emailOutputDetails').show();
+                    break;
+                // Other types can be expanded later
+            }
+        }
+        
+        
+        function createStage() {
+            $.get('@Url.Action("CreateStage")', { projectId: projectId }, function(html) {
+                $('#modalContainer').html(html);
+                $('#createStageModal').modal('show');
+            });
+        }
+        
+        function editStage(stageId) {
+            $.get('@Url.Action("EditStage")', { stageId: stageId, projectId: projectId }, function(html) {
+                $('#modalContainer').html(html);
+                $('#editStageModal').modal('show');
+            });
+        }
+        
+        function deleteStage(stageId) {
+            if (confirm('Opravdu chcete smazat tento krok?')) {
+                $.post('@Url.Action("DeleteStage")', { stageId: stageId, projectId: projectId }, function(response) {
+                    if (response.success) {
+                        toastr.success(response.message);
+                        location.reload();
+                    } else {
+                        toastr.error(response.message);
+                    }
+                });
+            }
+        }
+        
+        function duplicateStage(stageId) {
+            $.post('@Url.Action("DuplicateStage")', { stageId: stageId, projectId: projectId }, function(response) {
+                if (response.success) {
+                    toastr.success(response.message);
+                    location.reload();
+                } else {
+                    toastr.error(response.message);
+                }
+            });
+        }
+        
+        function testWorkflow() {
+            $.get('@Url.Action("TestWorkflow")', { projectId: projectId }, function(html) {
+                $('#modalContainer').html(html);
+                $('#testWorkflowModal').modal('show');
+            });
+        }
+        
+        function saveWorkflow() {
+            toastr.success('Workflow uložen (demo mode - žádná persistence)');
+        }
+        
+        function validateWorkflow() {
+            const stages = @Html.Raw(Json.Serialize(Model.Stages));
+            const workflowName = $('input[placeholder="Zadejte název workflow"]').val();
+            
+            const issues = [];
+            const warnings = [];
+            
+            // Basic validations
+            if (!workflowName || workflowName.trim() === '') {
+                issues.push('Workflow nemá název');
+            }
+            
+            if (stages.length === 0) {
+                issues.push('Workflow neobsahuje žádné kroky');
+            }
+            
+            // Output validation
+            const outputType = $('#outputType').val();
+            if (!outputType || outputType === '') {
+                issues.push('Není definován výstup workflow');
+            }
+            
+            // Stage validations
+            stages.forEach((stage, index) => {
+                const stageNum = index + 1;
+                
+                if (!stage.name || stage.name.trim() === '') {
+                    issues.push(`Krok ${stageNum}: Chybí název`);
+                }
+                
+                if (!stage.tools || stage.tools.length === 0) {
+                    warnings.push(`Krok ${stageNum} (${stage.name}): Neobsahuje žádné nástroje`);
+                }
+                
+                if (stage.useReAct && (!stage.tools || stage.tools.length === 0)) {
+                    issues.push(`Krok ${stageNum} (${stage.name}): ReAct režim vyžaduje alespoň jeden nástroj`);
+                }
+                
+                if (stage.executionStrategy === 'Conditional' && stage.tools.length < 2) {
+                    warnings.push(`Krok ${stageNum} (${stage.name}): Podmíněná strategie obvykle vyžaduje více nástrojů`);
+                }
+            });
+            
+            // Show results
+            if (issues.length === 0 && warnings.length === 0) {
+                toastr.success(`✅ Workflow je validní! (${stages.length} kroků, vše v pořádku)`);
+            } else {
+                let message = '<div style="text-align: left;">';
+                
+                if (issues.length > 0) {
+                    message += '<strong>🚫 Kritické problémy:</strong><br>';
+                    issues.forEach(issue => message += `• ${issue}<br>`);
+                    message += '<br>';
+                }
+                
+                if (warnings.length > 0) {
+                    message += '<strong>⚠️ Upozornění:</strong><br>';
+                    warnings.forEach(warning => message += `• ${warning}<br>`);
+                }
+                
+                message += '</div>';
+                
+                if (issues.length > 0) {
+                    toastr.error(message, 'Validace selhala', { timeOut: 10000 });
+                } else {
+                    toastr.warning(message, 'Validace s upozorněními', { timeOut: 8000 });
+                }
+            }
+        }
+        
+        function saveAsTemplate() {
+            const templateName = prompt('Zadejte název šablony:');
+            if (templateName) {
+                $.get('@Url.Action("SaveTemplate")', { 
+                    projectId: projectId, 
+                    templateName: templateName 
+                }, function(response) {
+                    if (response.success) {
+                        toastr.success(response.message);
+                    }
+                });
+            }
+        }
+        
+        // Initialize tooltips
+        $('[data-toggle="tooltip"]').tooltip();
+        
+        // Initialize sortable for drag & drop (placeholder)
+        $(document).ready(function() {
+            if ($('#workflowStages .stage-card-prototype').length > 1) {
+                toastr.info('💡 Drag & drop pro reordering bude implementováno v produkční verzi');
+            }
+        });
+    </script>
+}

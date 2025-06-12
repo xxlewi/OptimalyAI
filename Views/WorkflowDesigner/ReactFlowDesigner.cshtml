@@ -1,0 +1,443 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+@{
+    ViewData["Title"] = "React Flow Workflow Designer";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .workflow-container {
+        height: calc(100vh - 200px);
+        display: flex;
+        gap: 20px;
+    }
+    
+    .tools-panel {
+        width: 300px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        overflow-y: auto;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .tool-category {
+        margin-bottom: 20px;
+    }
+    
+    .tool-category h6 {
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #007bff;
+        padding-bottom: 5px;
+    }
+    
+    .tool-item {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 8px;
+        cursor: grab;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .tool-item:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+        border-color: #007bff;
+    }
+    
+    .tool-item:active {
+        cursor: grabbing;
+        transform: scale(0.95);
+    }
+    
+    .tool-item i {
+        color: #007bff;
+        font-size: 16px;
+    }
+    
+    .react-flow-wrapper {
+        flex: 1;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: relative;
+        height: 100%;
+    }
+    
+    #react-flow-container {
+        width: 100%;
+        height: 100%;
+    }
+    
+    .workflow-actions {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        display: flex;
+        gap: 10px;
+    }
+    
+    .workflow-actions .btn {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* Custom React Flow Styles */
+    .react-flow__node-custom {
+        background: white;
+        border: 2px solid #007bff;
+        border-radius: 8px;
+        padding: 0;
+        min-width: 200px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: all 0.2s;
+    }
+    
+    .react-flow__node-custom:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+    
+    .react-flow__node-custom.selected {
+        border-color: #ff6b6b;
+        box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.2);
+    }
+    
+    .node-header {
+        background: #007bff;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 6px 6px 0 0;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .node-header.condition {
+        background: #ffc107;
+        color: #000;
+    }
+    
+    .node-header.parallel {
+        background: #6f42c1;
+    }
+    
+    .node-body {
+        padding: 15px;
+    }
+    
+    .node-description {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 10px;
+        font-style: italic;
+    }
+    
+    .node-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 10px;
+    }
+    
+    .tool-badge {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        border: 1px solid #90caf9;
+    }
+    
+    .node-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .node-action-btn {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+    
+    .node-action-btn:hover {
+        background: rgba(255,255,255,0.2);
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    }
+    
+    /* React Flow Background Grid */
+    .react-flow {
+        background-color: #f8f9fa;
+        background-image: 
+            linear-gradient(rgba(220, 220, 220, 0.5) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(220, 220, 220, 0.5) 1px, transparent 1px);
+        background-size: 20px 20px;
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> React Flow Workflow Designer
+                    <small class="text-muted">@Model.ProjectName</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-sm-right">
+                    <button class="btn btn-success" onclick="validateWorkflow()">
+                        <i class="fas fa-check"></i> Validate
+                    </button>
+                    <button class="btn btn-info" onclick="exportWorkflow()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="workflow-container">
+            <!-- Tools Panel -->
+            <div class="tools-panel">
+                <h5><i class="fas fa-toolbox"></i> Nástroje a komponenty</h5>
+                
+                <div class="tool-category">
+                    <h6><i class="fas fa-shapes"></i> Základní bloky</h6>
+                    <div class="tool-item" draggable="true" data-node-type="task">
+                        <i class="fas fa-cog"></i>
+                        <div>
+                            <strong>Úloha</strong>
+                            <div style="font-size: 12px; color: #666;">Základní zpracovací uzel</div>
+                        </div>
+                    </div>
+                    <div class="tool-item" draggable="true" data-node-type="condition">
+                        <i class="fas fa-code-branch"></i>
+                        <div>
+                            <strong>Podmínka</strong>
+                            <div style="font-size: 12px; color: #666;">Větvení workflow</div>
+                        </div>
+                    </div>
+                    <div class="tool-item" draggable="true" data-node-type="parallel">
+                        <i class="fas fa-sitemap"></i>
+                        <div>
+                            <strong>Paralelní zpracování</strong>
+                            <div style="font-size: 12px; color: #666;">Současné vykonání</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tool-category">
+                    <h6><i class="fas fa-puzzle-piece"></i> AI Nástroje</h6>
+                    @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                    {
+                        <div class="tool-item" draggable="true" data-tool="@tool">
+                            <i class="fas fa-robot"></i>
+                            <div>
+                                <strong>@tool.Replace("_", " ")</strong>
+                                <div style="font-size: 12px; color: #666;">AI nástroj</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                
+                <div class="tool-category">
+                    <h6><i class="fas fa-info-circle"></i> Nápověda</h6>
+                    <div class="alert alert-info" style="font-size: 13px;">
+                        <strong>Jak používat:</strong><br>
+                        • Přetáhněte nástroje na plochu<br>
+                        • Propojte uzly taháním z portu<br>
+                        • Dvakrát klikněte pro editaci<br>
+                        • Pravý klik pro možnosti
+                    </div>
+                </div>
+            </div>
+            
+            <!-- React Flow Canvas -->
+            <div class="react-flow-wrapper">
+                <div class="workflow-actions">
+                    <button class="btn btn-primary" onclick="saveWorkflow()">
+                        <i class="fas fa-save"></i> Uložit
+                    </button>
+                    <button class="btn btn-success" onclick="testWorkflow()">
+                        <i class="fas fa-play"></i> Test
+                    </button>
+                    <button class="btn btn-warning" onclick="clearWorkflow()">
+                        <i class="fas fa-trash"></i> Vyčistit
+                    </button>
+                </div>
+                
+                <div id="react-flow-container" style="width: 100%; height: 100%;"></div>
+                
+                <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+@{
+    var reactflowCoreCss = "https://unpkg.com/@" + "reactflow/core@11.10.1/dist/style.css";
+    var reactflowControlsCss = "https://unpkg.com/@" + "reactflow/controls@11.2.5/dist/style.css";
+    var reactflowMinimapCss = "https://unpkg.com/@" + "reactflow/minimap@11.7.5/dist/style.css";
+}
+<!-- React Flow CSS -->
+<link href="@reactflowCoreCss" rel="stylesheet" />
+<link href="@reactflowControlsCss" rel="stylesheet" />
+<link href="@reactflowMinimapCss" rel="stylesheet" />
+}
+
+<!-- Node Edit Modal -->
+<div class="modal fade" id="nodeEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Upravit uzel
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="nodeForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label><i class="fas fa-tag"></i> Název</label>
+                                <input type="text" class="form-control" id="nodeName" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label><i class="fas fa-shapes"></i> Typ</label>
+                                <select class="form-control" id="nodeType">
+                                    <option value="task">Úloha</option>
+                                    <option value="condition">Podmínka</option>
+                                    <option value="parallel">Paralelní zpracování</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-align-left"></i> Popis</label>
+                        <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="form-group" id="toolsSection">
+                        <label><i class="fas fa-puzzle-piece"></i> AI Nástroje</label>
+                        <select multiple class="form-control" id="nodeTools" size="5">
+                            @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                            {
+                                <option value="@tool">@tool.Replace("_", " ")</option>
+                            }
+                        </select>
+                        <small class="form-text text-muted">Držte Ctrl pro výběr více nástrojů</small>
+                    </div>
+                    
+                    <div class="form-group" id="conditionSection" style="display: none;">
+                        <label><i class="fas fa-code-branch"></i> Podmínka</label>
+                        <input type="text" class="form-control" id="nodeCondition" placeholder="např. result === 'success'">
+                        <small class="form-text text-muted">JavaScript výraz pro větvení</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="nodeUseReAct">
+                            <label class="form-check-label" for="nodeUseReAct">
+                                <i class="fas fa-brain"></i> Použít ReAct pattern
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Zrušit
+                </button>
+                <button type="button" class="btn btn-danger" onclick="deleteCurrentNode()" id="deleteNodeBtn">
+                    <i class="fas fa-trash"></i> Smazat
+                </button>
+                <button type="button" class="btn btn-primary" onclick="updateNode()">
+                    <i class="fas fa-save"></i> Uložit změny
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<!-- React from CDN -->
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+@{
+    var reactflowCoreUrl = "https://unpkg.com/@" + "reactflow/core@11.10.1/dist/umd/index.js";
+    var reactflowResizerUrl = "https://unpkg.com/@" + "reactflow/node-resizer@2.2.5/dist/umd/index.js";
+    var reactflowMinimapUrl = "https://unpkg.com/@" + "reactflow/minimap@11.7.5/dist/umd/index.js";
+    var reactflowControlsUrl = "https://unpkg.com/@" + "reactflow/controls@11.2.5/dist/umd/index.js";
+    var reactflowBackgroundUrl = "https://unpkg.com/@" + "reactflow/background@11.3.5/dist/umd/index.js";
+}
+
+<script src="@reactflowCoreUrl"></script>
+<script src="@reactflowResizerUrl"></script>
+<script src="@reactflowMinimapUrl"></script>
+<script src="@reactflowControlsUrl"></script>
+<script src="@reactflowBackgroundUrl"></script>
+
+<!-- Our React Flow Designer -->
+<script src="~/js/react-flow-designer.js"></script>
+
+<script>
+    // Initialize the workflow designer when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set global project info
+        window.currentProjectId = '@Model.ProjectId';
+        window.currentProjectName = '@Model.ProjectName';
+        
+        // Initialize the React Flow designer with model data
+        const model = @Html.Raw(Json.Serialize(Model));
+        initializeReactFlowDesigner(model);
+        
+        // Handle node type change in modal
+        document.getElementById('nodeType').addEventListener('change', function() {
+            const type = this.value;
+            document.getElementById('conditionSection').style.display = 
+                type === 'condition' ? 'block' : 'none';
+            document.getElementById('toolsSection').style.display = 
+                type === 'task' ? 'block' : 'none';
+        });
+    });
+</script>
+}

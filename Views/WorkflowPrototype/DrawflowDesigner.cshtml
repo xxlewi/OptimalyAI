@@ -1,0 +1,367 @@
+@model OptimalyAI.Controllers.DrawflowWorkflow
+@{
+    ViewData["Title"] = "Workflow Designer";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section Styles {
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow@latest/dist/drawflow.min.css">
+<link rel="stylesheet" href="~/css/drawflow-custom.css">
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-8">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> Workflow Designer
+                    <small class="text-muted">@Model.ProjectName</small>
+                </h1>
+            </div>
+            <div class="col-sm-4">
+                <div class="btn-group float-sm-right" role="group">
+                    <button class="btn btn-success" onclick="workflowManager.save()">
+                        <i class="fas fa-save"></i> Uložit
+                    </button>
+                    <button class="btn btn-info" onclick="workflowManager.validate()">
+                        <i class="fas fa-check-circle"></i> Validovat
+                    </button>
+                    <button class="btn btn-primary" onclick="workflowManager.export()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" href="#" onclick="workflowManager.import()">
+                                <i class="fas fa-upload"></i> Import
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item text-danger" href="#" onclick="workflowManager.clear()">
+                                <i class="fas fa-trash"></i> Vyčistit
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Left Sidebar - Node Palette -->
+            <div class="col-lg-2">
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-toolbox"></i> Uzly
+                        </h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="node-palette">
+                            <!-- Basic Nodes -->
+                            <h6 class="palette-header">Základní</h6>
+                            <div class="drag-item node-start" draggable="true" 
+                                 data-node-type="start" data-node-inputs="0" data-node-outputs="1">
+                                <i class="fas fa-play-circle"></i> Start
+                            </div>
+                            <div class="drag-item node-end" draggable="true" 
+                                 data-node-type="end" data-node-inputs="1" data-node-outputs="0">
+                                <i class="fas fa-stop-circle"></i> Konec
+                            </div>
+                            <div class="drag-item node-task" draggable="true" 
+                                 data-node-type="task" data-node-inputs="1" data-node-outputs="2">
+                                <i class="fas fa-cog"></i> Úloha
+                            </div>
+                            
+                            <!-- Control Flow -->
+                            <h6 class="palette-header mt-3">Řízení toku</h6>
+                            <div class="drag-item node-condition" draggable="true" 
+                                 data-node-type="condition" data-node-inputs="1" data-node-outputs="2">
+                                <i class="fas fa-code-branch"></i> Podmínka
+                            </div>
+                            <div class="drag-item node-parallel" draggable="true" 
+                                 data-node-type="parallel" data-node-inputs="1" data-node-outputs="3">
+                                <i class="fas fa-sitemap"></i> Paralelní
+                            </div>
+                            <div class="drag-item node-join" draggable="true" 
+                                 data-node-type="join" data-node-inputs="3" data-node-outputs="1">
+                                <i class="fas fa-compress-arrows-alt"></i> Spojení
+                            </div>
+                            <div class="drag-item node-loop" draggable="true" 
+                                 data-node-type="loop" data-node-inputs="1" data-node-outputs="2">
+                                <i class="fas fa-redo"></i> Smyčka
+                            </div>
+                            
+                            <!-- Special -->
+                            <h6 class="palette-header mt-3">Speciální</h6>
+                            <div class="drag-item node-wait" draggable="true" 
+                                 data-node-type="wait" data-node-inputs="1" data-node-outputs="1">
+                                <i class="fas fa-clock"></i> Čekání
+                            </div>
+                            <div class="drag-item node-orchestrator" draggable="true" 
+                                 data-node-type="orchestrator" data-node-inputs="1" data-node-outputs="1">
+                                <i class="fas fa-robot"></i> Orchestrátor
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Tools -->
+                <div class="card card-success card-outline mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-puzzle-piece"></i> AI Nástroje
+                        </h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="tools-palette">
+                            <input type="text" class="form-control form-control-sm mb-2" 
+                                   id="toolSearch" placeholder="Hledat...">
+                            <div id="toolsList">
+                                @foreach(var tool in ViewBag.AvailableTools)
+                                {
+                                    <div class="drag-tool" draggable="true" 
+                                         data-tool-id="@tool.Id" data-tool-name="@tool.Name"
+                                         title="@tool.Description">
+                                        <i class="fas fa-puzzle-piece"></i> @tool.Name
+                                        <small class="d-block text-muted">@tool.Category</small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Center - Drawflow Canvas -->
+            <div class="col-lg-8">
+                <div class="card card-default">
+                    <div class="card-body p-0">
+                        <div id="drawflow" class="drawflow-container"></div>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Táhněte uzly z palety • Dvojklik pro editaci • Delete pro smazání
+                        </small>
+                        <span class="float-right">
+                            <span id="nodeCount">0</span> uzlů • 
+                            <span id="connectionCount">0</span> spojení
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Sidebar - Properties -->
+            <div class="col-lg-2">
+                <div class="card card-info card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-sliders-h"></i> Vlastnosti
+                        </h3>
+                    </div>
+                    <div class="card-body" id="propertiesPanel">
+                        <p class="text-muted text-center">
+                            <i class="fas fa-mouse-pointer"></i><br>
+                            Vyberte uzel pro zobrazení vlastností
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Orchestrator Selection -->
+                <div class="card card-warning card-outline mt-3" id="orchestratorCard" style="display:none;">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-robot"></i> Orchestrátor
+                        </h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <select class="form-control form-control-sm" id="orchestratorSelect">
+                            <option value="">-- Vyberte --</option>
+                            @foreach(var orch in ViewBag.Orchestrators)
+                            {
+                                <option value="@orch">@orch</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Node Edit Modal -->
+<div class="modal fade" id="nodeEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Upravit uzel
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="nodeEditForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Název</label>
+                                <input type="text" class="form-control" id="nodeName" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Typ</label>
+                                <input type="text" class="form-control" id="nodeType" readonly>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Popis</label>
+                        <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
+                    </div>
+                    
+                    <!-- Task-specific fields -->
+                    <div id="taskFields" style="display:none;">
+                        <div class="form-group">
+                            <label>Přiřazené nástroje</label>
+                            <div id="assignedTools" class="mb-2"></div>
+                            <small class="text-muted">
+                                Přetáhněte nástroje z levého panelu na uzel
+                            </small>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="useReAct">
+                            <label class="form-check-label" for="useReAct">
+                                Použít ReAct reasoning
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Condition-specific fields -->
+                    <div id="conditionFields" style="display:none;">
+                        <div class="form-group">
+                            <label>Podmínka (JavaScript výraz)</label>
+                            <textarea class="form-control" id="conditionExpression" 
+                                      placeholder="např. result.success === true" rows="2"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Loop-specific fields -->
+                    <div id="loopFields" style="display:none;">
+                        <div class="form-group">
+                            <label>Podmínka smyčky</label>
+                            <textarea class="form-control" id="loopCondition" 
+                                      placeholder="např. items.length > 0" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Max. iterací</label>
+                            <input type="number" class="form-control" id="maxIterations" value="100">
+                        </div>
+                    </div>
+                    
+                    <!-- Wait-specific fields -->
+                    <div id="waitFields" style="display:none;">
+                        <div class="form-group">
+                            <label>Čekání (sekundy)</label>
+                            <input type="number" class="form-control" id="waitTime" value="5">
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced settings -->
+                    <div class="card card-outline card-secondary collapsed-card">
+                        <div class="card-header">
+                            <h3 class="card-title">Pokročilé nastavení</h3>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Timeout (sekundy)</label>
+                                <input type="number" class="form-control" id="nodeTimeout" value="300">
+                            </div>
+                            <div class="form-group">
+                                <label>Počet opakování při chybě</label>
+                                <input type="number" class="form-control" id="nodeRetries" value="3">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-danger" onclick="workflowManager.deleteNode()" 
+                        id="deleteNodeBtn">
+                    <i class="fas fa-trash"></i> Smazat
+                </button>
+                <button type="button" class="btn btn-primary" onclick="workflowManager.updateNode()">
+                    <i class="fas fa-save"></i> Uložit změny
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Import Workflow</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Vyberte soubor workflow (JSON)</label>
+                    <input type="file" class="form-control-file" id="importFile" accept=".json">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="workflowManager.doImport()">
+                    <i class="fas fa-upload"></i> Importovat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow@latest/dist/drawflow.min.js"></script>
+<script src="~/js/drawflow-manager.js"></script>
+<script>
+    // Initialize on page load
+    $(document).ready(function() {
+        // Initialize Drawflow
+        workflowManager.init('@Model.ProjectId', '@Model.ProjectName');
+        
+        // Load existing workflow data if any
+        const existingData = @Html.Raw(Model.DrawflowData ?? "null");
+        if (existingData) {
+            workflowManager.loadData(existingData);
+        }
+        
+        // Tool search
+        $('#toolSearch').on('input', function() {
+            const search = $(this).val().toLowerCase();
+            $('.drag-tool').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(text.includes(search));
+            });
+        });
+    });
+</script>
+}

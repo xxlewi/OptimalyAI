@@ -1,0 +1,775 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+@{
+    ViewData["Title"] = "Workflow Designer - Drawflow";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .workflow-container {
+        display: flex;
+        height: calc(100vh - 200px);
+        gap: 15px;
+    }
+    
+    #drawflow {
+        flex: 1;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        position: relative;
+    }
+    
+    .tools-sidebar {
+        width: 280px;
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow-y: auto;
+    }
+    
+    .drag-item {
+        background: #007bff;
+        color: white;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 6px;
+        cursor: grab;
+        text-align: center;
+        transition: all 0.3s;
+    }
+    
+    .drag-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .drag-item:active {
+        cursor: grabbing;
+    }
+    
+    /* Override Drawflow default styles */
+    .drawflow .drawflow-node {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        width: auto !important;
+        height: auto !important;
+    }
+    
+    .drawflow .drawflow-node .drawflow_content_node {
+        padding: 0 !important;
+    }
+    
+    /* Our custom node styles */
+    .drawflow-node-custom {
+        background: white;
+        border: 2px solid #007bff;
+        border-radius: 8px;
+        padding: 15px;
+        min-width: 200px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .drawflow .drawflow-node.selected .drawflow-node-custom {
+        border-color: #ff6b6b;
+        box-shadow: 0 0 0 3px rgba(255,107,107,0.2);
+    }
+    
+    .node-header {
+        font-weight: bold;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .node-tools {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+    }
+    
+    .tool-badge {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin: 2px;
+    }
+    
+    .node-actions {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        display: none;
+    }
+    
+    .drawflow-node:hover .node-actions {
+        display: block;
+    }
+    
+    .toolbar {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> Workflow Designer
+                    <small class="text-muted">@Model.ProjectName</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-sm-right">
+                    <button class="btn btn-success" onclick="saveWorkflow()">
+                        <i class="fas fa-save"></i> Uložit
+                    </button>
+                    <button class="btn btn-info" onclick="exportWorkflow()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button class="btn btn-primary" onclick="importWorkflow()">
+                        <i class="fas fa-upload"></i> Import
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="toolbar">
+            <button class="btn btn-sm btn-danger" onclick="clearWorkflow()">
+                <i class="fas fa-trash"></i> Vyčistit
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="editor.zoom_out()">
+                <i class="fas fa-search-minus"></i> Zoom -
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="editor.zoom_reset()">
+                <i class="fas fa-compress"></i> Reset
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="editor.zoom_in()">
+                <i class="fas fa-search-plus"></i> Zoom +
+            </button>
+            <div class="ml-auto">
+                <span class="text-muted">Přetáhněte bloky z levého panelu</span>
+            </div>
+        </div>
+        
+        <div class="workflow-container">
+            <!-- Tools Sidebar -->
+            <div class="tools-sidebar">
+                <h5><i class="fas fa-toolbox"></i> Nástroje</h5>
+                
+                <div class="drag-item" id="start-button" draggable="true" ondragstart="drag(event)" data-node="start" style="background: #28a745; display: none;">
+                    <i class="fas fa-play"></i> Začátek
+                </div>
+                
+                <div class="drag-item" id="end-button" draggable="true" ondragstart="drag(event)" data-node="end" style="background: #dc3545; display: none;">
+                    <i class="fas fa-stop"></i> Konec
+                </div>
+                
+                <hr>
+                
+                <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="task">
+                    <i class="fas fa-cog"></i> Úloha
+                </div>
+                
+                <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="condition" style="background: #ffc107; color: #000;">
+                    <i class="fas fa-code-branch"></i> Podmínka
+                </div>
+                
+                <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="parallel" style="background: #6f42c1;">
+                    <i class="fas fa-sitemap"></i> Paralelní
+                </div>
+                
+                <hr>
+                
+                <h6>AI Nástroje</h6>
+                @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                {
+                    <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="ai-tool" data-tool="@tool" style="background: #28a745;">
+                        <i class="fas fa-robot"></i> @tool.Replace("_", " ")
+                    </div>
+                }
+            </div>
+            
+            <!-- Drawflow Canvas -->
+            <div id="drawflow" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+        </div>
+    </div>
+</section>
+
+<!-- Node Edit Modal -->
+<div class="modal fade" id="nodeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit uzel</h5>
+                <button type="button" class="close" onclick="closeModal()">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="nodeForm">
+                    <input type="hidden" id="nodeId">
+                    <div class="form-group">
+                        <label>Název</label>
+                        <input type="text" class="form-control" id="nodeName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Popis</label>
+                        <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
+                    </div>
+                    <div class="form-group" id="toolsGroup">
+                        <label>AI Nástroje</label>
+                        <select multiple class="form-control" id="nodeTools" size="5">
+                            @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                            {
+                                <option value="@tool">@tool.Replace("_", " ")</option>
+                            }
+                        </select>
+                        <small class="text-muted">Držte Ctrl pro výběr více nástrojů</small>
+                    </div>
+                    <div class="form-group" id="conditionGroup" style="display: none;">
+                        <label>Podmínka</label>
+                        <input type="text" class="form-control" id="nodeCondition" placeholder="result > 0">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="deleteNode()">
+                    <i class="fas fa-trash"></i> Smazat
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="updateNode()">
+                    <i class="fas fa-save"></i> Uložit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<!-- Drawflow -->
+<link rel="stylesheet" href="https://unpkg.com/drawflow@latest/dist/drawflow.min.css">
+<script src="https://unpkg.com/drawflow@latest/dist/drawflow.min.js"></script>
+
+<script>
+    let editor;
+    let currentNodeId = null;
+    let nodeIdCounter = 1;
+    
+    // Initialize Drawflow
+    document.addEventListener('DOMContentLoaded', function() {
+        const id = document.getElementById("drawflow");
+        editor = new Drawflow(id);
+        editor.start();
+        
+        // Add event listener for double-click on nodes
+        editor.on('nodeCreated', function(nodeId) {
+            const nodeElement = document.getElementById(`node-${nodeId}`);
+            if (nodeElement) {
+                nodeElement.addEventListener('dblclick', function(e) {
+                    e.stopPropagation();
+                    openNodeModal(nodeId);
+                });
+            }
+            updateStartEndButtons();
+        });
+        
+        // Update buttons when node is removed
+        editor.on('nodeRemoved', function(nodeId) {
+            updateStartEndButtons();
+        });
+        
+        // Load existing workflow if any
+        const model = @Html.Raw(Json.Serialize(Model));
+        if (model && model.nodes && model.nodes.length > 0) {
+            loadModelIntoDrawflow(model);
+        } else {
+            // Pokud není žádné workflow, přidej Začátek a Konec uzly
+            addStartEndNodes();
+        }
+        
+        // Update button visibility after initial load
+        setTimeout(() => {
+            updateStartEndButtons();
+        }, 100);
+    });
+    
+    // Drag and Drop handlers
+    function drag(ev) {
+        ev.dataTransfer.setData("node", ev.target.getAttribute('data-node'));
+        ev.dataTransfer.setData("tool", ev.target.getAttribute('data-tool') || '');
+    }
+    
+    function allowDrop(ev) {
+        ev.preventDefault();
+    }
+    
+    function drop(ev) {
+        ev.preventDefault();
+        const nodeType = ev.dataTransfer.getData("node");
+        const tool = ev.dataTransfer.getData("tool");
+        addNodeToCanvas(nodeType, tool, ev.clientX, ev.clientY);
+    }
+    
+    // Add node to canvas
+    function addNodeToCanvas(type, tool, posX, posY) {
+        const pos_x = posX - document.getElementById("drawflow").getBoundingClientRect().left;
+        const pos_y = posY - document.getElementById("drawflow").getBoundingClientRect().top;
+        
+        let html = '';
+        let data = { type: type };
+        let nodeAdded = null;
+        
+        switch(type) {
+            case 'start':
+                data.name = 'Začátek';
+                nodeAdded = editor.addNode('start', 0, 1, pos_x, pos_y, 'start', data, 
+                    `<div class="drawflow-node-custom" style="background: #28a745; color: white; border-color: #28a745;">
+                        <div class="node-header">
+                            <i class="fas fa-play"></i> Začátek
+                        </div>
+                    </div>`
+                );
+                break;
+                
+            case 'end':
+                data.name = 'Konec';
+                nodeAdded = editor.addNode('end', 1, 0, pos_x, pos_y, 'end', data, 
+                    `<div class="drawflow-node-custom" style="background: #dc3545; color: white; border-color: #dc3545;">
+                        <div class="node-header">
+                            <i class="fas fa-stop"></i> Konec
+                        </div>
+                    </div>`
+                );
+                break;
+                
+            case 'task':
+                data.name = 'Nová úloha';
+                data.tools = [];
+                nodeAdded = editor.addNode('task', 1, 1, pos_x, pos_y, 'task', data, '');
+                html = createTaskNodeHtml(nodeAdded, data.name, []);
+                document.getElementById(`node-${nodeAdded}`).querySelector('.drawflow_content_node').innerHTML = html;
+                break;
+                
+            case 'condition':
+                data.name = 'Podmínka';
+                data.condition = '';
+                nodeAdded = editor.addNode('condition', 1, 2, pos_x, pos_y, 'condition', data, '');
+                html = createConditionNodeHtml(nodeAdded, data.name);
+                document.getElementById(`node-${nodeAdded}`).querySelector('.drawflow_content_node').innerHTML = html;
+                break;
+                
+            case 'parallel':
+                data.name = 'Paralelní zpracování';
+                nodeAdded = editor.addNode('parallel', 1, 3, pos_x, pos_y, 'parallel', data, '');
+                html = createParallelNodeHtml(nodeAdded, data.name);
+                document.getElementById(`node-${nodeAdded}`).querySelector('.drawflow_content_node').innerHTML = html;
+                break;
+                
+            case 'ai-tool':
+                data.name = tool.replace(/_/g, ' ');
+                data.tools = [tool];
+                nodeAdded = editor.addNode('ai-tool', 1, 1, pos_x, pos_y, 'task', data, '');
+                html = createTaskNodeHtml(nodeAdded, data.name, [tool]);
+                document.getElementById(`node-${nodeAdded}`).querySelector('.drawflow_content_node').innerHTML = html;
+                break;
+        }
+    }
+    
+    // Node HTML generators
+    function createTaskNodeHtml(id, name, tools) {
+        const toolsHtml = tools.map(t => `<span class="tool-badge">${t.replace(/_/g, ' ')}</span>`).join('');
+        return `
+            <div class="drawflow-node-custom">
+                <div class="node-actions">
+                    <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); removeNode(${id})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="node-header">
+                    <i class="fas fa-cog"></i> ${name}
+                </div>
+                ${tools.length > 0 ? `<div class="node-tools">${toolsHtml}</div>` : ''}
+            </div>
+        `;
+    }
+    
+    function createConditionNodeHtml(id, name) {
+        return `
+            <div class="drawflow-node-custom" style="border-color: #ffc107;">
+                <div class="node-actions">
+                    <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); removeNode(${id})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="node-header">
+                    <i class="fas fa-code-branch"></i> ${name}
+                </div>
+            </div>
+        `;
+    }
+    
+    function createParallelNodeHtml(id, name) {
+        return `
+            <div class="drawflow-node-custom" style="border-color: #6f42c1;">
+                <div class="node-actions">
+                    <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); removeNode(${id})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="node-header">
+                    <i class="fas fa-sitemap"></i> ${name}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Node editing
+    function openNodeModal(nodeId) {
+        console.log('Opening modal for node:', nodeId);
+        currentNodeId = nodeId;
+        
+        // Get node info from editor's internal data
+        const drawflowData = editor.drawflow.drawflow.Home.data;
+        const nodeInfo = drawflowData[nodeId];
+        
+        console.log('Node info:', nodeInfo);
+        
+        if (nodeInfo) {
+            const data = nodeInfo.data;
+            document.getElementById('nodeId').value = nodeId;
+            document.getElementById('nodeName').value = data.name || '';
+            document.getElementById('nodeDescription').value = data.description || '';
+            
+            // Show/hide fields based on type
+            if (data.type === 'condition') {
+                document.getElementById('toolsGroup').style.display = 'none';
+                document.getElementById('conditionGroup').style.display = 'block';
+                document.getElementById('nodeCondition').value = data.condition || '';
+            } else {
+                document.getElementById('toolsGroup').style.display = 'block';
+                document.getElementById('conditionGroup').style.display = 'none';
+                
+                // Set selected tools
+                const tools = data.tools || [];
+                Array.from(document.getElementById('nodeTools').options).forEach(option => {
+                    option.selected = tools.includes(option.value);
+                });
+            }
+            
+            // Use vanilla JS to show modal
+            const modal = document.getElementById('nodeModal');
+            modal.style.display = 'block';
+            modal.classList.add('show');
+            document.body.classList.add('modal-open');
+            
+            // Add backdrop
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            backdrop.id = 'modal-backdrop-custom';
+            document.body.appendChild(backdrop);
+        }
+    }
+    
+    function updateNode() {
+        if (!currentNodeId) return;
+        
+        // Get node info from editor's internal data
+        const drawflowData = editor.drawflow.drawflow.Home.data;
+        const nodeInfo = drawflowData[currentNodeId];
+        
+        if (nodeInfo) {
+            const name = document.getElementById('nodeName').value;
+            const description = document.getElementById('nodeDescription').value;
+            const data = nodeInfo.data;
+            
+            data.name = name;
+            data.description = description;
+            
+            if (data.type === 'condition') {
+                data.condition = document.getElementById('nodeCondition').value;
+            } else {
+                const selectedTools = Array.from(document.getElementById('nodeTools').selectedOptions)
+                    .map(option => option.value);
+                data.tools = selectedTools;
+            }
+            
+            // Update node HTML
+            let html = '';
+            switch(data.type) {
+                case 'task':
+                case 'ai-tool':
+                    html = createTaskNodeHtml(currentNodeId, name, data.tools || []);
+                    break;
+                case 'condition':
+                    html = createConditionNodeHtml(currentNodeId, name);
+                    break;
+                case 'parallel':
+                    html = createParallelNodeHtml(currentNodeId, name);
+                    break;
+            }
+            
+            // Update data
+            editor.updateNodeDataFromId(currentNodeId, data);
+            
+            // Update HTML by directly modifying DOM
+            const nodeElement = document.getElementById(`node-${currentNodeId}`);
+            if (nodeElement) {
+                const contentNode = nodeElement.querySelector('.drawflow_content_node');
+                if (contentNode) {
+                    contentNode.innerHTML = html;
+                }
+            }
+            
+            closeModal();
+        }
+    }
+    
+    function deleteNode() {
+        if (currentNodeId) {
+            editor.removeNodeId(currentNodeId);
+            closeModal();
+        }
+    }
+    
+    // Helper function to close modal
+    function closeModal() {
+        const modal = document.getElementById('nodeModal');
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        document.body.classList.remove('modal-open');
+        
+        // Remove backdrop
+        const backdrop = document.getElementById('modal-backdrop-custom');
+        if (backdrop) {
+            backdrop.remove();
+        }
+    }
+    
+    // Remove node function for X button
+    function removeNode(nodeId) {
+        editor.removeNodeId(nodeId);
+    }
+    
+    // Workflow operations
+    function saveWorkflow() {
+        const exportData = editor.export();
+        
+        // Convert to our format
+        const workflow = {
+            ProjectId: '@Model.ProjectId',
+            ProjectName: '@Model.ProjectName',
+            DrawflowData: exportData,
+            LastModified: new Date().toISOString()
+        };
+        
+        $.ajax({
+            url: '/WorkflowDesigner/SaveDrawflowWorkflow',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(workflow),
+            success: function(response) {
+                if (response.success) {
+                    toastr.success('Workflow uloženo');
+                } else {
+                    toastr.error('Chyba při ukládání');
+                }
+            }
+        });
+    }
+    
+    function exportWorkflow() {
+        const exportData = editor.export();
+        const json = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `workflow-${Date.now()}.json`;
+        a.click();
+        
+        URL.revokeObjectURL(url);
+        toastr.success('Workflow exportováno');
+    }
+    
+    function importWorkflow() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    editor.import(data);
+                    toastr.success('Workflow importováno');
+                } catch (error) {
+                    toastr.error('Chyba při importu');
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+    
+    function clearWorkflow() {
+        if (confirm('Opravdu vymazat celý workflow?')) {
+            editor.clear();
+            nodeIdCounter = 1;
+            
+            // Přidat Start a End uzly zpět
+            addStartEndNodes();
+            
+            toastr.info('Workflow vyčištěno');
+        }
+    }
+    
+    function addStartEndNodes() {
+        // Přidat Začátek uzel
+        const startId = editor.addNode('start', 0, 1, 100, 200, 'start', 
+            { type: 'start', name: 'Začátek' }, 
+            `<div class="drawflow-node-custom" style="background: #28a745; color: white; border-color: #28a745;">
+                <div class="node-header">
+                    <i class="fas fa-play"></i> Začátek
+                </div>
+            </div>`
+        );
+        
+        // Přidat Konec uzel
+        const endId = editor.addNode('end', 1, 0, 600, 200, 'end', 
+            { type: 'end', name: 'Konec' }, 
+            `<div class="drawflow-node-custom" style="background: #dc3545; color: white; border-color: #dc3545;">
+                <div class="node-header">
+                    <i class="fas fa-stop"></i> Konec
+                </div>
+            </div>`
+        );
+    }
+    
+    // Check if start/end nodes exist and update buttons
+    function updateStartEndButtons() {
+        const drawflowData = editor.drawflow.drawflow.Home.data;
+        let hasStart = false;
+        let hasEnd = false;
+        
+        // Check all nodes
+        for (const nodeId in drawflowData) {
+            const node = drawflowData[nodeId];
+            if (node.data && node.data.type === 'start') {
+                hasStart = true;
+            }
+            if (node.data && node.data.type === 'end') {
+                hasEnd = true;
+            }
+        }
+        
+        // Show/hide buttons based on existence
+        document.getElementById('start-button').style.display = hasStart ? 'none' : 'block';
+        document.getElementById('end-button').style.display = hasEnd ? 'none' : 'block';
+    }
+    
+    function loadModelIntoDrawflow(model) {
+        // Convert our model to Drawflow format
+        // This is a simplified version - you'd need to map your model structure
+        try {
+            model.nodes.forEach((node, index) => {
+                const pos_x = node.position ? node.position.x : 100 + (index * 250);
+                const pos_y = node.position ? node.position.y : 200;
+                
+                let nodeAdded;
+                let html = '';
+                
+                // Map NodeType enum to string
+                let nodeType = 'task';
+                if (node.type === 0) nodeType = 'start';
+                else if (node.type === 1) nodeType = 'end';
+                else if (node.type === 3) nodeType = 'condition';
+                else if (node.type === 4) nodeType = 'parallel';
+                
+                const nodeData = {
+                    type: nodeType,
+                    name: node.name,
+                    description: node.description || '',
+                    tools: node.tools || []
+                };
+                
+                switch(nodeType) {
+                    case 'start':
+                        html = `<div class="drawflow-node-custom" style="background: #28a745; color: white; border-color: #28a745;">
+                            <div class="node-header">
+                                <i class="fas fa-play"></i> ${node.name}
+                            </div>
+                        </div>`;
+                        nodeAdded = editor.addNode('start', 0, 1, pos_x, pos_y, 'start', nodeData, html);
+                        break;
+                        
+                    case 'end':
+                        html = `<div class="drawflow-node-custom" style="background: #dc3545; color: white; border-color: #dc3545;">
+                            <div class="node-header">
+                                <i class="fas fa-stop"></i> ${node.name}
+                            </div>
+                        </div>`;
+                        nodeAdded = editor.addNode('end', 1, 0, pos_x, pos_y, 'end', nodeData, html);
+                        break;
+                        
+                    case 'condition':
+                        nodeAdded = editor.addNode('condition', 1, 2, pos_x, pos_y, 'condition', nodeData, '');
+                        html = createConditionNodeHtml(nodeAdded, node.name);
+                        setTimeout(() => {
+                            const el = document.getElementById(`node-${nodeAdded}`);
+                            if (el) el.querySelector('.drawflow_content_node').innerHTML = html;
+                        }, 100);
+                        break;
+                        
+                    case 'parallel':
+                        nodeAdded = editor.addNode('parallel', 1, 3, pos_x, pos_y, 'parallel', nodeData, '');
+                        html = createParallelNodeHtml(nodeAdded, node.name);
+                        setTimeout(() => {
+                            const el = document.getElementById(`node-${nodeAdded}`);
+                            if (el) el.querySelector('.drawflow_content_node').innerHTML = html;
+                        }, 100);
+                        break;
+                        
+                    default:
+                        nodeAdded = editor.addNode('task', 1, 1, pos_x, pos_y, 'task', nodeData, '');
+                        html = createTaskNodeHtml(nodeAdded, node.name, node.tools || []);
+                        setTimeout(() => {
+                            const el = document.getElementById(`node-${nodeAdded}`);
+                            if (el) el.querySelector('.drawflow_content_node').innerHTML = html;
+                        }, 100);
+                        break;
+                }
+            });
+            
+            // Load edges if any
+            if (model.edges && model.edges.length > 0) {
+                model.edges.forEach(edge => {
+                    // Map edge IDs to Drawflow node IDs
+                    // This is simplified - you'd need proper ID mapping
+                });
+            }
+        } catch (error) {
+            console.error('Error loading model:', error);
+        }
+    }
+</script>
+}

@@ -1,0 +1,383 @@
+@model OptimalyAI.ViewModels.CreateStagePrototypeViewModel
+
+<div class="modal fade" id="createStageModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <form id="createStageForm">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus-circle"></i> Vytvořit nový krok workflow
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="projectId" value="@Model.ProjectId" />
+                    
+                    <!-- Prototype Alert -->
+                    <div class="alert alert-warning">
+                        <i class="fas fa-flask"></i> <strong>Prototype Mode:</strong> 
+                        Testování nového UI pro vytváření stage - žádná data se neukládají do DB
+                    </div>
+                    
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label>
+                                    Název kroku <span class="text-danger">*</span>
+                                    <i class="fas fa-info-circle text-primary" data-toggle="tooltip" 
+                                       title="Krátký výstižný název popisující, co tento krok dělá"
+                                       data-placement="top"></i>
+                                </label>
+                                <input type="text" class="form-control form-control-lg" id="stageName" required 
+                                       placeholder="např. 'Analýza vstupních fotek zákazníka'" />
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-lightbulb"></i> Tip: Použijte akční sloveso - "Analyzuj", "Vyhledej", "Filtruj"
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>
+                                    Typ kroku
+                                    <i class="fas fa-question-circle text-info" data-toggle="tooltip" 
+                                       title="Kategorie kroku - pomáhá při organizaci workflow"
+                                       data-placement="top"></i>
+                                </label>
+                                <select class="form-control form-control-lg" id="stageType" onchange="updateStageTypeHelp()">
+                                    @foreach (var type in ViewBag.StageTypes)
+                                    {
+                                        <option value="@type">@type</option>
+                                    }
+                                </select>
+                                <div class="alert alert-light mt-2 p-2" id="stageTypeHelp">
+                                    <small><i class="fas fa-tag"></i> Vyberte typ kroku</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            Popis kroku
+                            <i class="fas fa-info-circle text-secondary" data-toggle="tooltip" 
+                               title="Detailní popis toho, co krok dělá, jaké má vstupy a výstupy"
+                               data-placement="top"></i>
+                        </label>
+                        <textarea class="form-control" id="stageDescription" rows="2" 
+                                  placeholder="např. 'Analyzuje zákaznické fotky pomocí AI pro extrakci barev, stylu a kategorie produktů. Výstup: JSON s vlastnostmi produktu'"></textarea>
+                        <small class="form-text text-muted">
+                            <i class="fas fa-lightbulb"></i> Tip: Popište vstupy, proces a výstupy kroku
+                        </small>
+                    </div>
+                    
+                    <!-- Simplified ReAct Selection -->
+                    <div class="form-group">
+                        <label>
+                            Vyžaduje reasoning/rozhodování?
+                            <i class="fas fa-question-circle text-info" data-toggle="tooltip" 
+                               title="Zapněte pouze pro kroky, které potřebují analyzovat data nebo se rozhodovat"
+                               data-placement="top"></i>
+                        </label>
+                        <div class="form-check">
+                            <input type="checkbox" id="useReActMode" class="form-check-input">
+                            <label for="useReActMode" class="form-check-label">
+                                Povolit AI reasoning pro tento krok
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">
+                            <strong class="text-success">✅ Zapněte pro:</strong> Analýzu dat, rozhodování, hodnocení kvality<br>
+                            <strong class="text-danger">❌ Nechte vypnuté pro:</strong> Získávání dat, transformace, jednoduché API volání
+                        </small>
+                    </div>
+                    
+                    <!-- Execution Strategy -->
+                    <div class="form-group">
+                        <label>
+                            Strategie vykonávání nástrojů
+                            <i class="fas fa-question-circle text-success" data-toggle="tooltip" 
+                               title="Jak se budou spouštět nástroje v tomto kroku"
+                               data-placement="top"></i>
+                        </label>
+                        <div class="btn-group btn-group-toggle d-flex" data-toggle="buttons">
+                            @foreach (var strategy in ViewBag.ExecutionStrategies)
+                            {
+                                var isChecked = strategy == "Sequential";
+                                var icon = strategy switch {
+                                    "Sequential" => "fas fa-arrow-right",
+                                    "Parallel" => "fas fa-random", 
+                                    "Conditional" => "fas fa-code-branch",
+                                    _ => "fas fa-cog"
+                                };
+                                var description = strategy switch {
+                                    "Sequential" => "Postupně",
+                                    "Parallel" => "Současně",
+                                    "Conditional" => "Podle podmínek",
+                                    _ => strategy
+                                };
+                                
+                                <label class="btn btn-outline-secondary @(isChecked ? "active" : "")" style="flex: 1">
+                                    <input type="radio" name="executionStrategy" value="@strategy" @(isChecked ? "checked" : "")>
+                                    <i class="@icon"></i> @strategy
+                                    <br>
+                                    <small>@description</small>
+                                </label>
+                            }
+                        </div>
+                        <div class="alert alert-info mt-2 p-2">
+                            <small>
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>Sequential:</strong> Nástroje se spustí jeden po druhém<br>
+                                <strong>Parallel:</strong> Všechny nástroje se spustí současně<br>
+                                <strong>Conditional:</strong> Nástroje se spustí podle podmínek
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <!-- Tools Selection -->
+                    <div class="form-group">
+                        <label>
+                            Nástroje pro tento krok
+                            <i class="fas fa-question-circle text-warning" data-toggle="tooltip" 
+                               title="Nástroje jsou konkrétní funkce - např. analýza obrázků, vyhledávání produktů"
+                               data-placement="top"></i>
+                        </label>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="alert alert-light border mb-3" style="background-color: #f8f9fa;">
+                                    <h6 class="mb-2"><i class="fas fa-info-circle text-primary"></i> Dostupné nástroje:</h6>
+                                    <div class="row">
+                                        @foreach (var category in ViewBag.ToolsByCategory)
+                                        {
+                                            <div class="col-md-6 mb-2">
+                                                <strong>@category.Key:</strong><br>
+                                                @foreach (var tool in category.Value)
+                                                {
+                                                    <span class="badge badge-secondary mr-1 mb-1 tool-selector" 
+                                                          data-tool="@tool" 
+                                                          style="cursor: pointer;"
+                                                          onclick="toggleTool(this, '@tool')">
+                                                        @tool
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                <h6>Vybrané nástroje:</h6>
+                                <div id="selectedTools" class="min-height-50 border rounded p-2 bg-light">
+                                    <small class="text-muted">Klikněte na nástroje výše pro jejich přidání</small>
+                                </div>
+                                <input type="hidden" id="selectedToolsList" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Settings -->
+                    <div class="mt-4">
+                        <a class="btn btn-link text-decoration-none" data-toggle="collapse" href="#advancedSettings" role="button">
+                            <i class="fas fa-sliders-h"></i> Pokročilé nastavení kroku
+                            <i class="fas fa-chevron-down ml-1"></i>
+                        </a>
+                        <div class="collapse" id="advancedSettings">
+                            <div class="card mt-2">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label>Timeout (sekundy):</label>
+                                                <input type="number" class="form-control" id="stepTimeout" value="300" min="10" max="3600">
+                                                <small class="text-muted">Maximální doba čekání na dokončení kroku</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label>Počet opakování při chybě:</label>
+                                                <input type="number" class="form-control" id="retryCount" value="3" min="0" max="10">
+                                                <small class="text-muted">Kolikrát opakovat krok při selhání</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label>Priorita kroku:</label>
+                                                <select class="form-control" id="stepPriority">
+                                                    <option value="Normal" selected>Normální</option>
+                                                    <option value="High">Vysoká</option>
+                                                    <option value="Low">Nízká</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mt-4">
+                                                <input type="checkbox" class="form-check-input" id="enableLogging" checked>
+                                                <label class="form-check-label" for="enableLogging">
+                                                    Zapnout detailní logování kroku
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Zrušit
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus-circle"></i> Vytvořit krok
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedTools = [];
+    
+    // Initialize tooltips
+    $('[data-toggle="tooltip"]').tooltip();
+    
+    
+    function toggleTool(element, toolName) {
+        const index = selectedTools.indexOf(toolName);
+        if (index > -1) {
+            selectedTools.splice(index, 1);
+            $(element).removeClass('badge-success').addClass('badge-secondary');
+        } else {
+            selectedTools.push(toolName);
+            $(element).removeClass('badge-secondary').addClass('badge-success');
+        }
+        updateSelectedToolsDisplay();
+    }
+    
+    function updateSelectedToolsDisplay() {
+        const container = $('#selectedTools');
+        if (selectedTools.length > 0) {
+            container.html(selectedTools.map(tool => 
+                `<span class="badge badge-success mr-1 mb-1">
+                    ${tool}
+                    <button type="button" class="btn btn-sm ml-1" onclick="removeTool('${tool}')" style="border:none; background:none; color:white; padding:0;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </span>`
+            ).join(''));
+        } else {
+            container.html('<small class="text-muted">Žádné nástroje nevybrány</small>');
+        }
+        $('#selectedToolsList').val(JSON.stringify(selectedTools));
+    }
+    
+    function removeTool(toolName) {
+        const index = selectedTools.indexOf(toolName);
+        if (index > -1) {
+            selectedTools.splice(index, 1);
+            $(`.tool-selector[data-tool="${toolName}"]`).removeClass('badge-success').addClass('badge-secondary');
+            updateSelectedToolsDisplay();
+        }
+    }
+    
+    function updateStageTypeHelp() {
+        const stageType = $('#stageType').val();
+        const helpDiv = $('#stageTypeHelp');
+        
+        const typeData = {
+            'Analysis': {
+                text: 'Analýza a zpracování dat',
+                example: 'Analýza zákaznických fotek pro extrakci vlastností produktů'
+            },
+            'Search': {
+                text: 'Vyhledávání a získávání dat',
+                example: 'Vyhledávání podobných produktů na e-commerce platformách'
+            },
+            'Processing': {
+                text: 'Zpracování a filtrování výsledků',
+                example: 'Filtrování produktů podle ceny, hodnocení a podobnosti'
+            },
+            'Export': {
+                text: 'Export a uložení výsledků',
+                example: 'Vytvoření Excel reportu s nejlepšími produkty'
+            },
+            'Import': {
+                text: 'Import a načítání dat',
+                example: 'Načtení dat z CSV souborů nebo API'
+            },
+            'Generation': {
+                text: 'Generování obsahu',
+                example: 'Vytvoření obrázků nebo textového obsahu'
+            },
+            'Conversation': {
+                text: 'Konverzace a interakce',
+                example: 'Chatbot komunikace s uživateli'
+            }
+        };
+        
+        if (typeData[stageType]) {
+            const data = typeData[stageType];
+            helpDiv.html(`
+                <small>
+                    <i class="fas fa-tag"></i> <strong>${data.text}</strong><br>
+                    <span class="text-success"><i class="fas fa-example"></i> ${data.example}</span>
+                </small>
+            `).show();
+        } else {
+            helpDiv.hide();
+        }
+    }
+    
+    // Form submission
+    $('#createStageForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const stageData = {
+            projectId: $('#projectId').val(),
+            name: $('#stageName').val(),
+            description: $('#stageDescription').val(),
+            type: $('#stageType').val(),
+            executionStrategy: $('input[name="executionStrategy"]:checked').val() || 'Sequential',
+            selectedTools: selectedTools,
+            useReAct: $('#useReActMode').is(':checked'),
+            advancedConfig: {
+                timeout: parseInt($('#stepTimeout').val()) || 300,
+                retryCount: parseInt($('#retryCount').val()) || 3,
+                priority: $('#stepPriority').val() || 'Normal',
+                enableLogging: $('#enableLogging').is(':checked')
+            }
+        };
+        
+        
+        // Show loading state
+        const submitBtn = $(this).find('button[type="submit"]');
+        const originalText = submitBtn.html();
+        submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Vytvářím...');
+        
+        // Simulate API call
+        setTimeout(() => {
+            $.post('@Url.Action("CreateStage")', stageData, function(response) {
+                if (response.success) {
+                    toastr.success(response.message);
+                    $('#createStageModal').modal('hide');
+                    location.reload();
+                } else {
+                    toastr.error('Chyba při vytváření kroku');
+                    if (response.errors) {
+                        response.errors.forEach(error => toastr.error(error));
+                    }
+                }
+            }).always(function() {
+                submitBtn.prop('disabled', false).html(originalText);
+            });
+        }, 1000); // Simulate network delay
+    });
+    
+    // Initialize
+    updateStageTypeHelp();
+</script>

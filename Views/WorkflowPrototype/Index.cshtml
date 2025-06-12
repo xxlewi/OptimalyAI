@@ -1,0 +1,504 @@
+@using OptimalyAI.ViewModels
+@{
+    ViewData["Title"] = "Seznam projektů - Workflow Designer";
+    var projects = ViewBag.DemoProjects as List<ProjectListItemViewModel> ?? new List<ProjectListItemViewModel>();
+}
+
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> Projekty
+                    <small class="text-muted">Workflow Designer Prototype</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Workflow Prototype</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Stats Row -->
+        <div class="row mb-3">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@ViewBag.TotalProjects</h3>
+                        <p>Celkem projektů</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-project-diagram"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@ViewBag.ActiveProjects</h3>
+                        <p>Aktivní projekty</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-play"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@ViewBag.DraftProjects</h3>
+                        <p>Rozpracované</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>@ViewBag.FailedProjects</h3>
+                        <p>Selhané</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Section -->
+        <div class="row mb-3">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="searchProjects" placeholder="Vyhledat projekt...">
+                    <div class="input-group-append">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select class="form-control" id="filterStatus">
+                    <option value="">Všechny stavy</option>
+                    <option value="Active">Aktivní</option>
+                    <option value="Draft">Rozpracované</option>
+                    <option value="Failed">Selhané</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-control" id="filterCustomer">
+                    <option value="">Všichni zákazníci</option>
+                    <option value="Fashion Store CZ">Fashion Store CZ</option>
+                    <option value="TechGadgets s.r.o.">TechGadgets s.r.o.</option>
+                    <option value="Market Leaders">Market Leaders</option>
+                    <option value="Support Plus">Support Plus</option>
+                    <option value="Bez zákazníka">Bez zákazníka</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-default btn-block" onclick="clearFilters()" title="Vymazat filtry">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Projects Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Seznam projektů</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="createNewProject()">
+                        <i class="fas fa-plus"></i> Nový projekt
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered table-striped table-hover" id="projectsTable">
+                    <thead>
+                        <tr>
+                            <th>Projekt</th>
+                            <th>Zákazník</th>
+                            <th>Workflow</th>
+                            <th>Poslední běh</th>
+                            <th>Úspěšnost</th>
+                            <th style="width: 250px">Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var project in projects)
+                        {
+                            <tr data-status="@project.Status" 
+                                data-customer="@project.CustomerName" 
+                                data-workflow-type="@project.WorkflowType"
+                                data-last-run-success="@(project.LastRunSuccess ? "success" : "failed")"
+                                data-project-name="@project.Name.ToLower()"
+                                data-project-description="@(project.Description?.ToLower() ?? "")"
+                                data-customer-email="@(project.CustomerEmail?.ToLower() ?? "")">
+                                <td>
+                                    <div>
+                                        <strong>
+                                            <a href="@Url.Action("Details", new { projectId = project.Id })" class="text-dark">
+                                                @project.Name
+                                            </a>
+                                        </strong>
+                                        @if (project.Status == "Active")
+                                        {
+                                            <span class="badge badge-success float-right">Aktivní</span>
+                                        }
+                                        else if (project.Status == "Draft")
+                                        {
+                                            <span class="badge badge-warning float-right">Rozpracovaný</span>
+                                        }
+                                        <br>
+                                        <small class="text-muted">
+                                            @if (!string.IsNullOrEmpty(project.Description))
+                                            {
+                                                @project.Description
+                                            }
+                                            else
+                                            {
+                                                <text>ID: @project.Id.ToString().Substring(0, 8)</text>
+                                            }
+                                        </small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <i class="fas fa-user text-muted"></i> 
+                                        <a href="/Customers" class="text-decoration-none">@project.CustomerName</a>
+                                        <br>
+                                        <small class="text-muted">
+                                            <i class="fas fa-envelope"></i> 
+                                            <a href="mailto:@(project.CustomerEmail ?? "email@example.com")" class="text-muted">@(project.CustomerEmail ?? "email@example.com")</a>
+                                        </small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <span class="badge badge-info">
+                                            <i class="fas fa-layer-group"></i> @project.StageCount kroků
+                                        </span>
+                                        <br>
+                                        <small>
+                                            @switch (project.TriggerType)
+                                            {
+                                                case "Manual":
+                                                    <span><i class="fas fa-hand-pointer"></i> Manuální</span>
+                                                    break;
+                                                case "Schedule":
+                                                    <span><i class="fas fa-clock"></i> Plánované</span>
+                                                    break;
+                                                case "Event":
+                                                    <span><i class="fas fa-bolt"></i> Událostmi</span>
+                                                    break;
+                                                default:
+                                                    <span class="text-muted">Nedefinováno</span>
+                                                    break;
+                                            }
+                                        </small>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (project.LastRun.HasValue)
+                                    {
+                                        <div>
+                                            <small>
+                                                @project.LastRun.Value.ToString("dd.MM. HH:mm")
+                                                <br>
+                                                @if (project.LastRunSuccess)
+                                                {
+                                                    <span class="badge badge-success">
+                                                        <i class="fas fa-check"></i> Úspěch
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-danger">
+                                                        <i class="fas fa-times"></i> Selhalo
+                                                    </span>
+                                                }
+                                            </small>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">Ještě neběželo</small>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="text-center">
+                                        <strong>@project.SuccessRate%</strong>
+                                        <div class="progress progress-xs">
+                                            <div class="progress-bar @(project.SuccessRate >= 80 ? "bg-success" : project.SuccessRate >= 50 ? "bg-warning" : "bg-danger")" 
+                                                 style="width: @project.SuccessRate%"></div>
+                                        </div>
+                                        <small class="text-muted">@project.TotalRuns běhů</small>
+                                    </div>
+                                </td>
+                                <td class="text-center align-middle">
+                                    <div>
+                                        <button type="button" class="btn btn-success btn-sm mr-1" onclick="runWorkflow('@project.Id')" title="Spustit workflow">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" 
+                                           class="btn btn-primary btn-sm mr-1" title="Upravit workflow">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="@Url.Action("Details", new { projectId = project.Id })" 
+                                           class="btn btn-info btn-sm mr-1" title="Detail projektu">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-secondary btn-sm mr-1" onclick="duplicateProject('@project.Id')" title="Duplikovat projekt">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-danger btn-sm" onclick="deleteProject('@project.Id')" title="Smazat projekt">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer clearfix">
+                <ul class="pagination pagination-sm m-0 float-right">
+                    <li class="page-item"><a class="page-link" href="#">&laquo;</a></li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                    <li class="page-item"><a class="page-link" href="#">&raquo;</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Create Project Modal -->
+<div class="modal fade" id="createProjectModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <form id="createProjectForm">
+                <div class="modal-header bg-primary">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus-circle"></i> Vytvořit nový projekt
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Název projektu <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="projectName" required 
+                                       placeholder="např. E-commerce vyhledávač">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Zákazník</label>
+                                <select class="form-control" id="customerId">
+                                    <option value="">Bez zákazníka</option>
+                                    <option value="1">Fashion Store CZ</option>
+                                    <option value="2">TechGadgets s.r.o.</option>
+                                    <option value="3">Market Leaders</option>
+                                    <option value="new">[+ Nový zákazník]</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Popis projektu</label>
+                        <textarea class="form-control" id="projectDescription" rows="3" 
+                                  placeholder="Stručný popis účelu workflow..."></textarea>
+                    </div>
+                    
+                    
+                    <div class="form-group">
+                        <label>Předpokládané spuštění</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="launchType" id="launchImmediate" value="immediate" checked>
+                            <label class="form-check-label" for="launchImmediate">
+                                Začít vytvářet workflow ihned
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="launchType" id="launchLater" value="later">
+                            <label class="form-check-label" for="launchLater">
+                                Pouze vytvořit projekt, workflow později
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Zrušit
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus-circle"></i> Vytvořit projekt
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function createNewProject() {
+            $('#createProjectModal').modal('show');
+        }
+        
+        // Handle form submission
+        $('#createProjectForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            const projectData = {
+                name: $('#projectName').val(),
+                customerId: $('#customerId').val(),
+                description: $('#projectDescription').val(),
+                launchType: $('input[name="launchType"]:checked').val()
+            };
+            
+            // Validace
+            if (!projectData.name) {
+                toastr.warning('Zadejte název projektu');
+                return;
+            }
+            
+            // Send to server
+            $.post('@Url.Action("CreateProject", "WorkflowPrototype")', projectData, function(response) {
+                if (response.success) {
+                    toastr.success(response.message);
+                    
+                    // Zavřít modal
+                    $('#createProjectModal').modal('hide');
+                    
+                    // Pokud má začít vytvářet workflow ihned, přesměrovat
+                    if (projectData.launchType === 'immediate') {
+                        setTimeout(() => {
+                            window.location.href = '@Url.Action("Designer", "WorkflowPrototype")' + 
+                                '?projectId=' + response.projectId;
+                        }, 1000);
+                    } else {
+                        // Jinak reload stránky
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1000);
+                    }
+                } else {
+                    toastr.error('Chyba při vytváření projektu');
+                }
+            });
+        });
+        
+        // Handle customer selection
+        $('#customerId').on('change', function() {
+            if ($(this).val() === 'new') {
+                // Zde by se otevřel dialog pro vytvoření nového zákazníka
+                toastr.info('Vytvoření nového zákazníka (v produkci)');
+                $(this).val(''); // Reset selection
+            }
+        });
+        
+        function runWorkflow(projectId) {
+            toastr.info('Spouštím workflow...');
+            setTimeout(() => {
+                toastr.success('Workflow spuštěno úspěšně!');
+            }, 1000);
+        }
+        
+        function viewHistory(projectId) {
+            window.location.href = '@Url.Action("Details", "WorkflowPrototype")' + '?projectId=' + projectId + '#history';
+        }
+        
+        function duplicateProject(projectId) {
+            toastr.success('Projekt duplikován');
+        }
+        
+        function deleteProject(projectId) {
+            if (confirm('Opravdu smazat tento projekt?')) {
+                toastr.warning('Projekt smazán (demo mode - žádná skutečná akce)');
+            }
+        }
+        
+        // Filtrování a vyhledávání
+        function filterProjects() {
+            const searchTerm = $('#searchProjects').val().toLowerCase();
+            const statusFilter = $('#filterStatus').val();
+            const customerFilter = $('#filterCustomer').val();
+            
+            $('#projectsTable tbody tr').each(function() {
+                const row = $(this);
+                const projectName = row.data('project-name') || '';
+                const projectDescription = row.data('project-description') || '';
+                const customerEmail = row.data('customer-email') || '';
+                const status = row.data('status');
+                const customer = row.data('customer');
+                const lastRunSuccess = row.data('last-run-success');
+                
+                // Text search
+                const matchesSearch = !searchTerm || 
+                    projectName.includes(searchTerm) || 
+                    projectDescription.includes(searchTerm) ||
+                    customerEmail.includes(searchTerm) ||
+                    customer.toLowerCase().includes(searchTerm);
+                
+                // Status filter (special handling for "Failed")
+                let matchesStatus = !statusFilter;
+                if (statusFilter === 'Failed') {
+                    matchesStatus = lastRunSuccess === 'failed';
+                } else if (statusFilter) {
+                    matchesStatus = status === statusFilter;
+                }
+                
+                // Other filters
+                const matchesCustomer = !customerFilter || customer === customerFilter;
+                
+                // Show/hide row
+                if (matchesSearch && matchesStatus && matchesCustomer) {
+                    row.show();
+                } else {
+                    row.hide();
+                }
+            });
+            
+            // Update count
+            const visibleRows = $('#projectsTable tbody tr:visible').length;
+            const totalRows = $('#projectsTable tbody tr').length;
+            
+            if (visibleRows === 0) {
+                if ($('#noResultsRow').length === 0) {
+                    $('#projectsTable tbody').append(
+                        '<tr id="noResultsRow"><td colspan="6" class="text-center text-muted py-4">Žádné projekty neodpovídají zadaným filtrům</td></tr>'
+                    );
+                }
+            } else {
+                $('#noResultsRow').remove();
+            }
+        }
+        
+        // Clear filters
+        function clearFilters() {
+            $('#searchProjects').val('');
+            $('#filterStatus').val('');
+            $('#filterCustomer').val('');
+            filterProjects();
+        }
+        
+        // Bind events
+        $(document).ready(function() {
+            $('#searchProjects').on('keyup', filterProjects);
+            $('#filterStatus, #filterCustomer').on('change', filterProjects);
+        });
+    </script>
+}

@@ -1,0 +1,301 @@
+@model OptimalyAI.ViewModels.CreateStagePrototypeViewModel
+
+<div class="modal fade" id="editStageModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <form id="editStageForm">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-edit"></i> Upravit krok workflow
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="stageId" value="@ViewBag.StageId" />
+                    <input type="hidden" id="projectId" value="@Model.ProjectId" />
+                    
+                    <!-- Prototype Alert -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-flask"></i> <strong>Edit Mode:</strong> 
+                        Úprava existujícího kroku - prototype verze
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label>Název kroku <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-lg" id="stageName" required value="@Model.Name" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Typ kroku</label>
+                                <select class="form-control form-control-lg" id="stageType">
+                                    @foreach (var type in ViewBag.StageTypes)
+                                    {
+                                        @if (type == Model.Type)
+                                        {
+                                            <option value="@type" selected>@type</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@type">@type</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Popis kroku</label>
+                        <textarea class="form-control" id="stageDescription" rows="2">@Model.Description</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input type="checkbox" id="useReActMode" class="form-check-input" @(Model.UseReAct ? "checked" : "")>
+                            <label for="useReActMode" class="form-check-label">
+                                Povolit AI reasoning pro tento krok
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Strategie vykonávání nástrojů</label>
+                        <div class="btn-group btn-group-toggle d-flex" data-toggle="buttons">
+                            @foreach (var strategy in ViewBag.ExecutionStrategies)
+                            {
+                                var isChecked = strategy == Model.ExecutionStrategy;
+                                var icon = strategy switch {
+                                    "Sequential" => "fas fa-arrow-right",
+                                    "Parallel" => "fas fa-random", 
+                                    "Conditional" => "fas fa-code-branch",
+                                    _ => "fas fa-cog"
+                                };
+                                
+                                <label class="btn btn-outline-secondary @(isChecked ? "active" : "")" style="flex: 1">
+                                    <input type="radio" name="executionStrategy" value="@strategy" @(isChecked ? "checked" : "")>
+                                    <i class="@icon"></i> @strategy
+                                </label>
+                            }
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Nástroje pro tento krok</label>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row">
+                                    @foreach (var category in ViewBag.ToolsByCategory)
+                                    {
+                                        <div class="col-md-6 mb-2">
+                                            <strong>@category.Key:</strong><br>
+                                            @foreach (var tool in category.Value)
+                                            {
+                                                var isSelected = Model.SelectedTools != null && Model.SelectedTools.Contains(tool);
+                                                <span class="badge @(isSelected ? "badge-success" : "badge-secondary") mr-1 mb-1 tool-selector" 
+                                                      data-tool="@tool" 
+                                                      style="cursor: pointer;"
+                                                      onclick="toggleTool(this, '@tool')">
+                                                    @tool
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <h6 class="mt-3">Vybrané nástroje:</h6>
+                                <div id="selectedTools" class="min-height-50 border rounded p-2 bg-light"></div>
+                                <input type="hidden" id="selectedToolsList" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Settings -->
+                    <div class="mt-4">
+                        <a class="btn btn-link text-decoration-none" data-toggle="collapse" href="#advancedSettings" role="button">
+                            <i class="fas fa-sliders-h"></i> Pokročilé nastavení kroku
+                            <i class="fas fa-chevron-down ml-1"></i>
+                        </a>
+                        <div class="collapse" id="advancedSettings">
+                            <div class="card mt-2">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label>Timeout (sekundy):</label>
+                                                <input type="number" class="form-control" id="stepTimeout" value="@(Model.AdvancedConfig?.ContainsKey("timeout") == true ? Model.AdvancedConfig["timeout"] : 300)" min="10" max="3600">
+                                                <small class="text-muted">Maximální doba čekání na dokončení kroku</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label>Počet opakování při chybě:</label>
+                                                <input type="number" class="form-control" id="retryCount" value="@(Model.AdvancedConfig?.ContainsKey("retryCount") == true ? Model.AdvancedConfig["retryCount"] : 3)" min="0" max="10">
+                                                <small class="text-muted">Kolikrát opakovat krok při selhání</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label>Priorita kroku:</label>
+                                                <select class="form-control" id="stepPriority">
+                                                    @{
+                                                        var priority = Model.AdvancedConfig?.ContainsKey("priority") == true ? Model.AdvancedConfig["priority"]?.ToString() : "Normal";
+                                                    }
+                                                    @if (priority == "Normal")
+                                                    {
+                                                        <option value="Normal" selected>Normální</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="Normal">Normální</option>
+                                                    }
+                                                    @if (priority == "High")
+                                                    {
+                                                        <option value="High" selected>Vysoká</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="High">Vysoká</option>
+                                                    }
+                                                    @if (priority == "Low")
+                                                    {
+                                                        <option value="Low" selected>Nízká</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="Low">Nízká</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mt-4">
+                                                @{
+                                                    var isLoggingEnabled = Model.AdvancedConfig?.ContainsKey("enableLogging") != true || (Model.AdvancedConfig["enableLogging"] is bool b && b);
+                                                }
+                                                @if (isLoggingEnabled)
+                                                {
+                                                    <input type="checkbox" class="form-check-input" id="enableLogging" checked>
+                                                }
+                                                else
+                                                {
+                                                    <input type="checkbox" class="form-check-input" id="enableLogging">
+                                                }
+                                                <label class="form-check-label" for="enableLogging">
+                                                    Zapnout detailní logování kroku
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Zrušit
+                    </button>
+                    <button type="submit" class="btn btn-info btn-lg">
+                        <i class="fas fa-save"></i> Uložit změny
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedTools = @Html.Raw(Json.Serialize(Model.SelectedTools ?? new List<string>()));
+    
+    $(document).ready(function() {
+        updateSelectedToolsDisplay();
+        
+        // Mark initially selected tools
+        selectedTools.forEach(tool => {
+            $(`.tool-selector[data-tool="${tool}"]`).removeClass('badge-secondary').addClass('badge-success');
+        });
+    });
+    
+    function toggleTool(element, toolName) {
+        const index = selectedTools.indexOf(toolName);
+        if (index > -1) {
+            selectedTools.splice(index, 1);
+            $(element).removeClass('badge-success').addClass('badge-secondary');
+        } else {
+            selectedTools.push(toolName);
+            $(element).removeClass('badge-secondary').addClass('badge-success');
+        }
+        updateSelectedToolsDisplay();
+    }
+    
+    function updateSelectedToolsDisplay() {
+        const container = $('#selectedTools');
+        if (selectedTools.length > 0) {
+            container.html(selectedTools.map(tool => 
+                `<span class="badge badge-success mr-1 mb-1">
+                    ${tool}
+                    <button type="button" class="btn btn-sm ml-1" onclick="removeTool('${tool}')" style="border:none; background:none; color:white; padding:0;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </span>`
+            ).join(''));
+        } else {
+            container.html('<small class="text-muted">Žádné nástroje nevybrány</small>');
+        }
+        $('#selectedToolsList').val(JSON.stringify(selectedTools));
+    }
+    
+    function removeTool(toolName) {
+        const index = selectedTools.indexOf(toolName);
+        if (index > -1) {
+            selectedTools.splice(index, 1);
+            $(`.tool-selector[data-tool="${toolName}"]`).removeClass('badge-success').addClass('badge-secondary');
+            updateSelectedToolsDisplay();
+        }
+    }
+    
+    $('#editStageForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const stageData = {
+            name: $('#stageName').val(),
+            description: $('#stageDescription').val(),
+            type: $('#stageType').val(),
+            executionStrategy: $('input[name="executionStrategy"]:checked').val(),
+            selectedTools: selectedTools,
+            useReAct: $('#useReActMode').is(':checked'),
+            projectId: $('#projectId').val(),
+            advancedConfig: {
+                timeout: parseInt($('#stepTimeout').val()) || 300,
+                retryCount: parseInt($('#retryCount').val()) || 3,
+                priority: $('#stepPriority').val() || 'Normal',
+                enableLogging: $('#enableLogging').is(':checked')
+            }
+        };
+        
+        const stageId = $('#stageId').val();
+        const submitBtn = $(this).find('button[type="submit"]');
+        const originalText = submitBtn.html();
+        submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Ukládám...');
+        
+        $.post(`/WorkflowPrototype/UpdateStage/${stageId}`, stageData, function(response) {
+            if (response.success) {
+                toastr.success(response.message);
+                $('#editStageModal').modal('hide');
+                location.reload();
+            } else {
+                toastr.error('Chyba při aktualizaci kroku');
+            }
+        }).always(function() {
+            submitBtn.prop('disabled', false).html(originalText);
+        });
+    });
+</script>

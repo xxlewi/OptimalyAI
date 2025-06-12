@@ -1,0 +1,1161 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+@{
+    ViewData["Title"] = "Workflow Designer";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> Workflow Designer
+                    <small class="text-muted">@Model.ProjectName</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-sm-right">
+                    <button class="btn btn-success" onclick="saveWorkflow()">
+                        <i class="fas fa-save"></i> Uložit
+                    </button>
+                    <button class="btn btn-info" onclick="validateWorkflow()">
+                        <i class="fas fa-check"></i> Validovat
+                    </button>
+                    <button class="btn btn-primary" onclick="runWorkflow()">
+                        <i class="fas fa-play"></i> Spustit
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Toolbox -->
+            <div class="col-md-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-toolbox"></i> Nástroje</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="node-palette">
+                            <div class="palette-item" draggable="true" data-node-type="Task">
+                                <i class="fas fa-cog"></i> Úloha
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="Condition">
+                                <i class="fas fa-code-branch"></i> Podmínka
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="Parallel">
+                                <i class="fas fa-random"></i> Paralelní
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="Join">
+                                <i class="fas fa-compress-arrows-alt"></i> Spojení
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="Loop">
+                                <i class="fas fa-redo"></i> Smyčka
+                            </div>
+                            <div class="palette-item" draggable="true" data-node-type="Wait">
+                                <i class="fas fa-clock"></i> Čekání
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <h6>Orchestrátory</h6>
+                        <select class="form-control form-control-sm mb-2" id="selectedOrchestrator">
+                            <option value="">Žádný</option>
+                            @foreach (var orchestrator in ViewBag.Orchestrators)
+                            {
+                                <option value="@orchestrator">@orchestrator</option>
+                            }
+                        </select>
+                        
+                        <h6>AI Tools</h6>
+                        <div class="tool-list">
+                            @foreach (var category in ViewBag.ToolsByCategory)
+                            {
+                                <div class="tool-category mb-2">
+                                    <small class="text-muted">@category.Key</small>
+                                    @foreach (var tool in category.Value)
+                                    {
+                                        <div class="tool-item" draggable="true" data-tool="@tool">
+                                            <i class="fas fa-wrench"></i> @tool
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Canvas -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div id="workflow-canvas" class="workflow-canvas">
+                            <svg id="svg-canvas" width="100%" height="600">
+                                <defs>
+                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                                            refX="9" refY="3.5" orient="auto">
+                                        <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+                                    </marker>
+                                </defs>
+                                <g id="edges-container"></g>
+                                <g id="nodes-container"></g>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Properties Panel -->
+            <div class="col-md-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-cog"></i> Vlastnosti</h3>
+                    </div>
+                    <div class="card-body" id="properties-panel">
+                        <p class="text-muted">Vyberte uzel pro úpravu vlastností</p>
+                    </div>
+                </div>
+                
+                <!-- Workflow Info -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-info-circle"></i> Informace</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-6">Uzlů:</dt>
+                            <dd class="col-6" id="node-count">0</dd>
+                            <dt class="col-6">Hran:</dt>
+                            <dd class="col-6" id="edge-count">0</dd>
+                            <dt class="col-6">Verze:</dt>
+                            <dd class="col-6">@Model.Metadata.Version</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Node Edit Modal -->
+<div class="modal fade" id="nodeEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit uzel</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="nodeEditBody">
+                <!-- Dynamic content -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="saveNodeProperties()">Uložit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+<style>
+    .workflow-canvas {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        position: relative;
+        overflow: auto;
+        height: 600px;
+    }
+    
+    .node-palette {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .palette-item {
+        padding: 8px;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        cursor: move;
+        text-align: center;
+        font-size: 14px;
+    }
+    
+    .palette-item:hover {
+        background: #e9ecef;
+    }
+    
+    .tool-item {
+        padding: 4px 8px;
+        background: #e9ecef;
+        border-radius: 3px;
+        cursor: move;
+        font-size: 12px;
+        margin: 2px 0;
+    }
+    
+    .tool-item:hover {
+        background: #dee2e6;
+    }
+    
+    /* SVG Node Styles */
+    .workflow-node {
+        cursor: move;
+    }
+    
+    .workflow-node.selected rect {
+        stroke: #007bff;
+        stroke-width: 2;
+    }
+    
+    .node-port {
+        cursor: crosshair;
+    }
+    
+    .node-port:hover circle {
+        fill: #007bff;
+        r: 8;
+    }
+    
+    .workflow-edge {
+        stroke: #666;
+        stroke-width: 2;
+        fill: none;
+        cursor: pointer;
+    }
+    
+    .workflow-edge:hover {
+        stroke: #007bff;
+        stroke-width: 3;
+    }
+    
+    .workflow-edge.selected {
+        stroke: #dc3545;
+    }
+    
+    /* Node type specific colors */
+    .node-start rect { fill: #28a745; }
+    .node-end rect { fill: #dc3545; }
+    .node-task rect { fill: #17a2b8; }
+    .node-condition rect { fill: #ffc107; }
+    .node-parallel rect { fill: #6f42c1; }
+    .node-join rect { fill: #e83e8c; }
+    .node-loop rect { fill: #fd7e14; }
+    .node-wait rect { fill: #6c757d; }
+    
+    /* Dragging styles */
+    .dragging {
+        opacity: 0.5;
+    }
+    
+    .drag-over {
+        background: #e3f2fd !important;
+    }
+</style>
+}
+
+@section Scripts {
+<script>
+    // Workflow data
+    let workflow = @Html.Raw(Json.Serialize(Model));
+    let selectedNode = null;
+    let selectedEdge = null;
+    let isConnecting = false;
+    let connectionStart = null;
+    let tempLine = null;
+    let editingNodeTools = [];
+    
+    // Initialize
+    $(document).ready(function() {
+        // Ensure workflow has required properties
+        workflow = workflow || {};
+        workflow.nodes = workflow.nodes || [];
+        workflow.edges = workflow.edges || [];
+        workflow.projectId = workflow.projectId || '@ViewBag.ProjectId';
+        
+        initializeCanvas();
+        renderWorkflow();
+        setupDragDrop();
+        setupEventHandlers();
+    });
+    
+    function initializeCanvas() {
+        // Set canvas size
+        const canvas = $('#workflow-canvas');
+        const svg = $('#svg-canvas');
+        svg.attr('width', canvas.width());
+        svg.attr('height', 600);
+    }
+    
+    function renderWorkflow() {
+        // Clear canvas
+        $('#nodes-container').empty();
+        $('#edges-container').empty();
+        
+        // Render edges first
+        workflow.edges.forEach(edge => renderEdge(edge));
+        
+        // Render nodes
+        workflow.nodes.forEach(node => renderNode(node));
+        
+        // Update counts
+        $('#node-count').text(workflow.nodes.length);
+        $('#edge-count').text(workflow.edges.length);
+    }
+    
+    // Convert NodeType enum to string
+    function getNodeTypeName(nodeType) {
+        const nodeTypes = ['Start', 'End', 'Task', 'Condition', 'Parallel', 'Join', 'Loop', 'Wait', 'SubWorkflow'];
+        return nodeTypes[nodeType] || 'Task';
+    }
+    
+    // Helper function for AJAX calls to WorkflowDesigner
+    function postToWorkflowDesigner(action, data, successCallback) {
+        $.ajax({
+            url: '/WorkflowDesigner/' + action,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: successCallback,
+            error: function(xhr) {
+                toastr.error('Chyba při volání ' + action);
+                console.error('Error calling ' + action, xhr);
+            }
+        });
+    }
+    
+    function renderNode(node) {
+        const nodeTypeName = getNodeTypeName(node.type);
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('id', 'node-' + node.id);
+        g.setAttribute('class', 'workflow-node node-' + nodeTypeName.toLowerCase());
+        g.setAttribute('transform', `translate(${node.position.x}, ${node.position.y})`);
+        g.setAttribute('data-node-id', node.id);
+        
+        // Node rectangle
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('width', '150');
+        rect.setAttribute('height', '60');
+        rect.setAttribute('rx', '5');
+        rect.setAttribute('stroke', '#333');
+        rect.setAttribute('stroke-width', '1');
+        
+        // Node text
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', '75');
+        text.setAttribute('y', '25');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '14');
+        text.setAttribute('fill', 'white');
+        text.textContent = node.name || nodeTypeName;
+        
+        // Node description
+        const desc = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        desc.setAttribute('x', '75');
+        desc.setAttribute('y', '40');
+        desc.setAttribute('text-anchor', 'middle');
+        desc.setAttribute('font-size', '11');
+        desc.setAttribute('fill', 'white');
+        desc.setAttribute('opacity', '0.8');
+        desc.textContent = (node.tools && node.tools.length > 0) ? node.tools.join(', ') : '';
+        
+        // Input ports
+        if (node.inputPorts && node.inputPorts.length > 0) {
+            node.inputPorts.forEach((port, index) => {
+                const portG = createPort(port, index, node.inputPorts.length, true);
+                g.appendChild(portG);
+            });
+        }
+        
+        // Output ports
+        if (node.outputPorts && node.outputPorts.length > 0) {
+            node.outputPorts.forEach((port, index) => {
+                const portG = createPort(port, index, node.outputPorts.length, false);
+                g.appendChild(portG);
+            });
+        }
+        
+        g.appendChild(rect);
+        g.appendChild(text);
+        g.appendChild(desc);
+        
+        // Event handlers
+        $(g).on('click', function(e) {
+            e.stopPropagation();
+            selectNode(node);
+        });
+        
+        $(g).on('dblclick', function(e) {
+            e.stopPropagation();
+            editNode(node);
+        });
+        
+        // Make draggable
+        makeDraggable(g, node);
+        
+        // Make nodes droppable for tools (only Task nodes)
+        if (getNodeTypeName(node.type) === 'Task') {
+            $(g).on('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                $(this).addClass('drag-over');
+            });
+            
+            $(g).on('dragleave', function(e) {
+                e.stopPropagation();
+                $(this).removeClass('drag-over');
+            });
+            
+            $(g).on('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                $(this).removeClass('drag-over');
+                
+                const tool = e.originalEvent.dataTransfer.getData('tool');
+                if (tool) {
+                    if (!node.tools) node.tools = [];
+                    if (!node.tools.includes(tool)) {
+                        node.tools.push(tool);
+                        renderWorkflow();
+                        selectNode(node);
+                        toastr.success(`Nástroj ${tool} přidán k uzlu`);
+                    }
+                }
+            });
+        }
+        
+        document.getElementById('nodes-container').appendChild(g);
+    }
+    
+    function createPort(port, index, total, isInput) {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'node-port');
+        g.setAttribute('data-port-id', port.id);
+        g.setAttribute('data-port-type', isInput ? 'input' : 'output');
+        
+        const spacing = 150 / (total + 1);
+        const x = isInput ? 0 : 150;
+        const y = spacing * (index + 1);
+        
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', x);
+        circle.setAttribute('cy', y);
+        circle.setAttribute('r', '6');
+        circle.setAttribute('fill', '#fff');
+        circle.setAttribute('stroke', '#333');
+        circle.setAttribute('stroke-width', '2');
+        
+        g.appendChild(circle);
+        
+        // Port events
+        $(g).on('mousedown', function(e) {
+            e.stopPropagation();
+            if (!isInput) {
+                startConnection(g, port);
+            }
+        });
+        
+        $(g).on('mouseup', function(e) {
+            e.stopPropagation();
+            if (isInput && isConnecting) {
+                endConnection(g, port);
+            }
+        });
+        
+        return g;
+    }
+    
+    function renderEdge(edge) {
+        const sourceNode = workflow.nodes.find(n => n.id === edge.sourceId);
+        const targetNode = workflow.nodes.find(n => n.id === edge.targetId);
+        
+        if (!sourceNode || !targetNode) return;
+        
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('id', 'edge-' + edge.id);
+        path.setAttribute('class', 'workflow-edge');
+        path.setAttribute('data-edge-id', edge.id);
+        path.setAttribute('marker-end', 'url(#arrowhead)');
+        
+        updateEdgePath(path, sourceNode, targetNode);
+        
+        // Edge label
+        if (edge.label) {
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('font-size', '12');
+            text.setAttribute('fill', '#666');
+            const midX = (sourceNode.position.x + targetNode.position.x) / 2 + 75;
+            const midY = (sourceNode.position.y + targetNode.position.y) / 2 + 30;
+            text.setAttribute('x', midX);
+            text.setAttribute('y', midY);
+            text.setAttribute('text-anchor', 'middle');
+            text.textContent = edge.label;
+            document.getElementById('edges-container').appendChild(text);
+        }
+        
+        $(path).on('click', function(e) {
+            e.stopPropagation();
+            selectEdge(edge);
+        });
+        
+        document.getElementById('edges-container').appendChild(path);
+    }
+    
+    function updateEdgePath(path, sourceNode, targetNode) {
+        const x1 = sourceNode.position.x + 150;
+        const y1 = sourceNode.position.y + 30;
+        const x2 = targetNode.position.x;
+        const y2 = targetNode.position.y + 30;
+        
+        // Bezier curve for smoother edges
+        const dx = Math.abs(x2 - x1);
+        const cp1x = x1 + dx * 0.5;
+        const cp1y = y1;
+        const cp2x = x2 - dx * 0.5;
+        const cp2y = y2;
+        
+        const d = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+        path.setAttribute('d', d);
+    }
+    
+    function makeDraggable(element, node) {
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        element.addEventListener('mousedown', dragStart);
+        
+        function dragStart(e) {
+            if (e.target.classList.contains('node-port')) return;
+            
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+            
+            if (e.target === element || e.target.parentNode === element) {
+                isDragging = true;
+            }
+        }
+        
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+        
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                
+                xOffset = currentX;
+                yOffset = currentY;
+                
+                node.position.x = currentX;
+                node.position.y = currentY;
+                
+                element.setAttribute('transform', `translate(${currentX}, ${currentY})`);
+                
+                // Update connected edges
+                updateConnectedEdges(node.id);
+            }
+        }
+        
+        function dragEnd(e) {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+        }
+    }
+    
+    function updateConnectedEdges(nodeId) {
+        workflow.edges.forEach(edge => {
+            if (edge.sourceId === nodeId || edge.targetId === nodeId) {
+                const path = document.getElementById('edge-' + edge.id);
+                if (path) {
+                    const sourceNode = workflow.nodes.find(n => n.id === edge.sourceId);
+                    const targetNode = workflow.nodes.find(n => n.id === edge.targetId);
+                    updateEdgePath(path, sourceNode, targetNode);
+                }
+            }
+        });
+    }
+    
+    function setupDragDrop() {
+        // Palette items
+        $('.palette-item').on('dragstart', function(e) {
+            e.originalEvent.dataTransfer.setData('nodeType', $(this).data('node-type'));
+            e.originalEvent.dataTransfer.setData('isNew', 'true');
+        });
+        
+        // Canvas drop
+        $('#workflow-canvas').on('dragover', function(e) {
+            e.preventDefault();
+            $(this).addClass('drag-over');
+        });
+        
+        $('#workflow-canvas').on('dragleave', function(e) {
+            $(this).removeClass('drag-over');
+        });
+        
+        $('#workflow-canvas').on('drop', function(e) {
+            e.preventDefault();
+            $(this).removeClass('drag-over');
+            
+            if (e.originalEvent.dataTransfer.getData('isNew') === 'true') {
+                const nodeType = e.originalEvent.dataTransfer.getData('nodeType');
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                createNewNode(nodeType, x - 75, y - 30);
+            }
+        });
+    }
+    
+    function createNewNode(type, x, y) {
+        // Convert type name to enum value
+        const nodeTypes = ['Start', 'End', 'Task', 'Condition', 'Parallel', 'Join', 'Loop', 'Wait', 'SubWorkflow'];
+        const typeIndex = nodeTypes.indexOf(type);
+        
+        const node = {
+            id: 'node-' + Date.now(),
+            name: type + ' ' + (workflow.nodes.length + 1),
+            type: typeIndex >= 0 ? typeIndex : 2, // Default to Task (2) if not found
+            position: { x: x, y: y },
+            tools: [],
+            inputPorts: [],
+            outputPorts: [],
+            configuration: {}
+        };
+        
+        $.ajax({
+            url: '/WorkflowDesigner/AddNode?projectId=' + workflow.projectId,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(node),
+            success: function(response) {
+                if (response.success) {
+                    workflow.nodes.push(response.node);
+                    renderNode(response.node);
+                    $('#node-count').text(workflow.nodes.length);
+                }
+            }
+        });
+    }
+    
+    function selectNode(node) {
+        $('.workflow-node').removeClass('selected');
+        $('#node-' + node.id).addClass('selected');
+        selectedNode = node;
+        selectedEdge = null;
+        
+        showNodeProperties(node);
+    }
+    
+    function selectEdge(edge) {
+        $('.workflow-edge').removeClass('selected');
+        $('#edge-' + edge.id).addClass('selected');
+        selectedEdge = edge;
+        selectedNode = null;
+        
+        showEdgeProperties(edge);
+    }
+    
+    function showNodeProperties(node) {
+        let html = `
+            <h6>${node.name}</h6>
+            <div class="form-group">
+                <label>Název</label>
+                <input type="text" class="form-control form-control-sm" value="${node.name}" 
+                       onchange="updateNodeProperty('name', this.value)">
+            </div>
+            <div class="form-group">
+                <label>Popis</label>
+                <textarea class="form-control form-control-sm" rows="2" 
+                          onchange="updateNodeProperty('description', this.value)">${node.description || ''}</textarea>
+            </div>
+        `;
+        
+        if (getNodeTypeName(node.type) === 'Task') {
+            html += `
+                <div class="form-group">
+                    <label>Orchestrátor</label>
+                    <select class="form-control form-control-sm" onchange="updateNodeProperty('orchestrator', this.value)">
+                        <option value="">Žádný</option>`;
+                        
+            // Add orchestrator options
+            const orchestrators = @Html.Raw(Json.Serialize(ViewBag.Orchestrators));
+            orchestrators.forEach(o => {
+                html += `<option value="${o}" ${node.orchestrator === o ? 'selected' : ''}>${o}</option>`;
+            });
+            
+            html += `</select>
+                </div>
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="useReAct" 
+                           ${node.useReAct ? 'checked' : ''} 
+                           onchange="updateNodeProperty('useReAct', this.checked)">
+                    <label class="form-check-label" for="useReAct">
+                        Použít ReAct reasoning
+                    </label>
+                </div>
+                <button class="btn btn-sm btn-primary btn-block" onclick="editNode(selectedNode)">
+                    <i class="fas fa-edit"></i> Upravit nástroje
+                </button>
+            `;
+        } else if (getNodeTypeName(node.type) === 'Condition') {
+            html += `
+                <div class="form-group">
+                    <label>Podmínka</label>
+                    <input type="text" class="form-control form-control-sm" 
+                           value="${node.conditionExpression || ''}" 
+                           placeholder="např. result.success == true"
+                           onchange="updateNodeProperty('conditionExpression', this.value)">
+                </div>
+            `;
+        } else if (getNodeTypeName(node.type) === 'Loop') {
+            html += `
+                <div class="form-group">
+                    <label>Podmínka smyčky</label>
+                    <input type="text" class="form-control form-control-sm" 
+                           value="${node.loopCondition || ''}" 
+                           placeholder="např. items.length > 0"
+                           onchange="updateNodeProperty('loopCondition', this.value)">
+                </div>
+                <div class="form-group">
+                    <label>Max iterací</label>
+                    <input type="number" class="form-control form-control-sm" 
+                           value="${node.maxIterations}" 
+                           onchange="updateNodeProperty('maxIterations', parseInt(this.value))">
+                </div>
+            `;
+        }
+        
+        html += `
+            <hr>
+            <button class="btn btn-sm btn-danger btn-block" onclick="deleteSelectedNode()">
+                <i class="fas fa-trash"></i> Smazat uzel
+            </button>
+        `;
+        
+        $('#properties-panel').html(html);
+    }
+    
+    function showEdgeProperties(edge) {
+        let html = `
+            <h6>Hrana</h6>
+            <div class="form-group">
+                <label>Popisek</label>
+                <input type="text" class="form-control form-control-sm" 
+                       value="${edge.label || ''}" 
+                       onchange="updateEdgeProperty('label', this.value)">
+            </div>
+            <div class="form-group">
+                <label>Podmínka</label>
+                <input type="text" class="form-control form-control-sm" 
+                       value="${edge.condition || ''}" 
+                       placeholder="např. status == 'success'"
+                       onchange="updateEdgeProperty('condition', this.value)">
+            </div>
+            <hr>
+            <button class="btn btn-sm btn-danger btn-block" onclick="deleteSelectedEdge()">
+                <i class="fas fa-trash"></i> Smazat hranu
+            </button>
+        `;
+        
+        $('#properties-panel').html(html);
+    }
+    
+    function updateNodeProperty(property, value) {
+        if (selectedNode) {
+            selectedNode[property] = value;
+            renderWorkflow();
+        }
+    }
+    
+    function updateEdgeProperty(property, value) {
+        if (selectedEdge) {
+            selectedEdge[property] = value;
+            renderWorkflow();
+        }
+    }
+    
+    function editNode(node) {
+        // Show modal with node editing form
+        let html = `
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Název uzlu</label>
+                        <input type="text" class="form-control" id="edit-node-name" value="${node.name}">
+                    </div>
+                    <div class="form-group">
+                        <label>Popis</label>
+                        <textarea class="form-control" id="edit-node-description" rows="3">${node.description || ''}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Orchestrátor</label>
+                        <select class="form-control" id="edit-node-orchestrator">
+                            <option value="">Žádný</option>
+                            @foreach (var orchestrator in ViewBag.Orchestrators)
+                            {
+                                <option value="@orchestrator">@orchestrator</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="edit-use-react" ${node.useReAct ? 'checked' : ''}>
+                        <label class="form-check-label" for="edit-use-react">
+                            Použít ReAct reasoning
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6>Vybrané nástroje</h6>
+                    <div id="selected-tools" class="mb-3">
+                        ${node.tools.map(tool => 
+                            `<span class="badge badge-info mr-1">${tool} 
+                             <i class="fas fa-times" onclick="removeTool('${tool}')" style="cursor:pointer"></i>
+                             </span>`
+                        ).join('')}
+                    </div>
+                    <h6>Dostupné nástroje</h6>
+                    <div class="tool-selector" style="max-height: 300px; overflow-y: auto;">
+                        @foreach (var category in ViewBag.ToolsByCategory)
+                        {
+                            <div class="mb-2">
+                                <small class="text-muted">@category.Key</small>
+                                @foreach (var tool in category.Value)
+                                {
+                                    <div class="tool-option" onclick="addTool('@tool')" style="cursor:pointer; padding: 4px; hover:background:#f0f0f0;">
+                                        <i class="fas fa-plus-circle"></i> @tool
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('#nodeEditBody').html(html);
+        $('#edit-node-orchestrator').val(node.orchestrator || '');
+        $('#nodeEditModal').modal('show');
+    }
+    
+    let editingNodeTools = [];
+    
+    function addTool(tool) {
+        if (!editingNodeTools.includes(tool)) {
+            editingNodeTools.push(tool);
+            updateToolsDisplay();
+        }
+    }
+    
+    function removeTool(tool) {
+        editingNodeTools = editingNodeTools.filter(t => t !== tool);
+        updateToolsDisplay();
+    }
+    
+    function updateToolsDisplay() {
+        $('#selected-tools').html(
+            editingNodeTools.map(tool => 
+                `<span class="badge badge-info mr-1">${tool} 
+                 <i class="fas fa-times" onclick="removeTool('${tool}')" style="cursor:pointer"></i>
+                 </span>`
+            ).join('')
+        );
+    }
+    
+    function saveNodeProperties() {
+        if (selectedNode) {
+            selectedNode.name = $('#edit-node-name').val();
+            selectedNode.description = $('#edit-node-description').val();
+            selectedNode.orchestrator = $('#edit-node-orchestrator').val();
+            selectedNode.useReAct = $('#edit-use-react').is(':checked');
+            selectedNode.tools = editingNodeTools;
+            
+            // Update on server
+            $.ajax({
+                url: '/WorkflowDesigner/UpdateNode?projectId=' + workflow.projectId,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(selectedNode),
+                success: function(response) {
+                    if (response.success) {
+                        $('#nodeEditModal').modal('hide');
+                        renderWorkflow();
+                        selectNode(selectedNode);
+                    }
+                }
+            });
+        }
+    }
+    
+    function deleteSelectedNode() {
+        if (selectedNode && confirm('Opravdu smazat uzel?')) {
+            $.ajax({
+                url: '/WorkflowDesigner/DeleteNode?projectId=' + workflow.projectId + '&nodeId=' + selectedNode.id,
+                type: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        workflow.nodes = workflow.nodes.filter(n => n.id !== selectedNode.id);
+                        workflow.edges = workflow.edges.filter(e => 
+                            e.sourceId !== selectedNode.id && e.targetId !== selectedNode.id
+                        );
+                        renderWorkflow();
+                        selectedNode = null;
+                        $('#properties-panel').html('<p class="text-muted">Vyberte uzel pro úpravu vlastností</p>');
+                    }
+                }
+            });
+        }
+    }
+    
+    function deleteSelectedEdge() {
+        if (selectedEdge && confirm('Opravdu smazat hranu?')) {
+            $.ajax({
+                url: '/WorkflowDesigner/DeleteEdge?projectId=' + workflow.projectId + '&edgeId=' + selectedEdge.id,
+                type: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        workflow.edges = workflow.edges.filter(e => e.id !== selectedEdge.id);
+                        renderWorkflow();
+                        selectedEdge = null;
+                        $('#properties-panel').html('<p class="text-muted">Vyberte uzel pro úpravu vlastností</p>');
+                    }
+                }
+            });
+        }
+    }
+    
+    // Connection handling
+    function startConnection(portElement, port) {
+        isConnecting = true;
+        connectionStart = {
+            node: selectedNode,
+            port: port,
+            element: portElement
+        };
+        
+        // Create temporary line
+        tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tempLine.setAttribute('stroke', '#007bff');
+        tempLine.setAttribute('stroke-width', '2');
+        tempLine.setAttribute('stroke-dasharray', '5,5');
+        document.getElementById('edges-container').appendChild(tempLine);
+        
+        // Track mouse movement
+        $(document).on('mousemove.connection', function(e) {
+            if (tempLine) {
+                const rect = $('#svg-canvas')[0].getBoundingClientRect();
+                const startPos = getPortPosition(connectionStart.element);
+                tempLine.setAttribute('x1', startPos.x);
+                tempLine.setAttribute('y1', startPos.y);
+                tempLine.setAttribute('x2', e.clientX - rect.left);
+                tempLine.setAttribute('y2', e.clientY - rect.top);
+            }
+        });
+    }
+    
+    function endConnection(portElement, port) {
+        if (isConnecting && connectionStart) {
+            const targetNode = workflow.nodes.find(n => 
+                n.inputPorts.some(p => p.id === port.id)
+            );
+            
+            if (targetNode && targetNode.id !== connectionStart.node.id) {
+                // Create edge
+                const edge = {
+                    id: 'edge-' + Date.now(),
+                    sourceId: connectionStart.node.id,
+                    targetId: targetNode.id,
+                    sourcePortId: connectionStart.port.id,
+                    targetPortId: port.id
+                };
+                
+                $.ajax({
+                    url: '/WorkflowDesigner/AddEdge?projectId=' + workflow.projectId,
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(edge),
+                    success: function(response) {
+                        if (response.success) {
+                            workflow.edges.push(response.edge);
+                            renderWorkflow();
+                        } else {
+                            toastr.error(response.message);
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Clean up
+        isConnecting = false;
+        connectionStart = null;
+        if (tempLine) {
+            tempLine.remove();
+            tempLine = null;
+        }
+        $(document).off('mousemove.connection');
+    }
+    
+    function getPortPosition(portElement) {
+        const circle = portElement.querySelector('circle');
+        const nodeG = portElement.closest('.workflow-node');
+        const transform = nodeG.getAttribute('transform');
+        const match = transform.match(/translate\(([^,]+),([^)]+)\)/);
+        const nodeX = parseFloat(match[1]);
+        const nodeY = parseFloat(match[2]);
+        const portX = parseFloat(circle.getAttribute('cx'));
+        const portY = parseFloat(circle.getAttribute('cy'));
+        
+        return {
+            x: nodeX + portX,
+            y: nodeY + portY
+        };
+    }
+    
+    // Keyboard shortcuts
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Delete' && (selectedNode || selectedEdge)) {
+            if (selectedNode) deleteSelectedNode();
+            if (selectedEdge) deleteSelectedEdge();
+        }
+    });
+    
+    // Canvas events
+    $('#svg-canvas').on('click', function(e) {
+        if (e.target === this || e.target.parentNode === document.getElementById('edges-container') ||
+            e.target.parentNode === document.getElementById('nodes-container')) {
+            selectedNode = null;
+            selectedEdge = null;
+            $('.workflow-node').removeClass('selected');
+            $('.workflow-edge').removeClass('selected');
+            $('#properties-panel').html('<p class="text-muted">Vyberte uzel pro úpravu vlastností</p>');
+        }
+    });
+    
+    // Global functions
+    function saveWorkflow() {
+        $.ajax({
+            url: '/WorkflowDesigner/SaveWorkflow',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(workflow),
+            success: function(response) {
+                if (response.success) {
+                    toastr.success('Workflow uloženo');
+                }
+            }
+        });
+    }
+    
+    function validateWorkflow() {
+        $.post('/WorkflowDesigner/ValidateWorkflow', {
+            projectId: workflow.projectId
+        }, function(response) {
+            if (response.success) {
+                toastr.success(response.message);
+            } else {
+                let errorHtml = '<ul>' + response.errors.map(e => `<li>${e}</li>`).join('') + '</ul>';
+                toastr.error(errorHtml, 'Chyby ve workflow', {
+                    timeOut: 0,
+                    extendedTimeOut: 0,
+                    closeButton: true,
+                    progressBar: false
+                });
+            }
+        });
+    }
+    
+    function runWorkflow() {
+        $.ajax({
+            url: '/WorkflowDesigner/ValidateWorkflow?projectId=' + workflow.projectId,
+            type: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    toastr.info('Spouštím workflow...');
+                    // Zde by bylo skutečné spuštění
+                    setTimeout(() => {
+                        toastr.success('Workflow spuštěno!');
+                    }, 1000);
+                } else {
+                    toastr.error('Nejprve opravte chyby ve workflow');
+                }
+            }
+        });
+    }
+    
+    function updateNodeProperty(property, value) {
+        if (!selectedNode) return;
+        
+        selectedNode[property] = value;
+        renderWorkflow();
+        selectNode(selectedNode);
+    }
+    
+    function editNode(node) {
+        if (!node) return;
+        
+        selectedNode = node;
+        editingNodeTools = [...(node.tools || [])];
+        
+        // Update modal content
+        $('#editNodeName').val(node.name);
+        $('#editNodeDescription').val(node.description || '');
+        $('#editNodeTools').html(editingNodeTools.map(tool => 
+            `<span class="badge badge-primary mr-1">${tool} 
+             <i class="fas fa-times" onclick="removeToolFromEditList('${tool}')" style="cursor:pointer"></i></span>`
+        ).join(''));
+        
+        $('#nodeEditModal').modal('show');
+    }
+    
+    function removeToolFromEditList(tool) {
+        editingNodeTools = editingNodeTools.filter(t => t !== tool);
+        $('#editNodeTools').html(editingNodeTools.map(tool => 
+            `<span class="badge badge-primary mr-1">${tool} 
+             <i class="fas fa-times" onclick="removeToolFromEditList('${tool}')" style="cursor:pointer"></i></span>`
+        ).join(''));
+    }
+    
+    function addToolToEditList() {
+        const tool = $('#addToolSelect').val();
+        if (tool && !editingNodeTools.includes(tool)) {
+            editingNodeTools.push(tool);
+            $('#editNodeTools').html(editingNodeTools.map(tool => 
+                `<span class="badge badge-primary mr-1">${tool} 
+                 <i class="fas fa-times" onclick="removeToolFromEditList('${tool}')" style="cursor:pointer"></i></span>`
+            ).join(''));
+            $('#addToolSelect').val('');
+        }
+    }
+    
+    function setupEventHandlers() {
+        // Tool dragging from palette to nodes
+        $('.tool-item').on('dragstart', function(e) {
+            e.originalEvent.dataTransfer.setData('tool', $(this).data('tool'));
+        });
+        
+        // When editing node in modal
+        $(document).on('show.bs.modal', '#nodeEditModal', function() {
+            if (selectedNode) {
+                editingNodeTools = [...selectedNode.tools];
+            }
+        });
+    }
+</script>
+}

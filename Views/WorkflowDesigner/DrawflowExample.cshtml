@@ -1,0 +1,821 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+@{
+    ViewData["Title"] = "Workflow Designer - Drawflow";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    #myDiagramDiv {
+        width: 100%;
+        height: 600px;
+        border: 1px solid #ddd;
+        background-color: #f8f8f8;
+    }
+    
+    .drawflow-node {
+        background: white;
+        border: 2px solid #4ea9ff;
+        border-radius: 8px;
+        padding: 0;
+        min-width: 280px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .drawflow-node:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+    
+    .drawflow-node.selected {
+        border-color: #ff6b6b;
+    }
+    
+    .node-header {
+        background: #4ea9ff;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 6px 6px 0 0;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .node-header.condition {
+        background: #ff9f40;
+    }
+    
+    .node-header.parallel {
+        background: #7c4dff;
+    }
+    
+    .node-body {
+        padding: 15px;
+    }
+    
+    .node-description {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 10px;
+        font-style: italic;
+    }
+    
+    .node-tools {
+        margin-top: 10px;
+    }
+    
+    .node-tool-item {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 4px 10px;
+        border-radius: 16px;
+        font-size: 12px;
+        margin: 2px;
+        border: 1px solid #90caf9;
+    }
+    
+    .node-actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .node-action-icon {
+        color: white;
+        cursor: pointer;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+        font-size: 14px;
+    }
+    
+    .node-action-icon:hover {
+        opacity: 1;
+    }
+    
+    .tool-palette {
+        background: white;
+        padding: 15px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .palette-item {
+        padding: 8px 12px;
+        margin: 5px 0;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        cursor: move;
+        transition: all 0.2s;
+    }
+    
+    .palette-item:hover {
+        background: #e9ecef;
+        transform: translateX(5px);
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> Workflow Designer
+                    <small class="text-muted">@Model.ProjectName</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-sm-right">
+                    <button class="btn btn-success" onclick="saveWorkflow()">
+                        <i class="fas fa-save"></i> Uložit
+                    </button>
+                    <button class="btn btn-info" onclick="exportWorkflow()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button class="btn btn-warning" onclick="clearWorkflow()">
+                        <i class="fas fa-trash"></i> Vyčistit
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Tool Palette -->
+            <div class="col-md-2">
+                <div class="tool-palette">
+                    <h5>Nástroje</h5>
+                    <div class="palette-item" draggable="true" ondragstart="drag(event)" data-node="task">
+                        <i class="fas fa-cog"></i> Úloha
+                    </div>
+                    <div class="palette-item" draggable="true" ondragstart="drag(event)" data-node="condition">
+                        <i class="fas fa-code-branch"></i> Podmínka
+                    </div>
+                    <div class="palette-item" draggable="true" ondragstart="drag(event)" data-node="parallel">
+                        <i class="fas fa-sitemap"></i> Paralelní
+                    </div>
+                    
+                    <hr>
+                    <h6>AI Nástroje</h6>
+                    @foreach(var tool in ViewBag.AvailableTools)
+                    {
+                        <div class="palette-item" draggable="true" ondragstart="dragTool(event)" data-tool="@tool">
+                            <i class="fas fa-puzzle-piece"></i> @tool
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            <!-- GoJS Canvas -->
+            <div class="col-md-10">
+                <div id="myDiagramDiv"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Node Edit Modal -->
+<div class="modal fade" id="nodeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit uzel</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="nodeForm">
+                    <div class="form-group">
+                        <label>Název</label>
+                        <input type="text" class="form-control" id="nodeName">
+                    </div>
+                    <div class="form-group">
+                        <label>Popis</label>
+                        <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
+                    </div>
+                    <div class="form-group" id="toolsGroup">
+                        <label>Nástroje</label>
+                        <div id="nodeTools"></div>
+                        <div class="mt-2">
+                            <small class="text-muted">Přetáhněte nástroj ze seznamu na tento uzel nebo:</small>
+                            <br>
+                            <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="showToolSelector()">
+                                <i class="fas fa-plus"></i> Přidat nástroj
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group" id="nodeTypeInfo">
+                        <label>Typ uzlu</label>
+                        <div id="nodeTypeDisplay"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="updateNode()">Uložit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<!-- GoJS library -->
+<script src="https://unpkg.com/gojs@2.3.17/release/go.js"></script>
+
+<script>
+    var myDiagram;
+    var $ = go.GraphObject.make;  // for conciseness in defining templates
+    
+    // Initialize GoJS
+    window.addEventListener('DOMContentLoaded', init);
+    
+    function init() {
+        // Create the Diagram
+        myDiagram = $(go.Diagram, "myDiagramDiv",
+            {
+                // allow double-click in background to create a new node
+                "clickCreatingTool.archetypeNodeData": { text: "New Node", color: "lightblue" },
+                // allow Ctrl-G to group and Ctrl-Shift-G to ungroup
+                "commandHandler.archetypeGroupData": { text: "Group", isGroup: true },
+                // enable undo & redo
+                "undoManager.isEnabled": true,
+                // automatically lay out the diagram
+                layout: $(go.TreeLayout, { angle: 90, layerSpacing: 35 })
+            });
+        
+        // Define node template
+        myDiagram.nodeTemplate =
+            $(go.Node, "Auto",
+                {
+                    locationSpot: go.Spot.Center,
+                    selectionAdornmentTemplate:
+                        $(go.Adornment, "Spot",
+                            $(go.Panel, "Auto",
+                                $(go.Shape, { fill: null, stroke: "dodgerblue", strokeWidth: 3 }),
+                                $(go.Placeholder)
+                            ),
+                            // the button to create a "next" node, at the top-right corner
+                            $("Button",
+                                {
+                                    alignment: go.Spot.TopRight,
+                                    click: addNodeAndLink
+                                },
+                                $(go.Shape, "PlusLine", { width: 6, height: 6 })
+                            )
+                        )
+                },
+                new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
+                // the main object is a Panel that surrounds a TextBlock with a Shape
+                $(go.Shape, "RoundedRectangle",
+                    {
+                        name: "SHAPE",
+                        fill: "lightblue",
+                        strokeWidth: 0,
+                        // set the port properties:
+                        portId: "",
+                        fromLinkable: true,
+                        toLinkable: true,
+                        cursor: "pointer"
+                    },
+                    new go.Binding("fill", "color")),
+                $(go.Panel, "Vertical",
+                    $(go.TextBlock,
+                        {
+                            font: "bold 14px sans-serif",
+                            stroke: '#333',
+                            margin: 8,
+                            maxSize: new go.Size(160, NaN),
+                            wrap: go.TextBlock.WrapFit,
+                            editable: true
+                        },
+                        new go.Binding("text").makeTwoWay()),
+                    $(go.TextBlock,
+                        {
+                            font: "11px sans-serif",
+                            stroke: '#666',
+                            margin: new go.Margin(3, 8, 8, 8),
+                            maxSize: new go.Size(160, NaN),
+                            wrap: go.TextBlock.WrapFit,
+                            visible: false
+                        },
+                        new go.Binding("text", "description"),
+                        new go.Binding("visible", "description", function(val) { return val ? true : false; })),
+                    $(go.Panel, "Horizontal",
+                        {
+                            margin: 8,
+                            visible: false
+                        },
+                        new go.Binding("visible", "tools", function(arr) { return arr && arr.length > 0; }),
+                        new go.Binding("itemArray", "tools"),
+                        {
+                            itemTemplate:
+                                $(go.Panel, "Auto",
+                                    { margin: 2 },
+                                    $(go.Shape, "RoundedRectangle",
+                                        { fill: "#e3f2fd", strokeWidth: 1, stroke: "#90caf9" }),
+                                    $(go.TextBlock,
+                                        { margin: 3, font: "10px sans-serif", stroke: "#1976d2" },
+                                        new go.Binding("text", "", formatToolName))
+                                )
+                        }
+                    )
+                ),
+                // four small named ports, one on each side:
+                makePort("T", go.Spot.Top, false, true),
+                makePort("L", go.Spot.Left, true, true),
+                makePort("R", go.Spot.Right, true, true),
+                makePort("B", go.Spot.Bottom, true, false),
+                {
+                    // handle mouse enter/leave events to show/hide the ports
+                    mouseEnter: function(e, obj) { showSmallPorts(obj.part, true); },
+                    mouseLeave: function(e, obj) { showSmallPorts(obj.part, false); },
+                    contextMenu: nodeMenu
+                }
+            );
+        
+        // Define link template
+        myDiagram.linkTemplate =
+            $(go.Link,
+                {
+                    routing: go.Link.AvoidsNodes,
+                    curve: go.Link.JumpOver,
+                    corner: 5,
+                    toShortLength: 4,
+                    relinkableFrom: true,
+                    relinkableTo: true,
+                    reshapable: true,
+                    resegmentable: true,
+                    // mouse-overs subtly highlight links:
+                    mouseEnter: function(e, link) { link.findObject("HIGHLIGHT").stroke = "rgba(30,144,255,0.2)"; },
+                    mouseLeave: function(e, link) { link.findObject("HIGHLIGHT").stroke = "transparent"; },
+                    selectionAdorned: false
+                },
+                new go.Binding("points").makeTwoWay(),
+                $(go.Shape,  // the highlight shape, normally transparent
+                    { isPanelMain: true, strokeWidth: 8, stroke: "transparent", name: "HIGHLIGHT" }),
+                $(go.Shape,  // the link path shape
+                    { isPanelMain: true, stroke: "gray", strokeWidth: 2 },
+                    new go.Binding("stroke", "isSelected", function(sel) { return sel ? "dodgerblue" : "gray"; }).ofObject()),
+                $(go.Shape,  // the arrowhead
+                    { toArrow: "standard", strokeWidth: 0, fill: "gray" }),
+                $(go.Panel, "Auto",  // the link label, normally not visible
+                    { visible: false, name: "LABEL", segmentIndex: 2, segmentFraction: 0.5 },
+                    new go.Binding("visible", "visible").makeTwoWay(),
+                    $(go.Shape, "RoundedRectangle",  // the label shape
+                        { fill: "#F8F8F8", strokeWidth: 0 }),
+                    $(go.TextBlock, "Yes",  // the label
+                        {
+                            textAlign: "center",
+                            font: "10pt helvetica, arial, sans-serif",
+                            stroke: "#333333",
+                            editable: true
+                        },
+                        new go.Binding("text").makeTwoWay())
+                )
+            );
+        
+        // Context menu for nodes
+        var nodeMenu = $(go.Adornment, "Vertical",
+            $("ContextMenuButton",
+                $(go.TextBlock, "Editovat"),
+                { click: function(e, obj) { editNode(obj.part.adornedPart); } }),
+            $("ContextMenuButton",
+                $(go.TextBlock, "Duplikovat"),
+                { click: function(e, obj) { duplicateNode(obj.part.adornedPart); } }),
+            $("ContextMenuButton",
+                $(go.TextBlock, "Smazat"),
+                { click: function(e, obj) { myDiagram.commandHandler.deleteSelection(); } }),
+            $("ContextMenuButton",
+                $(go.TextBlock, "Přidat nástroj"),
+                { click: function(e, obj) { showToolPicker(obj.part.adornedPart); } })
+        );
+        
+        // Load initial data
+        loadWorkflow();
+        
+        // Setup palette
+        setupPalette();
+    }
+    
+    // Helper function to make ports
+    function makePort(name, spot, output, input) {
+        return $(go.Shape, "Circle",
+            {
+                fill: null,  // not seen, by default; set to a translucent gray by showSmallPorts, defined below
+                stroke: null,
+                desiredSize: new go.Size(7, 7),
+                alignment: spot,  // align the port on the main Shape
+                alignmentFocus: spot,  // just inside the Shape
+                portId: name,  // declare this object to be a "port"
+                fromSpot: spot, toSpot: spot,  // declare where links may connect at this port
+                fromLinkable: output, toLinkable: input,  // declare whether the user may draw links to/from here
+                cursor: "pointer"  // show a different cursor to indicate potential link point
+            });
+    }
+    
+    function showSmallPorts(node, show) {
+        node.ports.each(function(port) {
+            if (port.portId !== "") {  // don't change the default port, which is the big shape
+                port.fill = show ? "rgba(0,0,0,.3)" : null;
+            }
+        });
+    }
+    
+    function addNodeAndLink(e, obj) {
+        var adornment = obj.part;
+        var fromNode = adornment.adornedPart;
+        if (fromNode === null) return;
+        
+        e.handled = true;
+        var diagram = fromNode.diagram;
+        diagram.startTransaction("Add State");
+        
+        // create a new node
+        var toNode = diagram.model.copyNodeData({ text: "new", color: "lightblue" });
+        var p = fromNode.location.copy();
+        p.x += 200;
+        toNode.location = go.Point.stringify(p);
+        diagram.model.addNodeData(toNode);
+        
+        // create a link from the old node to the new node
+        var newlink = { from: fromNode.data.key, to: toNode.key };
+        diagram.model.addLinkData(newlink);
+        
+        diagram.commitTransaction("Add State");
+        
+        // select the new Node
+        var newnode = diagram.findNodeForData(toNode);
+        diagram.select(newnode);
+    }
+    
+    function formatToolName(tool) {
+        return tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    
+    // Load workflow from model
+    function loadWorkflow() {
+        const workflow = @Html.Raw(Json.Serialize(Model));
+        
+        // Convert our nodes to Drawflow format
+        workflow.nodes.forEach(node => {
+            const html = createNodeHtml(node.name, node.tools || []);
+            const drawflowNode = editor.addNode(
+                node.type.toString(), 
+                1, // inputs
+                1, // outputs
+                node.position.x, 
+                node.position.y, 
+                node.type.toString(), 
+                { name: node.name, tools: node.tools || [], description: node.description || '' }, 
+                html
+            );
+        });
+        
+        // Add edges
+        workflow.edges.forEach(edge => {
+            // Map our node IDs to Drawflow node IDs
+            // This is simplified - you'd need proper ID mapping
+            editor.addConnection(edge.sourceId, edge.targetId, 'output_1', 'input_1');
+        });
+    }
+    
+    // Create node HTML
+    function createNodeHtml(name, tools, type = 'task', description = '') {
+        const typeClass = type || 'task';
+        const icon = getNodeIcon(typeClass);
+        
+        let toolsHtml = '';
+        if (tools && tools.length > 0) {
+            const toolItems = tools.map(tool => 
+                `<span class="node-tool-item">
+                    <i class="fas fa-puzzle-piece"></i> ${formatToolName(tool)}
+                </span>`
+            ).join('');
+            toolsHtml = `<div class="node-tools">${toolItems}</div>`;
+        }
+        
+        const descHtml = description 
+            ? `<div class="node-description">${description}</div>` 
+            : `<div class="node-description">Dvojklik pro úpravu...</div>`;
+        
+        return `
+            <div class="node-wrapper">
+                <div class="node-header ${typeClass}">
+                    <span><i class="${icon}"></i> ${name}</span>
+                    <div class="node-actions">
+                        <i class="fas fa-edit node-action-icon" title="Upravit"></i>
+                        <i class="fas fa-times node-action-icon" title="Smazat"></i>
+                    </div>
+                </div>
+                <div class="node-body">
+                    ${descHtml}
+                    ${toolsHtml}
+                </div>
+            </div>
+        `;
+    }
+    
+    function getNodeIcon(type) {
+        switch(type) {
+            case 'task': return 'fas fa-cog';
+            case 'condition': return 'fas fa-code-branch';
+            case 'parallel': return 'fas fa-sitemap';
+            default: return 'fas fa-circle';
+        }
+    }
+    
+    function formatToolName(tool) {
+        return tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    
+    // Drag and drop handlers
+    function drag(ev) {
+        const nodeType = ev.target.getAttribute('data-node');
+        console.log('Dragging node:', nodeType);
+        ev.dataTransfer.setData("node", nodeType);
+        ev.dataTransfer.effectAllowed = "copy";
+    }
+    
+    function dragTool(ev) {
+        const tool = ev.target.getAttribute('data-tool');
+        console.log('Dragging tool:', tool);
+        ev.dataTransfer.setData("tool", tool);
+        ev.dataTransfer.effectAllowed = "copy";
+    }
+    
+    function drop(ev) {
+        ev.preventDefault();
+        
+        const nodeType = ev.dataTransfer.getData("node");
+        const tool = ev.dataTransfer.getData("tool");
+        
+        console.log('Drop event:', { nodeType, tool, currentNodeId });
+        
+        if (nodeType) {
+            // Add new node
+            // Get position relative to canvas with scroll
+            const rect = document.getElementById('drawflow').getBoundingClientRect();
+            const pos = {
+                x: ev.clientX - rect.left,
+                y: ev.clientY - rect.top
+            };
+            
+            // Adjust for Drawflow's transform
+            const canvas_x = (pos.x / editor.zoom) - (editor.canvas_x / editor.zoom);
+            const canvas_y = (pos.y / editor.zoom) - (editor.canvas_y / editor.zoom);
+            
+            const name = nodeType.charAt(0).toUpperCase() + nodeType.slice(1) + ' ' + nodeIdCounter++;
+            const html = createNodeHtml(name, [], nodeType, '');
+            
+            const newNodeId = editor.addNode(
+                nodeType, 
+                1, 
+                1, 
+                canvas_x, 
+                canvas_y, 
+                nodeType, 
+                { name: name, tools: [], description: '' }, 
+                html
+            );
+            
+            console.log('Node added:', newNodeId);
+            
+            // Add event handlers to the new node
+            setTimeout(() => {
+                const node = document.querySelector(`#node-${newNodeId}`);
+                if (node) {
+                    const editIcon = node.querySelector('.fa-edit');
+                    const deleteIcon = node.querySelector('.fa-times');
+                    
+                    if (editIcon) {
+                        editIcon.onclick = () => editNode(newNodeId);
+                    }
+                    if (deleteIcon) {
+                        deleteIcon.onclick = () => deleteNode(newNodeId);
+                    }
+                }
+            }, 100);
+            
+        } else if (tool) {
+            // Try to add tool as a new task node if no node is selected
+            if (!currentNodeId) {
+                // Create a new task node with this tool
+                const rect = document.getElementById('drawflow').getBoundingClientRect();
+                const pos = {
+                    x: ev.clientX - rect.left,
+                    y: ev.clientY - rect.top
+                };
+                
+                const canvas_x = (pos.x / editor.zoom) - (editor.canvas_x / editor.zoom);
+                const canvas_y = (pos.y / editor.zoom) - (editor.canvas_y / editor.zoom);
+                
+                const name = formatToolName(tool);
+                const html = createNodeHtml(name, [tool], 'task', 'Automaticky vytvořený uzel s nástrojem');
+                
+                const toolNodeId = editor.addNode(
+                    'task', 
+                    1, 
+                    1, 
+                    canvas_x, 
+                    canvas_y, 
+                    'task', 
+                    { name: name, tools: [tool], description: 'Automaticky vytvořený uzel s nástrojem' }, 
+                    html
+                );
+                
+                // Add event handlers to the new node
+                setTimeout(() => {
+                    const node = document.querySelector(`#node-${toolNodeId}`);
+                    if (node) {
+                        const editIcon = node.querySelector('.fa-edit');
+                        const deleteIcon = node.querySelector('.fa-times');
+                        
+                        if (editIcon) {
+                            editIcon.onclick = () => editNode(toolNodeId);
+                        }
+                        if (deleteIcon) {
+                            deleteIcon.onclick = () => deleteNode(toolNodeId);
+                        }
+                    }
+                }, 100);
+                
+                toastr.success('Nástroj přidán jako nový uzel');
+            } else {
+                // Add tool to selected node
+                const nodeInfo = editor.getNodeFromId(currentNodeId);
+                if (nodeInfo && nodeInfo.class === 'task') {
+                    if (!nodeInfo.data.tools) nodeInfo.data.tools = [];
+                    if (!nodeInfo.data.tools.includes(tool)) {
+                        nodeInfo.data.tools.push(tool);
+                        updateNodeHtml(currentNodeId, nodeInfo.data);
+                        toastr.success('Nástroj přidán k uzlu');
+                    }
+                } else {
+                    toastr.warning('Nástroje lze přidat pouze k uzlům typu Úloha');
+                }
+            }
+        }
+    }
+    
+    function allowDrop(ev) {
+        ev.preventDefault();
+    }
+    
+    // Edit node
+    function editNode(nodeId) {
+        const nodeInfo = editor.getNodeFromId(nodeId);
+        if (nodeInfo) {
+            currentNodeId = nodeId;
+            $('#nodeName').val(nodeInfo.data.name);
+            $('#nodeDescription').val(nodeInfo.data.description || '');
+            
+            // Show tools
+            const toolsHtml = (nodeInfo.data.tools || []).map(tool => 
+                `<span class="badge badge-primary mr-1">${formatToolName(tool)} 
+                 <i class="fas fa-times" onclick="removeTool('${tool}')" style="cursor:pointer"></i></span>`
+            ).join('');
+            $('#nodeTools').html(toolsHtml || '<em class="text-muted">Žádné nástroje</em>');
+            
+            // Show node type
+            const typeLabel = nodeInfo.class.charAt(0).toUpperCase() + nodeInfo.class.slice(1);
+            const typeIcon = getNodeIcon(nodeInfo.class);
+            $('#nodeTypeDisplay').html(`<span class="badge badge-info"><i class="${typeIcon}"></i> ${typeLabel}</span>`);
+            
+            // Show/hide tools section based on node type
+            if (nodeInfo.class !== 'task') {
+                $('#toolsGroup').hide();
+            } else {
+                $('#toolsGroup').show();
+            }
+            
+            $('#nodeModal').modal('show');
+        }
+    }
+    
+    // Update node
+    function updateNode() {
+        if (currentNodeId) {
+            const nodeInfo = editor.getNodeFromId(currentNodeId);
+            nodeInfo.data.name = $('#nodeName').val();
+            nodeInfo.data.description = $('#nodeDescription').val();
+            
+            updateNodeHtml(currentNodeId, nodeInfo.data);
+            $('#nodeModal').modal('hide');
+        }
+    }
+    
+    // Update node HTML
+    function updateNodeHtml(nodeId, data) {
+        const nodeInfo = editor.getNodeFromId(nodeId);
+        const html = createNodeHtml(data.name, data.tools || [], nodeInfo.class, data.description || '');
+        editor.updateNodeDataFromId(nodeId, data);
+        document.querySelector(`#node-${nodeId} .drawflow_content_node`).innerHTML = html;
+    }
+    
+    // Quick edit node
+    function editNodeQuick(nodeId) {
+        if (!nodeId) nodeId = currentNodeId;
+        if (nodeId) editNode(nodeId);
+    }
+    
+    // Delete node
+    function deleteNode(nodeId) {
+        if (!nodeId) nodeId = currentNodeId;
+        if (nodeId && confirm('Opravdu smazat tento uzel?')) {
+            editor.removeNodeId('node-' + nodeId);
+            toastr.info('Uzel smazán');
+        }
+    }
+    
+    // Remove tool from node
+    function removeTool(tool) {
+        if (currentNodeId) {
+            const nodeInfo = editor.getNodeFromId(currentNodeId);
+            if (nodeInfo && nodeInfo.data.tools) {
+                nodeInfo.data.tools = nodeInfo.data.tools.filter(t => t !== tool);
+                updateNodeHtml(currentNodeId, nodeInfo.data);
+                
+                // Update modal
+                const toolsHtml = nodeInfo.data.tools.map(t => 
+                    `<span class="badge badge-primary mr-1">${formatToolName(t)} 
+                     <i class="fas fa-times" onclick="removeTool('${t}')" style="cursor:pointer"></i></span>`
+                ).join('');
+                $('#nodeTools').html(toolsHtml || '<em class="text-muted">Žádné nástroje</em>');
+                
+                toastr.info('Nástroj odebrán');
+            }
+        }
+    }
+    
+    // Save workflow
+    function saveWorkflow() {
+        const exportData = editor.export();
+        const workflow = {
+            projectId: '@Model.ProjectId',
+            nodes: [],
+            edges: []
+        };
+        
+        // Convert Drawflow format to our format
+        Object.keys(exportData.drawflow.Home.data).forEach(nodeId => {
+            const node = exportData.drawflow.Home.data[nodeId];
+            workflow.nodes.push({
+                id: nodeId,
+                name: node.data.name,
+                type: 2, // Task - simplified
+                position: { x: node.pos_x, y: node.pos_y },
+                tools: node.data.tools || [],
+                description: node.data.description || ''
+            });
+            
+            // Extract connections
+            Object.keys(node.outputs.output_1.connections).forEach(connIndex => {
+                const conn = node.outputs.output_1.connections[connIndex];
+                workflow.edges.push({
+                    id: `edge-${nodeId}-${conn.node}`,
+                    sourceId: nodeId,
+                    targetId: conn.node
+                });
+            });
+        });
+        
+        // Save via AJAX
+        $.ajax({
+            url: '/WorkflowDesigner/SaveWorkflow',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(workflow),
+            success: function(response) {
+                if (response.success) {
+                    toastr.success('Workflow uloženo');
+                }
+            }
+        });
+    }
+    
+    // Export workflow
+    function exportWorkflow() {
+        const data = editor.export();
+        const dataStr = JSON.stringify(data, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = 'workflow.json';
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    }
+    
+    // Clear workflow
+    function clearWorkflow() {
+        if (confirm('Opravdu vymazat celý workflow?')) {
+            editor.clear();
+        }
+    }
+</script>
+}

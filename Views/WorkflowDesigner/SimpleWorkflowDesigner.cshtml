@@ -1,0 +1,824 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+@{
+    ViewData["Title"] = "Workflow Designer";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .designer-container {
+        display: flex;
+        height: calc(100vh - 200px);
+        gap: 20px;
+    }
+    
+    .toolbox {
+        width: 250px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        overflow-y: auto;
+    }
+    
+    .toolbox h6 {
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #333;
+    }
+    
+    .tool-item {
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 10px;
+        cursor: move;
+        text-align: center;
+        transition: all 0.2s;
+    }
+    
+    .tool-item:hover {
+        border-color: #007bff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .canvas-container {
+        flex: 1;
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        position: relative;
+        overflow: auto;
+    }
+    
+    #workflow-canvas {
+        width: 2000px;
+        height: 1500px;
+        position: relative;
+        background-image: 
+            linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
+        background-size: 20px 20px;
+    }
+    
+    .workflow-node {
+        position: absolute;
+        background: white;
+        border: 2px solid #007bff;
+        border-radius: 8px;
+        padding: 15px;
+        min-width: 180px;
+        cursor: move;
+        user-select: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .workflow-node.selected {
+        border-color: #ff6b6b;
+        box-shadow: 0 0 0 3px rgba(255,107,107,0.2);
+    }
+    
+    .workflow-node.start {
+        background: #28a745;
+        color: white;
+        border-color: #28a745;
+    }
+    
+    .workflow-node.end {
+        background: #dc3545;
+        color: white;
+        border-color: #dc3545;
+    }
+    
+    .workflow-node.condition {
+        border-color: #ffc107;
+    }
+    
+    .workflow-node.parallel {
+        border-color: #6f42c1;
+    }
+    
+    .node-header {
+        font-weight: bold;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .node-close {
+        cursor: pointer;
+        color: #999;
+        font-size: 18px;
+        line-height: 1;
+    }
+    
+    .node-close:hover {
+        color: #dc3545;
+    }
+    
+    .node-tools {
+        font-size: 12px;
+        margin-top: 8px;
+    }
+    
+    .tool-badge {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-right: 4px;
+    }
+    
+    .connection-line {
+        stroke: #007bff;
+        stroke-width: 2;
+        fill: none;
+        pointer-events: none;
+    }
+    
+    .connection-dot {
+        width: 12px;
+        height: 12px;
+        background: #007bff;
+        border: 2px solid white;
+        border-radius: 50%;
+        position: absolute;
+        cursor: crosshair;
+    }
+    
+    .connection-dot.input {
+        left: -8px;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    
+    .connection-dot.output {
+        right: -8px;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    
+    .toolbar {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+</style>
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> Workflow Designer
+                    <small class="text-muted">@Model.ProjectName</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-sm-right">
+                    <button class="btn btn-success" onclick="saveWorkflow()">
+                        <i class="fas fa-save"></i> Uložit
+                    </button>
+                    <button class="btn btn-info" onclick="validateWorkflow()">
+                        <i class="fas fa-check"></i> Validovat
+                    </button>
+                    <button class="btn btn-primary" onclick="testWorkflow()">
+                        <i class="fas fa-play"></i> Test
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="toolbar">
+            <button class="btn btn-sm btn-secondary" onclick="clearWorkflow()">
+                <i class="fas fa-trash"></i> Vyčistit
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="autoLayout()">
+                <i class="fas fa-magic"></i> Automatické rozložení
+            </button>
+            <span class="ml-auto text-muted">
+                Přetáhněte bloky z panelu nástrojů
+            </span>
+        </div>
+        
+        <div class="designer-container">
+            <!-- Toolbox -->
+            <div class="toolbox">
+                <h5><i class="fas fa-toolbox"></i> Nástroje</h5>
+                
+                <h6>Základní uzly</h6>
+                <div class="tool-item" data-type="task" draggable="true">
+                    <i class="fas fa-cog"></i> Úloha
+                </div>
+                <div class="tool-item" data-type="condition" draggable="true">
+                    <i class="fas fa-code-branch"></i> Podmínka
+                </div>
+                <div class="tool-item" data-type="parallel" draggable="true">
+                    <i class="fas fa-sitemap"></i> Paralelní
+                </div>
+                
+                <hr>
+                
+                <h6>AI Nástroje</h6>
+                @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                {
+                    <div class="tool-item" data-type="ai-tool" data-tool="@tool" draggable="true">
+                        <i class="fas fa-robot"></i> @tool.Replace("_", " ")
+                    </div>
+                }
+            </div>
+            
+            <!-- Canvas -->
+            <div class="canvas-container">
+                <div id="workflow-canvas">
+                    <svg id="connections-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible;">
+                        <defs>
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#007bff" />
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Node Edit Modal -->
+<div class="modal fade" id="nodeEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit uzel</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editingNodeId">
+                <div class="form-group">
+                    <label>Název</label>
+                    <input type="text" class="form-control" id="nodeName">
+                </div>
+                <div class="form-group">
+                    <label>Popis</label>
+                    <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
+                </div>
+                <div class="form-group" id="toolsSection">
+                    <label>AI Nástroje</label>
+                    <select multiple class="form-control" id="nodeTools" size="5">
+                        @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                        {
+                            <option value="@tool">@tool.Replace("_", " ")</option>
+                        }
+                    </select>
+                    <small class="text-muted">Držte Ctrl pro výběr více nástrojů</small>
+                </div>
+                <div class="form-group" id="conditionSection" style="display: none;">
+                    <label>Podmínka</label>
+                    <input type="text" class="form-control" id="nodeCondition" placeholder="result > 0">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="deleteCurrentNode()">
+                    <i class="fas fa-trash"></i> Smazat
+                </button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="updateCurrentNode()">
+                    <i class="fas fa-save"></i> Uložit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Workflow state
+    let nodes = {};
+    let connections = [];
+    let selectedNode = null;
+    let nodeIdCounter = 1;
+    let draggedElement = null;
+    let isConnecting = false;
+    let connectionStart = null;
+    
+    // Initialize
+    $(document).ready(function() {
+        initializeDragAndDrop();
+        initializeCanvas();
+        loadInitialWorkflow();
+    });
+    
+    // Initialize drag and drop
+    function initializeDragAndDrop() {
+        // Toolbox items
+        $('.tool-item').on('dragstart', function(e) {
+            e.originalEvent.dataTransfer.setData('type', $(this).data('type'));
+            e.originalEvent.dataTransfer.setData('tool', $(this).data('tool') || '');
+        });
+        
+        // Canvas
+        $('#workflow-canvas').on('dragover', function(e) {
+            e.preventDefault();
+        }).on('drop', function(e) {
+            e.preventDefault();
+            const type = e.originalEvent.dataTransfer.getData('type');
+            const tool = e.originalEvent.dataTransfer.getData('tool');
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            createNode(type, x, y, tool);
+        });
+    }
+    
+    // Initialize canvas events
+    function initializeCanvas() {
+        $('#workflow-canvas').on('click', function(e) {
+            if (e.target === this) {
+                deselectAll();
+            }
+        });
+    }
+    
+    // Create new node
+    function createNode(type, x, y, tool) {
+        const nodeId = 'node_' + nodeIdCounter++;
+        
+        // Default descriptions
+        const defaultDescriptions = {
+            'start': 'Začátek workflow',
+            'end': 'Konec workflow',
+            'task': 'Proveď úlohu',
+            'condition': 'Rozhodni podle podmínky',
+            'parallel': 'Zpracuj paralelně',
+            'ai-tool': 'Použij AI nástroj'
+        };
+        
+        const node = {
+            id: nodeId,
+            type: type,
+            name: tool ? tool.replace(/_/g, ' ') : getNodeTypeName(type),
+            x: x - 90,
+            y: y - 30,
+            tools: tool ? [tool] : [],
+            description: defaultDescriptions[type] || ''
+        };
+        
+        nodes[nodeId] = node;
+        renderNode(node);
+    }
+    
+    // Get node type display name
+    function getNodeTypeName(type) {
+        const names = {
+            'start': 'Začátek',
+            'end': 'Konec',
+            'task': 'Úloha',
+            'condition': 'Podmínka',
+            'parallel': 'Paralelní zpracování'
+        };
+        return names[type] || type;
+    }
+    
+    // Render node
+    function renderNode(node) {
+        const nodeEl = $('<div>')
+            .addClass('workflow-node')
+            .addClass(node.type)
+            .attr('id', node.id)
+            .css({
+                left: node.x + 'px',
+                top: node.y + 'px'
+            });
+        
+        // Header
+        const header = $('<div>').addClass('node-header');
+        header.append($('<span>').html(`<i class="${getNodeIcon(node.type)}"></i> ${node.name}`));
+        
+        // Close button (not for start/end)
+        if (node.type !== 'start' && node.type !== 'end') {
+            header.append($('<span>').addClass('node-close').html('×').click(function(e) {
+                e.stopPropagation();
+                removeNode(node.id);
+            }));
+        }
+        
+        nodeEl.append(header);
+        
+        // Description
+        if (node.description) {
+            const descDiv = $('<div>')
+                .css({
+                    fontSize: '12px',
+                    color: '#666',
+                    marginTop: '5px',
+                    fontStyle: 'italic'
+                })
+                .text(node.description);
+            nodeEl.append(descDiv);
+        }
+        
+        // Tools
+        if (node.tools && node.tools.length > 0) {
+            const toolsDiv = $('<div>').addClass('node-tools');
+            node.tools.forEach(tool => {
+                toolsDiv.append($('<span>').addClass('tool-badge').text(tool.replace(/_/g, ' ')));
+            });
+            nodeEl.append(toolsDiv);
+        }
+        
+        // Connection dots
+        if (node.type !== 'start') {
+            nodeEl.append($('<div>').addClass('connection-dot input'));
+        }
+        if (node.type !== 'end') {
+            nodeEl.append($('<div>').addClass('connection-dot output'));
+        }
+        
+        // Events
+        nodeEl.on('click', function(e) {
+            e.stopPropagation();
+            selectNode(node.id);
+        });
+        
+        nodeEl.on('dblclick', function(e) {
+            e.stopPropagation();
+            editNode(node.id);
+        });
+        
+        // Make draggable
+        makeDraggable(nodeEl, node);
+        
+        // Connection events - musíme použít delegated events
+        nodeEl.on('mousedown', '.connection-dot.output', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            startConnection(node.id);
+            return false;
+        });
+        
+        nodeEl.on('mouseup', '.connection-dot.input', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            if (isConnecting && connectionStart !== node.id) {
+                endConnection(node.id);
+            }
+            return false;
+        });
+        
+        $('#workflow-canvas').append(nodeEl);
+    }
+    
+    // Get node icon
+    function getNodeIcon(type) {
+        const icons = {
+            'start': 'fas fa-play',
+            'end': 'fas fa-stop',
+            'task': 'fas fa-cog',
+            'condition': 'fas fa-code-branch',
+            'parallel': 'fas fa-sitemap',
+            'ai-tool': 'fas fa-robot'
+        };
+        return icons[type] || 'fas fa-circle';
+    }
+    
+    // Make element draggable
+    function makeDraggable(element, node) {
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+        
+        element.on('mousedown', function(e) {
+            if ($(e.target).hasClass('node-close') || $(e.target).hasClass('connection-dot')) return;
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            initialX = node.x;
+            initialY = node.y;
+            
+            $(document).on('mousemove.drag', function(e) {
+                if (!isDragging) return;
+                
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                
+                node.x = initialX + dx;
+                node.y = initialY + dy;
+                
+                element.css({
+                    left: node.x + 'px',
+                    top: node.y + 'px'
+                });
+                
+                updateConnections();
+            });
+            
+            $(document).on('mouseup.drag', function() {
+                isDragging = false;
+                $(document).off('.drag');
+            });
+        });
+    }
+    
+    // Connection management
+    function startConnection(nodeId) {
+        console.log('Starting connection from:', nodeId);
+        isConnecting = true;
+        connectionStart = nodeId;
+        
+        // Change cursor
+        $('#workflow-canvas').css('cursor', 'crosshair');
+        
+        // Create temporary line
+        const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tempLine.setAttribute('id', 'temp-connection');
+        tempLine.setAttribute('class', 'connection-line');
+        tempLine.setAttribute('stroke', '#ff6b6b');
+        tempLine.setAttribute('stroke-dasharray', '5,5');
+        $('#connections-svg')[0].appendChild(tempLine);
+        
+        // Get start position - from output dot
+        const startNode = nodes[nodeId];
+        const startEl = $('#' + nodeId);
+        const outputDot = startEl.find('.connection-dot.output');
+        const dotOffset = outputDot.offset();
+        const canvasOffset = $('#workflow-canvas').offset();
+        
+        const startX = dotOffset.left - canvasOffset.left + $('#workflow-canvas').scrollLeft() + 6;
+        const startY = dotOffset.top - canvasOffset.top + $('#workflow-canvas').scrollTop() + 6;
+        
+        // Mouse move to update temp line
+        $(document).on('mousemove.connection', function(e) {
+            const rect = $('#workflow-canvas')[0].getBoundingClientRect();
+            const x = e.clientX - rect.left + $('#workflow-canvas').scrollLeft();
+            const y = e.clientY - rect.top + $('#workflow-canvas').scrollTop();
+            
+            tempLine.setAttribute('x1', startX);
+            tempLine.setAttribute('y1', startY);
+            tempLine.setAttribute('x2', x);
+            tempLine.setAttribute('y2', y);
+        });
+        
+        // Global mouseup to cancel connection
+        $(document).on('mouseup.connection', function(e) {
+            // If not on a valid input, cancel
+            if (!$(e.target).hasClass('connection-dot') || !$(e.target).hasClass('input')) {
+                console.log('Connection cancelled');
+                
+                // Clean up
+                $('#temp-connection').remove();
+                isConnecting = false;
+                connectionStart = null;
+                $('#workflow-canvas').css('cursor', 'default');
+                $(document).off('.connection');
+            }
+        });
+    }
+    
+    function endConnection(nodeId) {
+        console.log('Ending connection at:', nodeId);
+        if (connectionStart && connectionStart !== nodeId) {
+            // Check if connection already exists
+            const exists = connections.some(c => 
+                c.from === connectionStart && c.to === nodeId
+            );
+            
+            if (!exists) {
+                connections.push({
+                    from: connectionStart,
+                    to: nodeId
+                });
+                updateConnections();
+                toastr.success('Propojeno!');
+            } else {
+                toastr.warning('Toto propojení již existuje');
+            }
+        }
+        
+        // Clean up
+        $('#temp-connection').remove();
+        isConnecting = false;
+        connectionStart = null;
+        $('#workflow-canvas').css('cursor', 'default');
+        $(document).off('.connection');
+    }
+    
+    // Update SVG connections
+    function updateConnections() {
+        const svg = $('#connections-svg');
+        svg.find('line:not(#temp-connection)').remove();
+        
+        connections.forEach(conn => {
+            const fromNode = nodes[conn.from];
+            const toNode = nodes[conn.to];
+            
+            if (fromNode && toNode) {
+                const fromEl = $('#' + conn.from);
+                const toEl = $('#' + conn.to);
+                
+                // Get exact positions from connection dots
+                const outputDot = fromEl.find('.connection-dot.output');
+                const inputDot = toEl.find('.connection-dot.input');
+                
+                const outputOffset = outputDot.offset();
+                const inputOffset = inputDot.offset();
+                const canvasOffset = $('#workflow-canvas').offset();
+                const scrollLeft = $('#workflow-canvas').scrollLeft();
+                const scrollTop = $('#workflow-canvas').scrollTop();
+                
+                const x1 = outputOffset.left - canvasOffset.left + scrollLeft + 6;
+                const y1 = outputOffset.top - canvasOffset.top + scrollTop + 6;
+                const x2 = inputOffset.left - canvasOffset.left + scrollLeft + 6;
+                const y2 = inputOffset.top - canvasOffset.top + scrollTop + 6;
+                
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', x1);
+                line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2);
+                line.setAttribute('y2', y2);
+                line.setAttribute('class', 'connection-line');
+                line.setAttribute('marker-end', 'url(#arrowhead)');
+                
+                svg[0].appendChild(line);
+            }
+        });
+    }
+    
+    // Node selection
+    function selectNode(nodeId) {
+        deselectAll();
+        selectedNode = nodeId;
+        $('#' + nodeId).addClass('selected');
+    }
+    
+    function deselectAll() {
+        selectedNode = null;
+        $('.workflow-node').removeClass('selected');
+    }
+    
+    // Edit node
+    function editNode(nodeId) {
+        const node = nodes[nodeId];
+        if (!node) return;
+        
+        $('#editingNodeId').val(nodeId);
+        $('#nodeName').val(node.name);
+        $('#nodeDescription').val(node.description || '');
+        
+        // Show/hide sections based on type
+        if (node.type === 'condition') {
+            $('#toolsSection').hide();
+            $('#conditionSection').show();
+            $('#nodeCondition').val(node.condition || '');
+        } else {
+            $('#toolsSection').show();
+            $('#conditionSection').hide();
+            
+            // Set selected tools
+            $('#nodeTools').val(node.tools || []);
+        }
+        
+        $('#nodeEditModal').modal('show');
+    }
+    
+    // Update node
+    function updateCurrentNode() {
+        const nodeId = $('#editingNodeId').val();
+        const node = nodes[nodeId];
+        if (!node) return;
+        
+        node.name = $('#nodeName').val();
+        node.description = $('#nodeDescription').val();
+        
+        if (node.type === 'condition') {
+            node.condition = $('#nodeCondition').val();
+        } else {
+            node.tools = $('#nodeTools').val() || [];
+        }
+        
+        // Re-render node
+        $('#' + nodeId).remove();
+        renderNode(node);
+        
+        $('#nodeEditModal').modal('hide');
+    }
+    
+    // Delete node
+    function deleteCurrentNode() {
+        const nodeId = $('#editingNodeId').val();
+        removeNode(nodeId);
+        $('#nodeEditModal').modal('hide');
+    }
+    
+    function removeNode(nodeId) {
+        delete nodes[nodeId];
+        $('#' + nodeId).remove();
+        
+        // Remove connections
+        connections = connections.filter(c => c.from !== nodeId && c.to !== nodeId);
+        updateConnections();
+    }
+    
+    // Load initial workflow
+    function loadInitialWorkflow() {
+        // Create start and end nodes
+        createNode('start', 100, 200);
+        createNode('end', 700, 200);
+        
+        // Load existing nodes from model if any
+        const model = @Html.Raw(Json.Serialize(Model));
+        if (model && model.nodes && model.nodes.length > 2) {
+            // Load additional nodes from model
+            // This is simplified - you'd map the model structure
+        }
+    }
+    
+    // Workflow operations
+    function saveWorkflow() {
+        const workflowData = {
+            nodes: Object.values(nodes),
+            connections: connections
+        };
+        
+        console.log('Saving workflow:', workflowData);
+        toastr.success('Workflow uloženo');
+    }
+    
+    function validateWorkflow() {
+        const errors = [];
+        
+        // Check for start node
+        const hasStart = Object.values(nodes).some(n => n.type === 'start');
+        if (!hasStart) errors.push('Chybí počáteční uzel');
+        
+        // Check for end node  
+        const hasEnd = Object.values(nodes).some(n => n.type === 'end');
+        if (!hasEnd) errors.push('Chybí koncový uzel');
+        
+        // Check disconnected nodes
+        Object.values(nodes).forEach(node => {
+            if (node.type !== 'start' && node.type !== 'end') {
+                const hasInput = connections.some(c => c.to === node.id);
+                const hasOutput = connections.some(c => c.from === node.id);
+                
+                if (!hasInput) errors.push(`Uzel "${node.name}" nemá vstup`);
+                if (!hasOutput) errors.push(`Uzel "${node.name}" nemá výstup`);
+            }
+        });
+        
+        if (errors.length === 0) {
+            toastr.success('Workflow je validní');
+        } else {
+            toastr.error(errors.join('<br>'), 'Chyby ve workflow');
+        }
+    }
+    
+    function testWorkflow() {
+        toastr.info('Test workflow...');
+    }
+    
+    function clearWorkflow() {
+        if (confirm('Opravdu vymazat workflow?')) {
+            nodes = {};
+            connections = [];
+            $('.workflow-node').remove();
+            $('svg line').remove();
+            
+            // Add back start and end
+            loadInitialWorkflow();
+        }
+    }
+    
+    function autoLayout() {
+        // Simple auto-layout
+        let x = 100;
+        const y = 200;
+        const spacing = 200;
+        
+        Object.values(nodes).forEach(node => {
+            node.x = x;
+            node.y = y;
+            $('#' + node.id).css({
+                left: node.x + 'px',
+                top: node.y + 'px'
+            });
+            x += spacing;
+        });
+        
+        updateConnections();
+        toastr.success('Uzly byly automaticky rozmístěny');
+    }
+</script>
+}

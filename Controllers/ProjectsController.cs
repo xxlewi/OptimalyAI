@@ -450,19 +450,8 @@ namespace OptimalyAI.Controllers
         [HttpGet]
         public async Task<IActionResult> WorkflowDesigner(Guid id)
         {
-            var project = await _projectService.GetByIdAsync(id);
-            if (project == null)
-            {
-                return NotFound();
-            }
-
-            var design = await _workflowDesignerService.GetWorkflowDesignAsync(id);
-            var components = await _workflowDesignerService.GetAvailableComponentsAsync();
-
-            ViewBag.Project = project;
-            ViewBag.Components = components;
-
-            return View("~/Views/Projects/WorkflowDesigner/Index.cshtml", design);
+            // Přesměruj na WorkflowPrototypeController
+            return RedirectToAction("Index", "WorkflowPrototype", new { projectId = id });
         }
 
         /// <summary>
@@ -502,7 +491,7 @@ namespace OptimalyAI.Controllers
                 ViewBag.Components = components;
                 ViewBag.ProjectId = projectId;
 
-                return PartialView("~/Views/Projects/WorkflowDesigner/_CreateStage.cshtml", new CreateProjectStageDto { ProjectId = projectId });
+                return PartialView("~/Views/WorkflowPrototype/_CreateStage.cshtml", new CreateProjectStageDto { ProjectId = projectId });
             }
             catch (Exception ex)
             {
@@ -527,7 +516,7 @@ namespace OptimalyAI.Controllers
             var components = await _workflowDesignerService.GetAvailableComponentsAsync();
             ViewBag.Components = components;
 
-            return PartialView("~/Views/Projects/WorkflowDesigner/_EditStage.cshtml", stage);
+            return PartialView("~/Views/WorkflowPrototype/_EditStage.cshtml", stage);
         }
 
         /// <summary>
@@ -543,7 +532,7 @@ namespace OptimalyAI.Controllers
             }
 
             ViewBag.Project = project;
-            return PartialView("~/Views/Projects/WorkflowDesigner/_TestWorkflow.cshtml", new TestProjectWorkflowDto { ProjectId = projectId });
+            return PartialView("~/Views/WorkflowPrototype/_TestWorkflow.cshtml", new TestProjectWorkflowDto { ProjectId = projectId });
         }
     }
 }

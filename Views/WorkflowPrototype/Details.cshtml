@@ -1,0 +1,429 @@
+@using OptimalyAI.ViewModels
+@{
+    ViewData["Title"] = "Detail projektu";
+    var project = ViewBag.Project as ProjectListItemViewModel;
+    var workflow = ViewBag.Workflow as WorkflowPrototypeViewModel;
+    var hasWorkflow = ViewBag.HasWorkflow ?? false;
+    var executionHistory = ViewBag.ExecutionHistory as List<dynamic> ?? new List<dynamic>();
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-8">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> @project.Name
+                    @if (project.Status == "Active")
+                    {
+                        <span class="badge badge-success">Aktivní</span>
+                    }
+                    else if (project.Status == "Draft")
+                    {
+                        <span class="badge badge-warning">Rozpracovaný</span>
+                    }
+                </h1>
+                <p class="text-muted">@project.Description</p>
+            </div>
+            <div class="col-sm-4 text-right">
+                <a href="@Url.Action("Index")" class="btn btn-default">
+                    <i class="fas fa-arrow-left"></i> Zpět na seznam
+                </a>
+                @if (hasWorkflow)
+                {
+                    <button class="btn btn-success" onclick="runWorkflow()">
+                        <i class="fas fa-play"></i> Spustit workflow
+                    </button>
+                }
+                <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-primary">
+                    <i class="fas fa-edit"></i> Upravit workflow
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Základní informace -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-info-circle"></i> Základní informace</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-5">ID projektu:</dt>
+                            <dd class="col-sm-7"><code>@project.Id.ToString().Substring(0, 8)...</code></dd>
+                            
+                            <dt class="col-sm-5">Zákazník:</dt>
+                            <dd class="col-sm-7">
+                                <a href="/Customers">@project.CustomerName</a><br>
+                                <small class="text-muted">
+                                    <a href="mailto:@project.CustomerEmail">@project.CustomerEmail</a>
+                                </small>
+                            </dd>
+                            
+                            <dt class="col-sm-5">Typ workflow:</dt>
+                            <dd class="col-sm-7">
+                                @switch (project.WorkflowType)
+                                {
+                                    case "ecommerce_search":
+                                        <span class="badge badge-info">🛒 E-commerce vyhledávání</span>
+                                        break;
+                                    case "content_generation":
+                                        <span class="badge badge-warning">📝 Generování obsahu</span>
+                                        break;
+                                    case "data_analysis":
+                                        <span class="badge badge-primary">📊 Analýza dat</span>
+                                        break;
+                                    case "chatbot":
+                                        <span class="badge badge-success">💬 Chatbot</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-secondary">⚙️ Vlastní</span>
+                                        break;
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-5">Spouštění:</dt>
+                            <dd class="col-sm-7">
+                                @switch (project.TriggerType)
+                                {
+                                    case "Manual":
+                                        <text><i class="fas fa-hand-pointer"></i> Manuální</text>
+                                        break;
+                                    case "Schedule":
+                                        <span><i class="fas fa-clock"></i> Plánované</span>
+                                        if (project.NextRun.HasValue)
+                                        {
+                                            <br>
+                                            <small>Další: @project.NextRun.Value.ToString("dd.MM.yyyy HH:mm")</small>
+                                        }
+                                        break;
+                                    case "Event":
+                                        <text><i class="fas fa-bolt"></i> Událostmi</text>
+                                        break;
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-5">Počet kroků:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge badge-info">@project.StageCount</span>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <!-- Statistiky -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-chart-bar"></i> Statistiky</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="description-block border-right">
+                                    <h5 class="description-header">@project.TotalRuns</h5>
+                                    <span class="description-text">CELKEM BĚHŮ</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="description-block">
+                                    <h5 class="description-header text-@(project.SuccessRate >= 80 ? "success" : project.SuccessRate >= 50 ? "warning" : "danger")">
+                                        @project.SuccessRate%
+                                    </h5>
+                                    <span class="description-text">ÚSPĚŠNOST</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="text-center">
+                            <p class="text-muted">
+                                @if (project.LastRun.HasValue)
+                                {
+                                    <text>Poslední běh: @project.LastRun.Value.ToString("dd.MM.yyyy HH:mm")</text>
+                                    if (project.LastRunSuccess)
+                                    {
+                                        <span class="badge badge-success ml-2">Úspěšný</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-danger ml-2">Neúspěšný</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <text>Zatím nebylo spuštěno</text>
+                                }
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow kroky -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-layer-group"></i> Kroky workflow</h3>
+                        <div class="card-tools">
+                            <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-sm btn-primary">
+                                <i class="fas fa-edit"></i> Upravit
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (hasWorkflow && workflow.Stages.Any())
+                        {
+                            <div class="timeline">
+                                @foreach (var stage in workflow.Stages.OrderBy(s => s.Order))
+                                {
+                                    <div class="time-label">
+                                        <span class="bg-primary">Krok @stage.Order</span>
+                                    </div>
+                                    <div>
+                                        <i class="fas fa-cog bg-@(stage.Status == "Active" ? "success" : "warning")"></i>
+                                        <div class="timeline-item">
+                                            <h3 class="timeline-header">
+                                                @stage.Name
+                                                @if (stage.UseReAct)
+                                                {
+                                                    <span class="badge badge-purple float-right">
+                                                        <i class="fas fa-brain"></i> ReAct
+                                                    </span>
+                                                }
+                                            </h3>
+                                            <div class="timeline-body">
+                                                @if (!string.IsNullOrEmpty(stage.Description))
+                                                {
+                                                    <p>@stage.Description</p>
+                                                }
+                                                <div class="mb-2">
+                                                    <span class="badge badge-info">@stage.Type</span>
+                                                    <span class="badge badge-secondary">@stage.ExecutionStrategy</span>
+                                                </div>
+                                                @if (stage.Tools.Any())
+                                                {
+                                                    <div>
+                                                        <small class="text-muted">Nástroje:</small><br>
+                                                        @foreach (var tool in stage.Tools)
+                                                        {
+                                                            <span class="badge badge-light mr-1">
+                                                                <i class="fas fa-wrench"></i> @tool
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                <div>
+                                    <i class="fas fa-check bg-success"></i>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Workflow ještě nebylo nakonfigurováno</p>
+                                <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Vytvořit workflow
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historie běhů -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-history"></i> Historie běhů</h3>
+                        <div class="card-tools">
+                            <button class="btn btn-sm btn-default" onclick="refreshHistory()">
+                                <i class="fas fa-sync"></i> Obnovit
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Spuštěno</th>
+                                    <th>Dokončeno</th>
+                                    <th>Trvání</th>
+                                    <th>Zpracováno</th>
+                                    <th>Stav</th>
+                                    <th>Spuštěno</th>
+                                    <th>Akce</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (executionHistory.Any())
+                                {
+                                    @foreach (var run in executionHistory)
+                                    {
+                                        <tr>
+                                            <td>@run.StartedAt.ToString("dd.MM.yyyy HH:mm:ss")</td>
+                                            <td>@run.CompletedAt.ToString("dd.MM.yyyy HH:mm:ss")</td>
+                                            <td>@run.Duration.ToString(@"hh\:mm\:ss")</td>
+                                            <td>@run.ItemsProcessed položek</td>
+                                            <td>
+                                                @if (run.Status == "Success")
+                                                {
+                                                    <span class="badge badge-success">
+                                                        <i class="fas fa-check"></i> Úspěch
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-danger">
+                                                        <i class="fas fa-times"></i> Selhalo
+                                                    </span>
+                                                    @if (!string.IsNullOrEmpty(run.ErrorMessage))
+                                                    {
+                                                        <br><small class="text-danger">@run.ErrorMessage</small>
+                                                    }
+                                                }
+                                            </td>
+                                            <td>@run.InitiatedBy</td>
+                                            <td>
+                                                <button class="btn btn-xs btn-info" onclick="viewExecutionDetails('@run.Id')" title="Zobrazit detaily">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-xs btn-default" onclick="downloadLog('@run.Id')" title="Stáhnout log">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-4">
+                                            Zatím žádná historie běhů
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (executionHistory.Count > 10)
+                    {
+                        <div class="card-footer">
+                            <button class="btn btn-sm btn-default">
+                                <i class="fas fa-chevron-down"></i> Zobrazit více
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        function runWorkflow() {
+            toastr.info('Spouštím workflow...');
+            setTimeout(() => {
+                toastr.success('Workflow bylo úspěšně spuštěno!');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            }, 1000);
+        }
+        
+        function refreshHistory() {
+            toastr.info('Obnovuji historii...');
+            setTimeout(() => {
+                location.reload();
+            }, 500);
+        }
+        
+        function viewExecutionDetails(executionId) {
+            toastr.info('Zobrazení detailů běhu (v produkci)');
+        }
+        
+        function downloadLog(executionId) {
+            toastr.info('Stahování logu (v produkci)');
+        }
+    </script>
+}
+
+@section Styles {
+    <style>
+        .timeline {
+            position: relative;
+            padding: 20px 0;
+        }
+        
+        .timeline:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 35px;
+            height: 100%;
+            width: 3px;
+            background: #dee2e6;
+        }
+        
+        .timeline > div {
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .timeline > div > i {
+            position: absolute;
+            left: 18px;
+            top: 0;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 35px;
+            color: #fff;
+            z-index: 1;
+        }
+        
+        .timeline-item {
+            margin-left: 60px;
+            margin-right: 15px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 0;
+        }
+        
+        .timeline-header {
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+            font-size: 16px;
+            margin: 0;
+        }
+        
+        .timeline-body {
+            padding: 10px;
+        }
+        
+        .time-label span {
+            padding: 5px 10px;
+            border-radius: 4px;
+            color: #fff;
+            font-weight: 600;
+            margin-left: 15px;
+        }
+        
+        .badge-purple {
+            background-color: #6f42c1;
+            color: #fff;
+        }
+    </style>
+}
