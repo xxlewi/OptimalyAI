@@ -498,6 +498,71 @@
     </div>
 </section>
 
+<!-- I/O Configuration Modal -->
+<div class="modal fade" id="ioConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Konfigurace vstupů a výstupů workflow</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Input Configuration -->
+                <h6><i class="fas fa-sign-in-alt"></i> Konfigurace vstupu</h6>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Typ vstupu</label>
+                            <select class="form-control" id="modalInputType" onchange="updateInputConfig()">
+                                <option value="files">📁 Soubory</option>
+                                <option value="images">🖼️ Obrázky</option>
+                                <option value="api">🌐 API</option>
+                                <option value="database">🗄️ Databáze</option>
+                                <option value="csv">📊 CSV</option>
+                                <option value="manual">✏️ Manuální</option>
+                            </select>
+                        </div>
+                        
+                        <div id="inputConfigDetails">
+                            <!-- Dynamic content based on input type -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Output Configuration -->
+                <h6><i class="fas fa-sign-out-alt"></i> Konfigurace výstupu</h6>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Typ výstupu</label>
+                            <select class="form-control" id="modalOutputType" onchange="updateOutputConfig()">
+                                <option value="excel">📊 Excel</option>
+                                <option value="json">📄 JSON</option>
+                                <option value="csv">📊 CSV</option>
+                                <option value="api">📤 API</option>
+                                <option value="database">💿 Databáze</option>
+                                <option value="email">📧 Email</option>
+                            </select>
+                        </div>
+                        
+                        <div id="outputConfigDetails">
+                            <!-- Dynamic content based on output type -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="saveIOConfig()">
+                    <i class="fas fa-save"></i> Uložit konfiguraci
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Node Edit Modal -->
 <div class="modal fade" id="nodeEditModal" tabindex="-1">
     <div class="modal-dialog">
@@ -1233,6 +1298,228 @@
         });
     }
     
+    // I/O Configuration
+    let workflowIOConfig = {
+        input: {
+            type: 'images',
+            config: {
+                formats: ['jpg', 'png', 'webp'],
+                maxSize: '10MB',
+                source: 'upload'
+            }
+        },
+        output: {
+            type: 'excel',
+            config: {
+                format: 'xlsx',
+                includeImages: true,
+                fields: ['url', 'price', 'availability', 'similarity']
+            }
+        }
+    };
+    
+    // Show I/O configuration modal
+    function showIOConfig() {
+        $('#modalInputType').val(workflowIOConfig.input.type);
+        $('#modalOutputType').val(workflowIOConfig.output.type);
+        updateInputConfig();
+        updateOutputConfig();
+        $('#ioConfigModal').modal('show');
+    }
+    
+    // Update input configuration UI
+    function updateInputConfig() {
+        const inputType = $('#modalInputType').val();
+        let configHtml = '';
+        
+        switch(inputType) {
+            case 'images':
+                configHtml = `
+                    <div class="form-group">
+                        <label>Podporované formáty</label>
+                        <input type="text" class="form-control" id="imageFormats" value="jpg, png, webp" placeholder="jpg, png, gif">
+                    </div>
+                    <div class="form-group">
+                        <label>Max. velikost souboru</label>
+                        <input type="text" class="form-control" id="maxFileSize" value="10MB">
+                    </div>
+                    <div class="form-group">
+                        <label>Zdroj</label>
+                        <select class="form-control" id="imageSource">
+                            <option value="upload">Upload souborů</option>
+                            <option value="url">URL adresa</option>
+                            <option value="api">API endpoint</option>
+                        </select>
+                    </div>
+                `;
+                break;
+                
+            case 'api':
+                configHtml = `
+                    <div class="form-group">
+                        <label>Endpoint URL</label>
+                        <input type="url" class="form-control" id="apiEndpoint" placeholder="https://api.example.com/data">
+                    </div>
+                    <div class="form-group">
+                        <label>Metoda</label>
+                        <select class="form-control" id="apiMethod">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Autentizace</label>
+                        <select class="form-control" id="apiAuth">
+                            <option value="none">Žádná</option>
+                            <option value="bearer">Bearer Token</option>
+                            <option value="apikey">API Key</option>
+                        </select>
+                    </div>
+                `;
+                break;
+                
+            case 'database':
+                configHtml = `
+                    <div class="form-group">
+                        <label>Typ databáze</label>
+                        <select class="form-control" id="dbType">
+                            <option value="postgresql">PostgreSQL</option>
+                            <option value="mysql">MySQL</option>
+                            <option value="mongodb">MongoDB</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tabulka/Kolekce</label>
+                        <input type="text" class="form-control" id="dbTable" placeholder="products">
+                    </div>
+                    <div class="form-group">
+                        <label>Filtr (SQL WHERE / MongoDB query)</label>
+                        <textarea class="form-control" id="dbFilter" rows="2"></textarea>
+                    </div>
+                `;
+                break;
+                
+            case 'csv':
+                configHtml = `
+                    <div class="form-group">
+                        <label>Oddělovač</label>
+                        <select class="form-control" id="csvDelimiter">
+                            <option value=",">Čárka (,)</option>
+                            <option value=";">Středník (;)</option>
+                            <option value="\\t">Tabulátor</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Kódování</label>
+                        <select class="form-control" id="csvEncoding">
+                            <option value="utf-8">UTF-8</option>
+                            <option value="windows-1250">Windows-1250</option>
+                        </select>
+                    </div>
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="csvHeaders" checked>
+                        <label class="custom-control-label" for="csvHeaders">První řádek obsahuje hlavičky</label>
+                    </div>
+                `;
+                break;
+        }
+        
+        $('#inputConfigDetails').html(configHtml);
+    }
+    
+    // Update output configuration UI
+    function updateOutputConfig() {
+        const outputType = $('#modalOutputType').val();
+        let configHtml = '';
+        
+        switch(outputType) {
+            case 'excel':
+                configHtml = `
+                    <div class="form-group">
+                        <label>Název souboru</label>
+                        <input type="text" class="form-control" id="excelFilename" value="vysledky_{timestamp}.xlsx">
+                    </div>
+                    <div class="form-group">
+                        <label>Sloupce</label>
+                        <textarea class="form-control" id="excelColumns" rows="3">URL produktu
+Cena
+Dostupnost
+Skóre podobnosti
+Obrázek</textarea>
+                    </div>
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="excelIncludeImages" checked>
+                        <label class="custom-control-label" for="excelIncludeImages">Vložit obrázky přímo do Excelu</label>
+                    </div>
+                `;
+                break;
+                
+            case 'api':
+                configHtml = `
+                    <div class="form-group">
+                        <label>Webhook URL</label>
+                        <input type="url" class="form-control" id="webhookUrl" placeholder="https://webhook.example.com/results">
+                    </div>
+                    <div class="form-group">
+                        <label>Metoda</label>
+                        <select class="form-control" id="webhookMethod">
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Headers</label>
+                        <textarea class="form-control" id="webhookHeaders" rows="2" placeholder='{"Authorization": "Bearer token"}'></textarea>
+                    </div>
+                `;
+                break;
+                
+            case 'email':
+                configHtml = `
+                    <div class="form-group">
+                        <label>Příjemci (oddělené čárkou)</label>
+                        <input type="text" class="form-control" id="emailRecipients" placeholder="user@example.com, admin@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Předmět</label>
+                        <input type="text" class="form-control" id="emailSubject" value="Výsledky workflow {workflow_name}">
+                    </div>
+                    <div class="form-group">
+                        <label>Formát přílohy</label>
+                        <select class="form-control" id="emailAttachmentFormat">
+                            <option value="excel">Excel</option>
+                            <option value="csv">CSV</option>
+                            <option value="pdf">PDF</option>
+                        </select>
+                    </div>
+                `;
+                break;
+        }
+        
+        $('#outputConfigDetails').html(configHtml);
+    }
+    
+    // Save I/O configuration
+    function saveIOConfig() {
+        const inputType = $('#modalInputType').val();
+        const outputType = $('#modalOutputType').val();
+        
+        // Save input config
+        workflowIOConfig.input.type = inputType;
+        workflowIOConfig.input.config = {};
+        
+        // Save output config
+        workflowIOConfig.output.type = outputType;
+        workflowIOConfig.output.config = {};
+        
+        // Update the dropdowns in toolbox
+        $('#workflowInputType').val(inputType);
+        $('#workflowOutputType').val(outputType);
+        
+        $('#ioConfigModal').modal('hide');
+        toastr.success('Konfigurace vstupů a výstupů uložena');
+    }
+    
     // Convert visual workflow to orchestrator format
     function convertToOrchestratorFormat() {
         console.log('Converting workflow with connections:', connections);
@@ -1334,6 +1621,8 @@
             firstStepId: firstStepId,
             lastStepIds: lastStepIds,
             steps: steps,
+            input: workflowIOConfig.input,  // Add input configuration
+            output: workflowIOConfig.output, // Add output configuration
             metadata: {
                 createdWith: 'SimpleWorkflowDesigner',
                 createdAt: new Date().toISOString(),
@@ -1555,6 +1844,16 @@
     // Load workflow from orchestrator format
     function loadFromOrchestratorFormat(data) {
         if (!data || !data.steps) return;
+        
+        // Load I/O configuration if available
+        if (data.input) {
+            workflowIOConfig.input = data.input;
+            $('#workflowInputType').val(data.input.type);
+        }
+        if (data.output) {
+            workflowIOConfig.output = data.output;
+            $('#workflowOutputType').val(data.output.type);
+        }
         
         // Clear existing (except start/end)
         Object.keys(nodes).forEach(nodeId => {

@@ -738,6 +738,143 @@ namespace OptimalyAI.Controllers
             
             return Json(new { success = false, message = "Workflow nebyl nalezen" });
         }
+        
+        /// <summary>
+        /// Execute workflow in test or production mode
+        /// </summary>
+        [HttpPost]
+        public IActionResult ExecuteWorkflow([FromBody] WorkflowExecutionRequest request)
+        {
+            if (request == null || request.ProjectId == Guid.Empty)
+            {
+                return Json(new { success = false, message = "Neplatná data" });
+            }
+            
+            try
+            {
+                // Validate workflow exists
+                if (!_workflows.ContainsKey(request.ProjectId))
+                {
+                    return Json(new { success = false, message = "Workflow nebyl nalezen" });
+                }
+                
+                var workflow = _workflows[request.ProjectId];
+                
+                // Create execution record
+                var execution = new WorkflowExecution
+                {
+                    Id = Guid.NewGuid(),
+                    ProjectId = request.ProjectId,
+                    RunName = request.RunName,
+                    Mode = request.Mode,
+                    Priority = request.Priority,
+                    TestItemLimit = request.TestItemLimit,
+                    EnableDebugLogging = request.EnableDebugLogging,
+                    Status = "Running",
+                    StartedAt = DateTime.Now,
+                    StartedBy = "Demo User"
+                };
+                
+                // Store execution (in real app, save to database)
+                if (!_executionHistory.ContainsKey(request.ProjectId))
+                {
+                    _executionHistory[request.ProjectId] = new List<WorkflowExecution>();
+                }
+                _executionHistory[request.ProjectId].Insert(0, execution);
+                
+                // Log execution details
+                var executionDetails = new
+                {
+                    Mode = request.Mode,
+                    ItemLimit = request.Mode == "test" ? request.TestItemLimit : (int?)null,
+                    Workflow = workflow.ProjectName,
+                    StepsCount = workflow.Stages?.Count ?? 0,
+                    EstimatedDuration = CalculateEstimatedDuration(workflow, request),
+                    Settings = new
+                    {
+                        DebugLogging = request.EnableDebugLogging,
+                        Priority = request.Priority
+                    }
+                };
+                
+                // In production, this would trigger actual workflow execution
+                // For now, we just simulate with the frontend JavaScript
+                
+                return Json(new 
+                { 
+                    success = true, 
+                    executionId = execution.Id,
+                    message = $"Workflow spuštěn v režimu {request.Mode}",
+                    execution = executionDetails
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Chyba při spuštění: {ex.Message}" });
+            }
+        }
+        
+        private TimeSpan CalculateEstimatedDuration(WorkflowPrototypeViewModel workflow, WorkflowExecutionRequest request)
+        {
+            var baseTimePerStep = TimeSpan.FromMinutes(2);
+            var stepCount = workflow.Stages?.Count ?? 1;
+            var itemMultiplier = request.Mode == "test" ? (request.TestItemLimit ?? 10) / 10.0 : 1.0;
+            
+            return TimeSpan.FromMilliseconds(baseTimePerStep.TotalMilliseconds * stepCount * itemMultiplier);
+        }
+        
+        private static Dictionary<Guid, List<WorkflowExecution>> _executionHistory = new();
+    }
+    
+    /// <summary>
+    /// Request for workflow execution
+    /// </summary>
+    public class WorkflowExecutionRequest
+    {
+        public Guid ProjectId { get; set; }
+        public string RunName { get; set; }
+        public string Mode { get; set; } // "test" or "production"
+        public string Priority { get; set; } = "normal";
+        public int? TestItemLimit { get; set; }
+        public bool EnableDebugLogging { get; set; } = true;
+    }
+    
+    /// <summary>
+    /// Workflow execution record
+    /// </summary>
+    public class WorkflowExecution
+    {
+        public Guid Id { get; set; }
+        public Guid ProjectId { get; set; }
+        public string RunName { get; set; }
+        public string Mode { get; set; }
+        public string Priority { get; set; }
+        public int? TestItemLimit { get; set; }
+        public bool EnableDebugLogging { get; set; }
+        public string Status { get; set; } // Running, Completed, Failed
+        public DateTime StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public string StartedBy { get; set; }
+        public int ItemsProcessed { get; set; }
+        public string ErrorMessage { get; set; }
+        public Dictionary<string, object> Results { get; set; } = new();
+        public List<WorkflowStepExecution> Steps { get; set; } = new();
+    }
+    
+    /// <summary>
+    /// Individual step execution within workflow
+    /// </summary>
+    public class WorkflowStepExecution
+    {
+        public string StepId { get; set; }
+        public string StepName { get; set; }
+        public string Status { get; set; }
+        public DateTime StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public TimeSpan Duration { get; set; }
+        public Dictionary<string, object> Input { get; set; } = new();
+        public Dictionary<string, object> Output { get; set; } = new();
+        public string ErrorMessage { get; set; }
     }
     
     /// <summary>

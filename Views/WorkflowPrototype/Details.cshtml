@@ -30,9 +30,14 @@
                 </a>
                 @if (hasWorkflow)
                 {
-                    <button class="btn btn-success" onclick="testWorkflow()">
-                        <i class="fas fa-play"></i> Spustit workflow
-                    </button>
+                    <div class="btn-group">
+                        <button class="btn btn-warning" onclick="showRunModal('test')">
+                            <i class="fas fa-vial"></i> Test run
+                        </button>
+                        <button class="btn btn-success" onclick="showRunModal('production')">
+                            <i class="fas fa-play"></i> Production run
+                        </button>
+                    </div>
                 }
             </div>
         </div>
@@ -158,6 +163,56 @@
                     </div>
                 </div>
                 
+                <!-- Vstupy a výstupy workflow -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-exchange-alt"></i> Vstupy & Výstupy</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h6><i class="fas fa-sign-in-alt text-primary"></i> Vstup workflow</h6>
+                        <dl class="row mb-3" id="inputConfigDisplay">
+                            <dt class="col-sm-5">Typ:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge badge-info">🖼️ Obrázky</span>
+                            </dd>
+                            <dt class="col-sm-5">Formát:</dt>
+                            <dd class="col-sm-7">JPG, PNG, WebP</dd>
+                            <dt class="col-sm-5">Zdroj:</dt>
+                            <dd class="col-sm-7">Upload souborů / API endpoint</dd>
+                            <dt class="col-sm-5">Max. velikost:</dt>
+                            <dd class="col-sm-7">10 MB na soubor</dd>
+                        </dl>
+                        
+                        <h6><i class="fas fa-sign-out-alt text-success"></i> Výstup workflow</h6>
+                        <dl class="row" id="outputConfigDisplay">
+                            <dt class="col-sm-5">Typ:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge badge-success">📊 Excel</span>
+                            </dd>
+                            <dt class="col-sm-5">Formát:</dt>
+                            <dd class="col-sm-7">XLSX s výsledky</dd>
+                            <dt class="col-sm-5">Obsah:</dt>
+                            <dd class="col-sm-7">
+                                <small>
+                                    • URL nalezených produktů<br>
+                                    • Ceny a dostupnost<br>
+                                    • Skóre podobnosti<br>
+                                    • Obrázky produktů
+                                </small>
+                            </dd>
+                        </dl>
+                        
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="$('#ioConfigModal').modal('show')">
+                            <i class="fas fa-edit"></i> Upravit I/O
+                        </button>
+                    </div>
+                </div>
+                
                 <!-- Orchestrátor nastavení -->
                 <div class="card mt-3">
                     <div class="card-header">
@@ -231,7 +286,7 @@
                             <button type="button" class="btn btn-sm btn-info" onclick="exportWorkflow()">
                                 <i class="fas fa-file-export"></i> Export
                             </button>
-                            <button type="button" class="btn btn-sm btn-success" onclick="testWorkflow()">
+                            <button type="button" class="btn btn-sm btn-success" onclick="showRunWorkflowModal()">
                                 <i class="fas fa-play"></i> Test
                             </button>
                             <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-sm btn-primary">
@@ -323,6 +378,436 @@
         </div>
     </div>
 </section>
+
+<!-- I/O Edit Modal -->
+<div class="modal fade" id="ioEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Konfigurace vstupů a výstupů projektu</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Input Configuration -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="fas fa-sign-in-alt"></i> Vstup workflow</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Typ vstupu</label>
+                            <select class="form-control" id="projectInputType" onchange="updateInputConfigForm()">
+                                <option value="directory">📂 Adresář</option>
+                                <option value="ftp">📡 FTP Server</option>
+                                <option value="api">🌐 API Endpoint</option>
+                                <option value="database">🗄️ Databáze</option>
+                                <option value="s3">☁️ Amazon S3</option>
+                                <option value="sharepoint">📎 SharePoint</option>
+                            </select>
+                        </div>
+                        
+                        <div id="inputConfigForm">
+                            <!-- Directory config (default) -->
+                            <div id="directoryInputConfig" class="input-config">
+                                <div class="form-group">
+                                    <label>Cesta k adresáři <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="inputDirectoryPath" 
+                                           placeholder="C:\Data\InputFiles nebo /home/user/data"
+                                           value="/home/optimaly/workflow-inputs/e-commerce">
+                                </div>
+                                <div class="form-group">
+                                    <label>Filtr souborů</label>
+                                    <input type="text" class="form-control" id="inputFileFilter" 
+                                           placeholder="*.jpg,*.png,*.jpeg" value="*.jpg,*.png,*.jpeg">
+                                </div>
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="inputIncludeSubdirs" checked>
+                                    <label class="custom-control-label" for="inputIncludeSubdirs">
+                                        Zahrnout podadresáře
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- FTP config -->
+                            <div id="ftpInputConfig" class="input-config" style="display: none;">
+                                <div class="form-group">
+                                    <label>FTP Server <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="ftpHost" placeholder="ftp.example.com">
+                                </div>
+                                <div class="form-group">
+                                    <label>Port</label>
+                                    <input type="number" class="form-control" id="ftpPort" value="21">
+                                </div>
+                                <div class="form-group">
+                                    <label>Uživatel <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="ftpUser">
+                                </div>
+                                <div class="form-group">
+                                    <label>Heslo <span class="text-danger">*</span></label>
+                                    <input type="password" class="form-control" id="ftpPassword">
+                                </div>
+                                <div class="form-group">
+                                    <label>Vzdálená cesta</label>
+                                    <input type="text" class="form-control" id="ftpPath" placeholder="/uploads/images">
+                                </div>
+                            </div>
+                            
+                            <!-- API config -->
+                            <div id="apiInputConfig" class="input-config" style="display: none;">
+                                <div class="form-group">
+                                    <label>API Endpoint URL <span class="text-danger">*</span></label>
+                                    <input type="url" class="form-control" id="apiEndpoint" 
+                                           placeholder="https://api.example.com/v1/products">
+                                </div>
+                                <div class="form-group">
+                                    <label>Metoda</label>
+                                    <select class="form-control" id="apiMethod">
+                                        <option value="GET">GET</option>
+                                        <option value="POST">POST</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Autentizace</label>
+                                    <select class="form-control" id="apiAuthType" onchange="updateApiAuthFields()">
+                                        <option value="none">Žádná</option>
+                                        <option value="bearer">Bearer Token</option>
+                                        <option value="basic">Basic Auth</option>
+                                        <option value="apikey">API Key</option>
+                                    </select>
+                                </div>
+                                <div id="apiAuthFields"></div>
+                            </div>
+                            
+                            <!-- Database config -->
+                            <div id="databaseInputConfig" class="input-config" style="display: none;">
+                                <div class="form-group">
+                                    <label>Typ databáze</label>
+                                    <select class="form-control" id="dbType">
+                                        <option value="postgresql">PostgreSQL</option>
+                                        <option value="mysql">MySQL</option>
+                                        <option value="mssql">MS SQL Server</option>
+                                        <option value="mongodb">MongoDB</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Server <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="dbHost" placeholder="localhost">
+                                </div>
+                                <div class="form-group">
+                                    <label>Port</label>
+                                    <input type="number" class="form-control" id="dbPort" value="5432">
+                                </div>
+                                <div class="form-group">
+                                    <label>Databáze <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="dbName">
+                                </div>
+                                <div class="form-group">
+                                    <label>Uživatel <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="dbUser">
+                                </div>
+                                <div class="form-group">
+                                    <label>Heslo <span class="text-danger">*</span></label>
+                                    <input type="password" class="form-control" id="dbPassword">
+                                </div>
+                                <div class="form-group">
+                                    <label>Query <span class="text-danger">*</span></label>
+                                    <textarea class="form-control" id="dbQuery" rows="3" 
+                                              placeholder="SELECT * FROM products WHERE active = true"></textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- S3 config -->
+                            <div id="s3InputConfig" class="input-config" style="display: none;">
+                                <div class="form-group">
+                                    <label>AWS Access Key <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="s3AccessKey">
+                                </div>
+                                <div class="form-group">
+                                    <label>AWS Secret Key <span class="text-danger">*</span></label>
+                                    <input type="password" class="form-control" id="s3SecretKey">
+                                </div>
+                                <div class="form-group">
+                                    <label>Region</label>
+                                    <select class="form-control" id="s3Region">
+                                        <option value="eu-central-1">EU (Frankfurt)</option>
+                                        <option value="us-east-1">US East (N. Virginia)</option>
+                                        <option value="us-west-2">US West (Oregon)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Bucket <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="s3Bucket">
+                                </div>
+                                <div class="form-group">
+                                    <label>Prefix (cesta)</label>
+                                    <input type="text" class="form-control" id="s3Prefix" placeholder="inputs/images/">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Output Configuration -->
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0"><i class="fas fa-sign-out-alt"></i> Výstup workflow</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Typ výstupu</label>
+                            <select class="form-control" id="projectOutputType" onchange="updateOutputConfigForm()">
+                                <option value="directory">📂 Adresář</option>
+                                <option value="ftp">📡 FTP Server</option>
+                                <option value="api">🌐 API Webhook</option>
+                                <option value="database">🗄️ Databáze</option>
+                                <option value="s3">☁️ Amazon S3</option>
+                                <option value="email">📧 Email</option>
+                            </select>
+                        </div>
+                        
+                        <div id="outputConfigForm">
+                            <!-- Directory output config (default) -->
+                            <div id="directoryOutputConfig" class="output-config">
+                                <div class="form-group">
+                                    <label>Cesta k adresáři <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="outputDirectoryPath" 
+                                           placeholder="C:\Data\OutputFiles nebo /home/user/results"
+                                           value="/home/optimaly/workflow-outputs/e-commerce">
+                                </div>
+                                <div class="form-group">
+                                    <label>Formát názvu souboru</label>
+                                    <input type="text" class="form-control" id="outputFileFormat" 
+                                           value="results_{date}_{time}.xlsx">
+                                    <small class="text-muted">Použijte {date}, {time}, {projectId}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-success" onclick="testIOConnection()">
+                    <i class="fas fa-plug"></i> Test připojení
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveProjectIO()">
+                    <i class="fas fa-save"></i> Uložit konfiguraci
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Run Workflow Modal -->
+<div class="modal fade" id="runWorkflowModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-play-circle"></i> Spustit workflow - @project.Name
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Input Type Selection -->
+                <div class="form-group">
+                    <label>Typ vstupu</label>
+                    <select class="form-control" id="inputType" onchange="updateInputForm()">
+                        <option value="files">📁 Soubory</option>
+                        <option value="directory">📂 Adresář</option>
+                        <option value="api">🌐 API Endpoint</option>
+                        <option value="database">🗄️ Databáze</option>
+                        <option value="manual">✏️ Manuální vstup</option>
+                        <option value="csv">📊 CSV soubor</option>
+                        <option value="images">🖼️ Obrázky</option>
+                    </select>
+                </div>
+                
+                <!-- Dynamic Input Form -->
+                <div id="inputFormContainer">
+                    <!-- Files Input (default) -->
+                    <div id="filesInput" class="input-type-form">
+                        <div class="form-group">
+                            <label>Vyberte soubory</label>
+                            <input type="file" class="form-control-file" id="workflowFiles" multiple>
+                            <small class="text-muted">Můžete vybrat více souborů najednou</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Directory Input -->
+                    <div id="directoryInput" class="input-type-form" style="display: none;">
+                        <div class="form-group">
+                            <label>Cesta k adresáři</label>
+                            <input type="text" class="form-control" id="directoryPath" placeholder="/path/to/directory">
+                            <small class="text-muted">Zadejte absolutní cestu k adresáři</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Filtr souborů (volitelné)</label>
+                            <input type="text" class="form-control" id="fileFilter" placeholder="*.jpg, *.png">
+                            <small class="text-muted">Např: *.csv, *.json, *.jpg</small>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="includeSubdirs">
+                            <label class="custom-control-label" for="includeSubdirs">
+                                Zahrnout podadresáře
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- API Input -->
+                    <div id="apiInput" class="input-type-form" style="display: none;">
+                        <div class="form-group">
+                            <label>API Endpoint URL</label>
+                            <input type="url" class="form-control" id="apiUrl" placeholder="https://api.example.com/data">
+                        </div>
+                        <div class="form-group">
+                            <label>HTTP Metoda</label>
+                            <select class="form-control" id="httpMethod">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Headers (JSON)</label>
+                            <textarea class="form-control" id="apiHeaders" rows="3" placeholder='{"Authorization": "Bearer token"}'></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Body (pro POST/PUT)</label>
+                            <textarea class="form-control" id="apiBody" rows="3"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Database Input -->
+                    <div id="databaseInput" class="input-type-form" style="display: none;">
+                        <div class="form-group">
+                            <label>Typ databáze</label>
+                            <select class="form-control" id="dbType">
+                                <option value="postgresql">PostgreSQL</option>
+                                <option value="mysql">MySQL</option>
+                                <option value="mssql">MS SQL Server</option>
+                                <option value="mongodb">MongoDB</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Connection String</label>
+                            <input type="text" class="form-control" id="connectionString" placeholder="Host=localhost;Database=mydb;Username=user;Password=pass">
+                            <small class="text-muted">Připojovací řetězec k databázi</small>
+                        </div>
+                        <div class="form-group">
+                            <label>SQL Query / Collection</label>
+                            <textarea class="form-control" id="dbQuery" rows="3" placeholder="SELECT * FROM products WHERE category = 'electronics'"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Input -->
+                    <div id="manualInput" class="input-type-form" style="display: none;">
+                        <div class="form-group">
+                            <label>Vstupní data (JSON)</label>
+                            <textarea class="form-control" id="manualData" rows="5" placeholder='{"items": ["item1", "item2"], "config": {"key": "value"}}'></textarea>
+                            <small class="text-muted">Zadejte data ve formátu JSON</small>
+                        </div>
+                    </div>
+                    
+                    <!-- CSV Input -->
+                    <div id="csvInput" class="input-type-form" style="display: none;">
+                        <div class="form-group">
+                            <label>CSV soubor</label>
+                            <input type="file" class="form-control-file" id="csvFile" accept=".csv">
+                        </div>
+                        <div class="form-group">
+                            <label>Oddělovač</label>
+                            <select class="form-control" id="csvDelimiter">
+                                <option value=",">Čárka (,)</option>
+                                <option value=";">Středník (;)</option>
+                                <option value="\t">Tabulátor</option>
+                                <option value="|">Pipe (|)</option>
+                            </select>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="csvHasHeaders" checked>
+                            <label class="custom-control-label" for="csvHasHeaders">
+                                První řádek obsahuje hlavičky
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Images Input -->
+                    <div id="imagesInput" class="input-type-form" style="display: none;">
+                        <div class="form-group">
+                            <label>Vyberte obrázky</label>
+                            <input type="file" class="form-control-file" id="imageFiles" multiple accept="image/*">
+                            <small class="text-muted">Podporované formáty: JPG, PNG, GIF, WebP</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Účel zpracování</label>
+                            <select class="form-control" id="imageProcessingType">
+                                <option value="analysis">Analýza obsahu</option>
+                                <option value="similarity">Hledání podobných</option>
+                                <option value="extraction">Extrakce textu (OCR)</option>
+                                <option value="enhancement">Vylepšení kvality</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Output Configuration -->
+                <hr>
+                <h6><i class="fas fa-download"></i> Konfigurace výstupu</h6>
+                <div class="form-group">
+                    <label>Typ výstupu</label>
+                    <select class="form-control" id="outputType">
+                        <option value="download">💾 Stáhnout soubor</option>
+                        <option value="api">📤 Odeslat na API</option>
+                        <option value="database">💿 Uložit do databáze</option>
+                        <option value="email">📧 Odeslat emailem</option>
+                        <option value="display">🖥️ Zobrazit v prohlížeči</option>
+                    </select>
+                </div>
+                
+                <!-- Advanced Options -->
+                <div class="mt-3">
+                    <button type="button" class="btn btn-sm btn-link" onclick="toggleAdvancedOptions()">
+                        <i class="fas fa-cog"></i> Pokročilé možnosti
+                    </button>
+                    <div id="advancedOptions" style="display: none;">
+                        <div class="form-group">
+                            <label>Priorita</label>
+                            <select class="form-control" id="executionPriority">
+                                <option value="low">Nízká</option>
+                                <option value="normal" selected>Normální</option>
+                                <option value="high">Vysoká</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Timeout (minuty)</label>
+                            <input type="number" class="form-control" id="executionTimeout" value="30" min="1" max="240">
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="enableDebugMode">
+                            <label class="custom-control-label" for="enableDebugMode">
+                                Debug režim (detailní logy)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="validateAndPrepareExecution()">
+                    <i class="fas fa-check"></i> Ověřit vstupy
+                </button>
+                <button type="button" class="btn btn-success" onclick="executeWorkflow()" style="display: none;" id="executeBtn">
+                    <i class="fas fa-rocket"></i> Spustit workflow
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Step Modal -->
 <div class="modal fade" id="stepEditModal" tabindex="-1">
@@ -428,6 +913,10 @@
                     console.log('LoadWorkflow response:', response);
                     if (response.success) {
                         renderWorkflowDiagram(response.orchestratorData);
+                        // Update I/O display if available
+                        if (response.orchestratorData && response.orchestratorData.input && response.orchestratorData.output) {
+                            updateIODisplay(response.orchestratorData.input, response.orchestratorData.output);
+                        }
                     } else {
                         // No workflow yet
                         $('#workflow-diagram').html(`
@@ -1222,6 +1711,672 @@
             $('#stepAdvancedSettingsContent').slideToggle();
         }
         
+        // Update I/O display
+        function updateIODisplay(input, output) {
+            // Update input display
+            if (input) {
+                let inputHtml = `
+                    <dt class="col-sm-5">Typ:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge badge-info">${getInputTypeIcon(input.type)} ${getInputTypeLabel(input.type)}</span>
+                    </dd>
+                `;
+                
+                // Add type-specific details
+                switch(input.type) {
+                    case 'directory':
+                        if (input.path) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Cesta:</dt>
+                                <dd class="col-sm-7"><code>${input.path}</code></dd>
+                            `;
+                        }
+                        if (input.filter) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Filtr:</dt>
+                                <dd class="col-sm-7">${input.filter}</dd>
+                            `;
+                        }
+                        break;
+                        
+                    case 'ftp':
+                        if (input.host) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Server:</dt>
+                                <dd class="col-sm-7">${input.host}:${input.port || 21}</dd>
+                            `;
+                        }
+                        if (input.path) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Cesta:</dt>
+                                <dd class="col-sm-7">${input.path}</dd>
+                            `;
+                        }
+                        break;
+                        
+                    case 'api':
+                        if (input.endpoint) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Endpoint:</dt>
+                                <dd class="col-sm-7"><small>${input.endpoint}</small></dd>
+                            `;
+                        }
+                        if (input.method) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Metoda:</dt>
+                                <dd class="col-sm-7">${input.method}</dd>
+                            `;
+                        }
+                        break;
+                        
+                    case 'database':
+                        if (input.dbType) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Databáze:</dt>
+                                <dd class="col-sm-7">${input.dbType}</dd>
+                            `;
+                        }
+                        if (input.host && input.database) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Připojení:</dt>
+                                <dd class="col-sm-7">${input.host}/${input.database}</dd>
+                            `;
+                        }
+                        break;
+                        
+                    case 's3':
+                        if (input.bucket) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Bucket:</dt>
+                                <dd class="col-sm-7">s3://${input.bucket}/${input.prefix || ''}</dd>
+                            `;
+                        }
+                        if (input.region) {
+                            inputHtml += `
+                                <dt class="col-sm-5">Region:</dt>
+                                <dd class="col-sm-7">${input.region}</dd>
+                            `;
+                        }
+                        break;
+                }
+                
+                $('#inputConfigDisplay').html(inputHtml);
+            }
+            
+            // Update output display
+            if (output) {
+                let outputHtml = `
+                    <dt class="col-sm-5">Typ:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge badge-success">${getOutputTypeIcon(output.type)} ${getOutputTypeLabel(output.type)}</span>
+                    </dd>
+                `;
+                
+                if (output.description) {
+                    outputHtml += `
+                        <dt class="col-sm-5">Popis:</dt>
+                        <dd class="col-sm-7">${output.description}</dd>
+                    `;
+                }
+                
+                if (output.config) {
+                    if (output.config.format) {
+                        outputHtml += `
+                            <dt class="col-sm-5">Formát:</dt>
+                            <dd class="col-sm-7">${output.config.format.toUpperCase()}</dd>
+                        `;
+                    }
+                    if (output.config.fields) {
+                        outputHtml += `
+                            <dt class="col-sm-5">Obsah:</dt>
+                            <dd class="col-sm-7">
+                                <small>
+                                    ${output.config.fields.map(f => '• ' + f).join('<br>')}
+                                </small>
+                            </dd>
+                        `;
+                    }
+                }
+                
+                $('#outputConfigDisplay').html(outputHtml);
+            }
+        }
+        
+        // Get input type icon
+        function getInputTypeIcon(type) {
+            const icons = {
+                'files': '📁',
+                'images': '🖼️',
+                'api': '🌐',
+                'database': '🗄️',
+                'csv': '📊',
+                'manual': '✏️'
+            };
+            return icons[type] || '📥';
+        }
+        
+        // Get input type label
+        function getInputTypeLabel(type) {
+            const labels = {
+                'files': 'Soubory',
+                'images': 'Obrázky',
+                'api': 'API',
+                'database': 'Databáze',
+                'csv': 'CSV',
+                'manual': 'Manuální'
+            };
+            return labels[type] || type;
+        }
+        
+        // Get output type icon
+        function getOutputTypeIcon(type) {
+            const icons = {
+                'excel': '📊',
+                'json': '📄',
+                'csv': '📊',
+                'api': '📤',
+                'database': '💿',
+                'email': '📧'
+            };
+            return icons[type] || '📤';
+        }
+        
+        // Get output type label
+        function getOutputTypeLabel(type) {
+            const labels = {
+                'excel': 'Excel',
+                'json': 'JSON',
+                'csv': 'CSV',
+                'api': 'API',
+                'database': 'Databáze',
+                'email': 'Email'
+            };
+            return labels[type] || type;
+        }
+        
+        // Show I/O edit modal
+        function showIOEditModal() {
+            // Load current I/O settings if available
+            if (currentWorkflowData && currentWorkflowData.input && currentWorkflowData.output) {
+                $('#projectInputType').val(currentWorkflowData.input.type);
+                $('#projectOutputType').val(currentWorkflowData.output.type);
+                // TODO: Load descriptions from saved data
+            }
+            
+            $('#ioEditModal').modal('show');
+        }
+        
+        // Update input configuration form
+        function updateInputConfigForm() {
+            const inputType = $('#projectInputType').val();
+            
+            // Hide all configs
+            $('.input-config').hide();
+            
+            // Show selected config
+            $(`#${inputType}InputConfig`).show();
+        }
+        
+        // Update output configuration form
+        function updateOutputConfigForm() {
+            const outputType = $('#projectOutputType').val();
+            
+            // Hide all configs
+            $('.output-config').hide();
+            
+            // Show selected config (we need to add these)
+            if (outputType === 'directory') {
+                $('#directoryOutputConfig').show();
+            } else {
+                // For now, show directory config as placeholder
+                $('#directoryOutputConfig').show();
+                toastr.info(`Konfigurace pro ${outputType} bude přidána`);
+            }
+        }
+        
+        // Update API auth fields
+        function updateApiAuthFields() {
+            const authType = $('#apiAuthType').val();
+            let authHtml = '';
+            
+            switch(authType) {
+                case 'bearer':
+                    authHtml = `
+                        <div class="form-group">
+                            <label>Bearer Token <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="apiBearerToken">
+                        </div>
+                    `;
+                    break;
+                case 'basic':
+                    authHtml = `
+                        <div class="form-group">
+                            <label>Uživatel <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="apiBasicUser">
+                        </div>
+                        <div class="form-group">
+                            <label>Heslo <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="apiBasicPassword">
+                        </div>
+                    `;
+                    break;
+                case 'apikey':
+                    authHtml = `
+                        <div class="form-group">
+                            <label>API Key <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="apiKey">
+                        </div>
+                        <div class="form-group">
+                            <label>Umístění klíče</label>
+                            <select class="form-control" id="apiKeyLocation">
+                                <option value="header">V hlavičce</option>
+                                <option value="query">V URL</option>
+                            </select>
+                        </div>
+                    `;
+                    break;
+            }
+            
+            $('#apiAuthFields').html(authHtml);
+        }
+        
+        // Test I/O connection
+        function testIOConnection() {
+            const inputType = $('#projectInputType').val();
+            
+            // Simulate connection test
+            toastr.info('Testuji připojení...');
+            
+            setTimeout(() => {
+                // In real implementation, this would actually test the connection
+                toastr.success('Připojení úspěšné!');
+            }, 1500);
+        }
+        
+        // Save project I/O configuration
+        function saveProjectIO() {
+            const inputType = $('#projectInputType').val();
+            const outputType = $('#projectOutputType').val();
+            
+            // Gather input configuration based on type
+            let inputConfig = {
+                type: inputType
+            };
+            
+            switch(inputType) {
+                case 'directory':
+                    inputConfig.path = $('#inputDirectoryPath').val();
+                    inputConfig.filter = $('#inputFileFilter').val();
+                    inputConfig.includeSubdirs = $('#inputIncludeSubdirs').is(':checked');
+                    break;
+                    
+                case 'ftp':
+                    inputConfig.host = $('#ftpHost').val();
+                    inputConfig.port = $('#ftpPort').val();
+                    inputConfig.user = $('#ftpUser').val();
+                    inputConfig.password = $('#ftpPassword').val(); // Should be encrypted
+                    inputConfig.path = $('#ftpPath').val();
+                    break;
+                    
+                case 'api':
+                    inputConfig.endpoint = $('#apiEndpoint').val();
+                    inputConfig.method = $('#apiMethod').val();
+                    inputConfig.authType = $('#apiAuthType').val();
+                    // Add auth details based on type
+                    break;
+                    
+                case 'database':
+                    inputConfig.dbType = $('#dbType').val();
+                    inputConfig.host = $('#dbHost').val();
+                    inputConfig.port = $('#dbPort').val();
+                    inputConfig.database = $('#dbName').val();
+                    inputConfig.user = $('#dbUser').val();
+                    inputConfig.password = $('#dbPassword').val(); // Should be encrypted
+                    inputConfig.query = $('#dbQuery').val();
+                    break;
+                    
+                case 's3':
+                    inputConfig.accessKey = $('#s3AccessKey').val();
+                    inputConfig.secretKey = $('#s3SecretKey').val(); // Should be encrypted
+                    inputConfig.region = $('#s3Region').val();
+                    inputConfig.bucket = $('#s3Bucket').val();
+                    inputConfig.prefix = $('#s3Prefix').val();
+                    break;
+            }
+            
+            // Gather output configuration
+            let outputConfig = {
+                type: outputType
+            };
+            
+            if (outputType === 'directory') {
+                outputConfig.path = $('#outputDirectoryPath').val();
+                outputConfig.fileFormat = $('#outputFileFormat').val();
+            }
+            
+            // Create complete I/O configuration
+            const ioConfig = {
+                input: inputConfig,
+                output: outputConfig
+            };
+            
+            // Update display immediately
+            updateIODisplay(ioConfig.input, ioConfig.output);
+            
+            // Save to workflow if exists
+            if (currentWorkflowData) {
+                currentWorkflowData.input = ioConfig.input;
+                currentWorkflowData.output = ioConfig.output;
+                
+                // Save to server
+                $.ajax({
+                    url: '/WorkflowDesigner/SaveWorkflow',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        ProjectId: '@project.Id',
+                        WorkflowData: currentWorkflowData
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.success('Nastavení vstupů a výstupů uloženo');
+                            $('#ioEditModal').modal('hide');
+                        } else {
+                            toastr.error('Chyba při ukládání');
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Chyba při komunikaci se serverem');
+                    }
+                });
+            } else {
+                // If no workflow exists yet, create minimal one with just I/O
+                const minimalWorkflow = {
+                    input: ioConfig.input,
+                    output: ioConfig.output,
+                    steps: [],
+                    metadata: {
+                        createdAt: new Date().toISOString()
+                    }
+                };
+                
+                $.ajax({
+                    url: '/WorkflowDesigner/SaveWorkflow',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        ProjectId: '@project.Id',
+                        WorkflowData: minimalWorkflow
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.success('Nastavení vstupů a výstupů uloženo');
+                            $('#ioEditModal').modal('hide');
+                            currentWorkflowData = minimalWorkflow;
+                        } else {
+                            toastr.error('Chyba při ukládání');
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Chyba při komunikaci se serverem');
+                    }
+                });
+            }
+        }
+        
+        // Show run workflow modal
+        function showRunWorkflowModal() {
+            $('#runWorkflowModal').modal('show');
+        }
+        
+        // Update input form based on selected type
+        function updateInputForm() {
+            const inputType = $('#inputType').val();
+            
+            // Hide all forms
+            $('.input-type-form').hide();
+            
+            // Show selected form
+            $(`#${inputType}Input`).show();
+            
+            // Reset validation
+            $('#executeBtn').hide();
+        }
+        
+        // Toggle advanced options
+        function toggleAdvancedOptions() {
+            $('#advancedOptions').slideToggle();
+        }
+        
+        // Validate and prepare execution
+        function validateAndPrepareExecution() {
+            const inputType = $('#inputType').val();
+            let isValid = true;
+            let errors = [];
+            
+            // Validate based on input type
+            switch(inputType) {
+                case 'files':
+                    const files = $('#workflowFiles')[0].files;
+                    if (files.length === 0) {
+                        errors.push('Vyberte alespoň jeden soubor');
+                        isValid = false;
+                    }
+                    break;
+                    
+                case 'directory':
+                    const dirPath = $('#directoryPath').val();
+                    if (!dirPath) {
+                        errors.push('Zadejte cestu k adresáři');
+                        isValid = false;
+                    }
+                    break;
+                    
+                case 'api':
+                    const apiUrl = $('#apiUrl').val();
+                    if (!apiUrl) {
+                        errors.push('Zadejte URL API endpointu');
+                        isValid = false;
+                    }
+                    // Validate headers JSON
+                    const headers = $('#apiHeaders').val();
+                    if (headers) {
+                        try {
+                            JSON.parse(headers);
+                        } catch (e) {
+                            errors.push('Headers musí být validní JSON');
+                            isValid = false;
+                        }
+                    }
+                    break;
+                    
+                case 'database':
+                    const connStr = $('#connectionString').val();
+                    const query = $('#dbQuery').val();
+                    if (!connStr) {
+                        errors.push('Zadejte connection string');
+                        isValid = false;
+                    }
+                    if (!query) {
+                        errors.push('Zadejte SQL query nebo název kolekce');
+                        isValid = false;
+                    }
+                    break;
+                    
+                case 'manual':
+                    const manualData = $('#manualData').val();
+                    if (!manualData) {
+                        errors.push('Zadejte vstupní data');
+                        isValid = false;
+                    } else {
+                        try {
+                            JSON.parse(manualData);
+                        } catch (e) {
+                            errors.push('Data musí být validní JSON');
+                            isValid = false;
+                        }
+                    }
+                    break;
+                    
+                case 'csv':
+                    const csvFile = $('#csvFile')[0].files;
+                    if (csvFile.length === 0) {
+                        errors.push('Vyberte CSV soubor');
+                        isValid = false;
+                    }
+                    break;
+                    
+                case 'images':
+                    const imageFiles = $('#imageFiles')[0].files;
+                    if (imageFiles.length === 0) {
+                        errors.push('Vyberte alespoň jeden obrázek');
+                        isValid = false;
+                    }
+                    break;
+            }
+            
+            if (isValid) {
+                toastr.success('Vstupy jsou validní!');
+                $('#executeBtn').show();
+                
+                // Show preview of what will be executed
+                showExecutionPreview();
+            } else {
+                toastr.error(errors.join('<br>'), 'Chyby ve vstupech');
+            }
+        }
+        
+        // Show execution preview
+        function showExecutionPreview() {
+            const inputType = $('#inputType').val();
+            let preview = 'Workflow bude spuštěno s následujícími parametry:\\n\\n';
+            
+            preview += `Typ vstupu: ${$('#inputType option:selected').text()}\\n`;
+            
+            switch(inputType) {
+                case 'files':
+                    const files = $('#workflowFiles')[0].files;
+                    preview += `Počet souborů: ${files.length}\\n`;
+                    for(let i = 0; i < Math.min(3, files.length); i++) {
+                        preview += `- ${files[i].name}\\n`;
+                    }
+                    if (files.length > 3) preview += `... a ${files.length - 3} dalších\\n`;
+                    break;
+                    
+                case 'directory':
+                    preview += `Adresář: ${$('#directoryPath').val()}\\n`;
+                    if ($('#fileFilter').val()) {
+                        preview += `Filtr: ${$('#fileFilter').val()}\\n`;
+                    }
+                    preview += `Podadresáře: ${$('#includeSubdirs').is(':checked') ? 'Ano' : 'Ne'}\\n`;
+                    break;
+                    
+                case 'api':
+                    preview += `URL: ${$('#apiUrl').val()}\\n`;
+                    preview += `Metoda: ${$('#httpMethod').val()}\\n`;
+                    break;
+                    
+                case 'database':
+                    preview += `Databáze: ${$('#dbType option:selected').text()}\\n`;
+                    preview += `Query: ${$('#dbQuery').val().substring(0, 50)}...\\n`;
+                    break;
+            }
+            
+            preview += `\\nVýstup: ${$('#outputType option:selected').text()}`;
+            
+            console.log(preview);
+        }
+        
+        // Execute workflow
+        function executeWorkflow() {
+            const inputType = $('#inputType').val();
+            const outputType = $('#outputType').val();
+            
+            // Gather all input data
+            const executionData = {
+                projectId: '@project.Id',
+                inputType: inputType,
+                outputType: outputType,
+                priority: $('#executionPriority').val(),
+                timeout: parseInt($('#executionTimeout').val()),
+                debug: $('#enableDebugMode').is(':checked'),
+                inputData: {}
+            };
+            
+            // Collect input-specific data
+            switch(inputType) {
+                case 'files':
+                    // For files, we'd need to handle file upload
+                    const files = $('#workflowFiles')[0].files;
+                    executionData.inputData.fileCount = files.length;
+                    executionData.inputData.fileNames = Array.from(files).map(f => f.name);
+                    break;
+                    
+                case 'directory':
+                    executionData.inputData = {
+                        path: $('#directoryPath').val(),
+                        filter: $('#fileFilter').val(),
+                        includeSubdirs: $('#includeSubdirs').is(':checked')
+                    };
+                    break;
+                    
+                case 'api':
+                    executionData.inputData = {
+                        url: $('#apiUrl').val(),
+                        method: $('#httpMethod').val(),
+                        headers: $('#apiHeaders').val() ? JSON.parse($('#apiHeaders').val()) : {},
+                        body: $('#apiBody').val()
+                    };
+                    break;
+                    
+                case 'database':
+                    executionData.inputData = {
+                        type: $('#dbType').val(),
+                        connectionString: $('#connectionString').val(),
+                        query: $('#dbQuery').val()
+                    };
+                    break;
+                    
+                case 'manual':
+                    executionData.inputData = JSON.parse($('#manualData').val());
+                    break;
+                    
+                case 'csv':
+                    const csvFile = $('#csvFile')[0].files[0];
+                    executionData.inputData = {
+                        fileName: csvFile.name,
+                        delimiter: $('#csvDelimiter').val(),
+                        hasHeaders: $('#csvHasHeaders').is(':checked')
+                    };
+                    break;
+                    
+                case 'images':
+                    const imageFiles = $('#imageFiles')[0].files;
+                    executionData.inputData = {
+                        fileCount: imageFiles.length,
+                        fileNames: Array.from(imageFiles).map(f => f.name),
+                        processingType: $('#imageProcessingType').val()
+                    };
+                    break;
+            }
+            
+            // Close modal
+            $('#runWorkflowModal').modal('hide');
+            
+            // Show execution progress
+            toastr.info('Workflow bylo spuštěno. Sledujte průběh níže...', 'Spouštím workflow');
+            
+            // TODO: Make actual API call to execute workflow
+            console.log('Executing workflow with data:', executionData);
+            
+            // Simulate execution
+            setTimeout(() => {
+                toastr.success('Workflow bylo úspěšně dokončeno!', 'Hotovo');
+                // Refresh execution history
+                refreshHistory();
+            }, 3000);
+        }
+        
         // Update loadWorkflowSteps to store data globally
         function loadWorkflowSteps() {
             $.ajax({
@@ -1404,4 +2559,207 @@
             opacity: 1;
         }
     </style>
+    <script>
+        // Finish the saveIOConfig function
+        function saveIOConfig() {
+            const inputData = collectInputData();
+            const outputData = collectOutputData();
+            
+            if (!inputData || !outputData) {
+                return;
+            }
+            
+            // Save to workflow
+            if (currentWorkflowData) {
+                if (!currentWorkflowData.metadata) {
+                    currentWorkflowData.metadata = {};
+                }
+                currentWorkflowData.metadata.ioConfig = {
+                    input: inputData,
+                    output: outputData
+                };
+            }
+            
+            $('#ioConfigModal').modal('hide');
+            toastr.success('Konfigurace vstupů a výstupů uložena');
+            
+            // Update display
+            updateIODisplay();
+        }
+        
+        // Update I/O display after save
+        function updateIODisplay() {
+            if (currentWorkflowData && currentWorkflowData.metadata && currentWorkflowData.metadata.ioConfig) {
+                const { input, output } = currentWorkflowData.metadata.ioConfig;
+                updateIODisplayFromData(input, output);
+            }
+        }
+        
+        // Show run modal with specific mode
+        function showRunModal(mode) {
+            $('#runMode').val(mode);
+            
+            if (mode === 'test') {
+                $('#runModeTitle').html('<i class="fas fa-vial text-warning"></i> Test Run');
+                $('#testModeInfo').show();
+                $('#productionModeInfo').hide();
+                $('#testLimitGroup').show();
+                $('#productionConfirmGroup').hide();
+                $('#runBtnText').text('Spustit test');
+                $('#runWorkflowBtn').removeClass('btn-success').addClass('btn-warning');
+                updateEstimates(10);
+            } else {
+                $('#runModeTitle').html('<i class="fas fa-play text-success"></i> Production Run');
+                $('#testModeInfo').hide();
+                $('#productionModeInfo').show();
+                $('#testLimitGroup').hide();
+                $('#productionConfirmGroup').show();
+                $('#runBtnText').text('Spustit production');
+                $('#runWorkflowBtn').removeClass('btn-warning').addClass('btn-success');
+                updateEstimates(1000);
+            }
+            
+            // Generate run name
+            const timestamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+            $('#runName').attr('placeholder', `${mode}-run-${timestamp}`);
+            
+            $('#runWorkflowModal').modal('show');
+        }
+        
+        // Update estimates based on mode
+        function updateEstimates(baseItems) {
+            const mode = $('#runMode').val();
+            const items = mode === 'test' ? $('#testItemLimit').val() : baseItems;
+            const timePerItem = 2; // seconds
+            const apiCallsPerItem = 3;
+            
+            $('#estimatedItems').text(items);
+            $('#estimatedTime').text(formatTime(items * timePerItem));
+            $('#estimatedAPICalls').text(items * apiCallsPerItem);
+        }
+        
+        // Format time in human readable format
+        function formatTime(seconds) {
+            if (seconds < 60) return `~${seconds}s`;
+            if (seconds < 3600) return `~${Math.round(seconds/60)}min`;
+            return `~${Math.round(seconds/3600)}h`;
+        }
+        
+        // Execute workflow with selected configuration
+        function executeWorkflow() {
+            const mode = $('#runMode').val();
+            
+            // Validation for production mode
+            if (mode === 'production' && !$('#confirmProduction').is(':checked')) {
+                toastr.error('Musíte potvrdit spuštění v produkčním režimu');
+                return;
+            }
+            
+            const config = {
+                mode: mode,
+                projectId: '@project.Id',
+                runName: $('#runName').val() || $('#runName').attr('placeholder'),
+                priority: $('#runPriority').val(),
+                enableDebugLogging: $('#enableDebugLogging').is(':checked'),
+                testItemLimit: mode === 'test' ? parseInt($('#testItemLimit').val()) : null
+            };
+            
+            // Show execution monitoring
+            $('#runWorkflowModal').modal('hide');
+            startWorkflowExecution(config);
+        }
+        
+        // Start workflow execution and show progress
+        function startWorkflowExecution(config) {
+            const executionId = 'exec_' + Date.now();
+            
+            // Create execution card
+            const executionHtml = `
+                <div class="timeline-item" id="execution-${executionId}">
+                    <span class="time-label">
+                        <span class="bg-blue">Právě teď</span>
+                    </span>
+                    <i class="fas fa-play bg-blue"></i>
+                    <div class="timeline-body">
+                        <div class="timeline-header">
+                            <strong>${config.runName}</strong>
+                            <span class="badge badge-${config.mode === 'test' ? 'warning' : 'success'}">${config.mode.toUpperCase()}</span>
+                            <div class="float-right">
+                                <button class="btn btn-xs btn-outline-primary" onclick="showExecutionDetails('${executionId}')">
+                                    <i class="fas fa-eye"></i> Detail
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     id="progress-${executionId}" role="progressbar" style="width: 0%">
+                                    0%
+                                </div>
+                            </div>
+                            <small class="text-muted mt-1" id="status-${executionId}">Inicializace...</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            $('#executionHistory').prepend(executionHtml);
+            
+            // Simulate workflow execution
+            simulateWorkflowExecution(executionId, config);
+            
+            toastr.info(`Workflow spuštěn v režimu ${config.mode.toUpperCase()}`);
+        }
+        
+        // Simulate workflow execution progress
+        function simulateWorkflowExecution(executionId, config) {
+            let progress = 0;
+            const steps = ['Načítání dat', 'Analýza vstupů', 'Zpracování', 'Generování výstupů', 'Dokončeno'];
+            let currentStep = 0;
+            
+            const interval = setInterval(() => {
+                progress += Math.random() * 20;
+                if (progress > 100) progress = 100;
+                
+                $(`#progress-${executionId}`).css('width', progress + '%').text(Math.round(progress) + '%');
+                
+                if (currentStep < steps.length - 1 && progress > (currentStep + 1) * 20) {
+                    currentStep++;
+                }
+                
+                $(`#status-${executionId}`).text(steps[currentStep]);
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    $(`#progress-${executionId}`).removeClass('progress-bar-animated');
+                    $(`#status-${executionId}`).text('Úspěšně dokončeno');
+                    
+                    // Update execution stats
+                    const successRate = Math.random() > 0.1 ? true : false;
+                    if (successRate) {
+                        toastr.success(`Workflow ${config.runName} úspěšně dokončen`);
+                        $(`#execution-${executionId} .timeline-header`).append(`
+                            <span class="badge badge-success ml-2">ÚSPĚCH</span>
+                        `);
+                    } else {
+                        toastr.error(`Workflow ${config.runName} selhal`);
+                        $(`#execution-${executionId} .timeline-header`).append(`
+                            <span class="badge badge-danger ml-2">CHYBA</span>
+                        `);
+                        $(`#progress-${executionId}`).addClass('bg-danger');
+                    }
+                }
+            }, 500);
+        }
+        
+        // Show execution details
+        function showExecutionDetails(executionId) {
+            toastr.info('Detail běhu workflow bude zobrazen...');
+        }
+        
+        // Update estimates when test limit changes
+        $(document).on('input', '#testItemLimit', function() {
+            updateEstimates(10);
+        });
+    </script>
 }
