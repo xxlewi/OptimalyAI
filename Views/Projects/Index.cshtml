@@ -1,8 +1,8 @@
-@model IEnumerable<OAI.Core.DTOs.ProjectDto>
+@using OptimalyAI.ViewModels
+@model IEnumerable<ProjectListItemViewModel>
 @{
-    ViewData["Title"] = "Seznam projektů - Produkční verze";
-    var summary = ViewBag.Summary as OAI.Core.DTOs.ProjectSummaryDto;
-    var workflowTypes = ViewBag.WorkflowTypes as IEnumerable<OAI.Core.DTOs.WorkflowTypeDto> ?? new List<OAI.Core.DTOs.WorkflowTypeDto>();
+    ViewData["Title"] = "Seznam projektů";
+    var projects = Model ?? new List<ProjectListItemViewModel>();
 }
 
 <section class="content-header">
@@ -31,7 +31,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-info">
                     <div class="inner">
-                        <h3>@(summary?.TotalProjects ?? 0)</h3>
+                        <h3>@ViewBag.TotalProjects</h3>
                         <p>Celkem projektů</p>
                     </div>
                     <div class="icon">
@@ -42,7 +42,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-success">
                     <div class="inner">
-                        <h3>@(summary?.ActiveProjects ?? 0)</h3>
+                        <h3>@ViewBag.ActiveProjects</h3>
                         <p>Aktivní projekty</p>
                     </div>
                     <div class="icon">
@@ -53,7 +53,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-warning">
                     <div class="inner">
-                        <h3>@(summary?.DraftProjects ?? 0)</h3>
+                        <h3>@ViewBag.DraftProjects</h3>
                         <p>Rozpracované</p>
                     </div>
                     <div class="icon">
@@ -64,7 +64,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-danger">
                     <div class="inner">
-                        <h3>@(summary?.FailedProjects ?? 0)</h3>
+                        <h3>@ViewBag.FailedProjects</h3>
                         <p>Selhané</p>
                     </div>
                     <div class="icon">
@@ -74,70 +74,20 @@
             </div>
         </div>
 
-        <!-- Search and Filter Section -->
+        <!-- Search Section -->
         <div class="row mb-3">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="input-group">
                     <input type="text" class="form-control" id="searchProjects" 
-                           placeholder="Vyhledat projekt..." value="@ViewBag.CurrentSearch">
+                           placeholder="Vyhledat projekt...">
                     <div class="input-group-append">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
                     </div>
                 </div>
             </div>
-            <div class="col-md-2">
-                <select class="form-control" id="filterStatus">
-                    <option value="">Všechny stavy</option>
-                    @if (ViewBag.CurrentStatus == "Active")
-                    {
-                        <option value="Active" selected>Aktivní</option>
-                    }
-                    else
-                    {
-                        <option value="Active">Aktivní</option>
-                    }
-                    @if (ViewBag.CurrentStatus == "Draft")
-                    {
-                        <option value="Draft" selected>Rozpracované</option>
-                    }
-                    else
-                    {
-                        <option value="Draft">Rozpracované</option>
-                    }
-                    @if (ViewBag.CurrentStatus == "Completed")
-                    {
-                        <option value="Completed" selected>Dokončené</option>
-                    }
-                    else
-                    {
-                        <option value="Completed">Dokončené</option>
-                    }
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select class="form-control" id="filterWorkflowType">
-                    <option value="">Všechny typy workflow</option>
-                    @foreach (var type in workflowTypes)
-                    {
-                        @if (ViewBag.CurrentWorkflowType?.ToString() == type.Value)
-                        {
-                            <option value="@type.Value" selected>@type.Name</option>
-                        }
-                        else
-                        {
-                            <option value="@type.Value">@type.Name</option>
-                        }
-                    }
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button class="btn btn-default btn-block" onclick="clearFilters()" title="Vymazat filtry">
+            <div class="col-md-6">
+                <button class="btn btn-default" onclick="clearSearch()" title="Vymazat hledání">
                     <i class="fas fa-times"></i> Vymazat
-                </button>
-            </div>
-            <div class="col-md-1">
-                <button class="btn btn-primary btn-block" onclick="applyFilters()" title="Aplikovat filtry">
-                    <i class="fas fa-filter"></i>
                 </button>
             </div>
         </div>
@@ -153,7 +103,7 @@
                 </div>
             </div>
             <div class="card-body">
-                @if (Model.Any())
+                @if (projects.Any())
                 {
                     <table class="table table-bordered table-striped table-hover" id="projectsTable">
                         <thead>
@@ -167,7 +117,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var project in Model)
+                            @foreach (var project in projects)
                             {
                                 <tr>
                                     <td>
@@ -314,74 +264,15 @@
                     </div>
                 }
             </div>
-            @if (ViewBag.TotalPages > 1)
-            {
-                <div class="card-footer clearfix">
-                    <ul class="pagination pagination-sm m-0 float-right">
-                        @if (ViewBag.CurrentPage > 1)
-                        {
-                            <li class="page-item">
-                                <a class="page-link" href="@Url.Action("Index", new { 
-                                    page = ViewBag.CurrentPage - 1, 
-                                    status = ViewBag.CurrentStatus, 
-                                    workflowType = ViewBag.CurrentWorkflowType, 
-                                    search = ViewBag.CurrentSearch 
-                                })">&laquo;</a>
-                            </li>
-                        }
-                        
-                        @for (int i = Math.Max(1, ViewBag.CurrentPage - 2); i <= Math.Min(ViewBag.TotalPages, ViewBag.CurrentPage + 2); i++)
-                        {
-                            <li class="page-item @(i == ViewBag.CurrentPage ? "active" : "")">
-                                <a class="page-link" href="@Url.Action("Index", new { 
-                                    page = i, 
-                                    status = ViewBag.CurrentStatus, 
-                                    workflowType = ViewBag.CurrentWorkflowType, 
-                                    search = ViewBag.CurrentSearch 
-                                })">@i</a>
-                            </li>
-                        }
-                        
-                        @if (ViewBag.CurrentPage < ViewBag.TotalPages)
-                        {
-                            <li class="page-item">
-                                <a class="page-link" href="@Url.Action("Index", new { 
-                                    page = ViewBag.CurrentPage + 1, 
-                                    status = ViewBag.CurrentStatus, 
-                                    workflowType = ViewBag.CurrentWorkflowType, 
-                                    search = ViewBag.CurrentSearch 
-                                })">&raquo;</a>
-                            </li>
-                        }
-                    </ul>
-                    <div class="float-left">
-                        Stránka @ViewBag.CurrentPage z @ViewBag.TotalPages 
-                        (@ViewBag.TotalCount projektů celkem)
-                    </div>
-                </div>
-            }
         </div>
     </div>
 </section>
 
 @section Scripts {
     <script>
-        function applyFilters() {
-            const search = $('#searchProjects').val();
-            const status = $('#filterStatus').val();
-            const workflowType = $('#filterWorkflowType').val();
-            
-            const params = new URLSearchParams();
-            if (search) params.append('search', search);
-            if (status) params.append('status', status);
-            if (workflowType) params.append('workflowType', workflowType);
-            params.append('page', '1'); // Reset to first page
-            
-            window.location.href = '@Url.Action("Index")' + '?' + params.toString();
-        }
-        
-        function clearFilters() {
-            window.location.href = '@Url.Action("Index")';
+        function clearSearch() {
+            $('#searchProjects').val('');
+            filterProjects();
         }
         
         function executeWorkflow(projectId) {
@@ -391,31 +282,39 @@
         
         function deleteProject(projectId) {
             if (confirm('Opravdu smazat tento projekt? Tato akce je nevratná.')) {
-                $.ajax({
-                    url: '@Url.Action("DeleteProject", "Projects")'.replace('Projects', 'api') + '/' + projectId,
-                    type: 'DELETE',
-                    success: function(response) {
-                        toastr.success('Projekt byl smazán');
-                        location.reload();
-                    },
-                    error: function(xhr) {
-                        const response = xhr.responseJSON || { message: 'Chyba při mazání projektu' };
-                        toastr.error(response.message || 'Chyba při mazání projektu');
-                    }
-                });
+                toastr.warning('Smazání projektu (demo režim - žádná skutečná akce)');
             }
         }
         
+        function filterProjects() {
+            const searchTerm = $('#searchProjects').val().toLowerCase();
+            
+            $('#projectsTable tbody tr').each(function() {
+                const row = $(this);
+                const projectName = row.find('td:first strong a').text().toLowerCase();
+                const description = row.find('td:first small').text().toLowerCase();
+                const customer = row.find('td:nth-child(2) a').text().toLowerCase();
+                
+                const matches = !searchTerm || 
+                    projectName.includes(searchTerm) || 
+                    description.includes(searchTerm) ||
+                    customer.includes(searchTerm);
+                
+                if (matches) {
+                    row.show();
+                } else {
+                    row.hide();
+                }
+            });
+        }
+        
         // Handle Enter key in search
-        $('#searchProjects').on('keypress', function(e) {
-            if (e.which === 13) { // Enter key
-                applyFilters();
-            }
+        $('#searchProjects').on('keyup', function() {
+            filterProjects();
         });
         
-        // Auto-apply filters on select change
-        $('#filterStatus, #filterWorkflowType').on('change', function() {
-            applyFilters();
+        $(document).ready(function() {
+            // Initialize
         });
     </script>
 }

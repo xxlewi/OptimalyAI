@@ -3,6 +3,7 @@ using OAI.Core.DTOs;
 using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Tools;
 using OptimalyAI.Controllers.Base;
+using OptimalyAI.ViewModels;
 
 namespace OptimalyAI.Controllers
 {
@@ -11,12 +12,10 @@ namespace OptimalyAI.Controllers
     /// </summary>
     public class ProjectsController : BaseApiController
     {
-        private readonly IProjectService _projectService;
         private readonly IToolRegistry _toolRegistry;
 
-        public ProjectsController(IProjectService projectService, IToolRegistry toolRegistry)
+        public ProjectsController(IToolRegistry toolRegistry)
         {
-            _projectService = projectService;
             _toolRegistry = toolRegistry;
         }
 
@@ -25,13 +24,10 @@ namespace OptimalyAI.Controllers
         /// </summary>
         /// <returns>View s přehledem projektů</returns>
         [HttpGet]
-        public async Task<IActionResult> Index(int page = 1, int pageSize = 10, string? status = null, string? workflowType = null, string? search = null)
+        public async Task<IActionResult> Index()
         {
-            // Získat projekty z databáze
-            var (projects, totalCount) = await _projectService.GetProjectsAsync(page, pageSize, status, workflowType, search);
-            
-            // Získat statistiky
-            var summary = await _projectService.GetSummaryAsync();
+            // Demo data pro testing
+            var projects = GetDemoProjects();
             
             // Získat dostupné nástroje
             var tools = await _toolRegistry.GetAllToolsAsync();
@@ -42,21 +38,68 @@ namespace OptimalyAI.Controllers
                 Description = t.Description 
             }).ToList();
             
-            // Získat workflow typy
-            var workflowTypes = await _projectService.GetWorkflowTypesAsync();
-            ViewBag.WorkflowTypes = workflowTypes;
-            
-            // Předat statistiky do ViewBag
-            ViewBag.Summary = summary;
-            ViewBag.TotalCount = totalCount;
-            ViewBag.CurrentPage = page;
-            ViewBag.PageSize = pageSize;
-            ViewBag.TotalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-            ViewBag.CurrentStatus = status;
-            ViewBag.CurrentWorkflowType = workflowType;
-            ViewBag.CurrentSearch = search;
+            // Demo statistiky
+            ViewBag.TotalProjects = projects.Count;
+            ViewBag.ActiveProjects = projects.Count(p => p.Status == "Active");
+            ViewBag.DraftProjects = projects.Count(p => p.Status == "Draft");
+            ViewBag.FailedProjects = 0;
             
             return View(projects);
+        }
+
+        private List<ProjectListItemViewModel> GetDemoProjects()
+        {
+            return new List<ProjectListItemViewModel>
+            {
+                new ProjectListItemViewModel
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "E-commerce Product Search",
+                    Description = "Vyhledávání podobných produktů podle fotek zákazníka",
+                    Status = "Active",
+                    CustomerName = "Fashion Store CZ",
+                    CustomerEmail = "info@fashionstore.cz",
+                    WorkflowType = "ecommerce_search",
+                    TriggerType = "Manual",
+                    LastRun = DateTime.Now.AddHours(-2),
+                    LastRunSuccess = true,
+                    SuccessRate = 95,
+                    TotalRuns = 124,
+                    StageCount = 5
+                },
+                new ProjectListItemViewModel
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Content Generation Pipeline",
+                    Description = "Automatická tvorba obsahu pro blog a sociální sítě",
+                    Status = "Active",
+                    CustomerName = "TechGadgets s.r.o.",
+                    CustomerEmail = "marketing@techgadgets.cz",
+                    WorkflowType = "content_generation",
+                    TriggerType = "Schedule",
+                    LastRun = DateTime.Now.AddMinutes(-30),
+                    LastRunSuccess = true,
+                    SuccessRate = 87,
+                    TotalRuns = 67,
+                    StageCount = 8
+                },
+                new ProjectListItemViewModel
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Data Analysis Dashboard",
+                    Description = "Analýza prodejních dat s vizualizací trendů",
+                    Status = "Draft",
+                    CustomerName = "Market Leaders",
+                    CustomerEmail = "data@marketleaders.com",
+                    WorkflowType = "data_analysis",
+                    TriggerType = "Event",
+                    LastRun = null,
+                    LastRunSuccess = false,
+                    SuccessRate = 0,
+                    TotalRuns = 0,
+                    StageCount = 3
+                }
+            };
         }
 
         /// <summary>
