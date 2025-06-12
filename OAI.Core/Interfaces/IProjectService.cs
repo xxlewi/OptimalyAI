@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using OAI.Core.DTOs;
-using OAI.Core.Interfaces.Base;
 
 namespace OAI.Core.Interfaces
 {
     /// <summary>
     /// Service interface for project management
     /// </summary>
-    public interface IProjectService : IBaseService<ProjectDto>
+    public interface IProjectService
     {
         /// <summary>
         /// Get project summary statistics

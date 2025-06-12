@@ -1,13 +1,12 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using OAI.Core.Entities.Base;
 
 namespace OAI.Core.Entities
 {
     /// <summary>
     /// Individual workflow step execution within a project execution
     /// </summary>
-    public class ProjectExecutionStep : BaseEntity
+    public class ProjectExecutionStep : BaseGuidEntity
     {
         [Required]
         public Guid ProjectExecutionId { get; set; }

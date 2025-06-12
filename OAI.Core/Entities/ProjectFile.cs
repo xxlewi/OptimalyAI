@@ -1,13 +1,12 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using OAI.Core.Entities.Base;
 
 namespace OAI.Core.Entities
 {
     /// <summary>
     /// Files associated with a project (inputs, outputs, attachments)
     /// </summary>
-    public class ProjectFile : BaseEntity
+    public class ProjectFile : BaseGuidEntity
     {
         [Required]
         public Guid ProjectId { get; set; }

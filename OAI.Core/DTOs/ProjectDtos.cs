@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using OAI.Core.DTOs.Base;
 
 namespace OAI.Core.DTOs
 {
@@ -10,7 +9,7 @@ namespace OAI.Core.DTOs
     /// Project DTOs for API responses and data transfer
     /// </summary>
 
-    public class ProjectDto : BaseDto
+    public class ProjectDto : BaseGuidDto
     {
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
@@ -32,7 +31,7 @@ namespace OAI.Core.DTOs
         public object? IOConfiguration { get; set; }
     }
 
-    public class CreateProjectDto : CreateDtoBase
+    public class CreateProjectDto : CreateGuidDtoBase
     {
         [Required]
         [MaxLength(200)]
@@ -66,7 +65,7 @@ namespace OAI.Core.DTOs
         public object? IOConfiguration { get; set; }
     }
 
-    public class UpdateProjectDto : UpdateDtoBase
+    public class UpdateProjectDto : UpdateGuidDtoBase
     {
         [MaxLength(200)]
         public string? Name { get; set; }
@@ -100,7 +99,7 @@ namespace OAI.Core.DTOs
         public object? IOConfiguration { get; set; }
     }
 
-    public class ProjectExecutionDto : BaseDto
+    public class ProjectExecutionDto : BaseGuidDto
     {
         public Guid ProjectId { get; set; }
         public string RunName { get; set; } = string.Empty;
@@ -124,7 +123,7 @@ namespace OAI.Core.DTOs
         public int TotalSteps => Steps.Count;
     }
 
-    public class CreateProjectExecutionDto : CreateDtoBase
+    public class CreateProjectExecutionDto : CreateGuidDtoBase
     {
         [Required]
         public Guid ProjectId { get; set; }
@@ -151,7 +150,7 @@ namespace OAI.Core.DTOs
         public object? Metadata { get; set; }
     }
 
-    public class ProjectExecutionStepDto : BaseDto
+    public class ProjectExecutionStepDto : BaseGuidDto
     {
         public Guid ProjectExecutionId { get; set; }
         public string StepId { get; set; } = string.Empty;
@@ -168,7 +167,7 @@ namespace OAI.Core.DTOs
         public object? Configuration { get; set; }
     }
 
-    public class ProjectFileDto : BaseDto
+    public class ProjectFileDto : BaseGuidDto
     {
         public Guid ProjectId { get; set; }
         public Guid? ProjectExecutionId { get; set; }

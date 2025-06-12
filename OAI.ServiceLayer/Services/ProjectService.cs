@@ -14,7 +14,7 @@ namespace OAI.ServiceLayer.Services
     /// <summary>
     /// Service for project management operations
     /// </summary>
-    public class ProjectService : BaseService<Project>, IProjectService
+    public class ProjectService : BaseGuidService<Project>, IProjectService
     {
         private readonly IProjectMapper _projectMapper;
         private readonly IProjectExecutionMapper _executionMapper;

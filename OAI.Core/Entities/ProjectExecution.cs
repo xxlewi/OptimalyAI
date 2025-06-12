@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using OAI.Core.Entities.Base;
 
 namespace OAI.Core.Entities
 {
     /// <summary>
     /// Project execution record - tracks individual workflow runs
     /// </summary>
-    public class ProjectExecution : BaseEntity
+    public class ProjectExecution : BaseGuidEntity
     {
         [Required]
         public Guid ProjectId { get; set; }

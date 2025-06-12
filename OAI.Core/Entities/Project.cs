@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using OAI.Core.Entities.Base;
 
 namespace OAI.Core.Entities
 {
     /// <summary>
     /// Project entity representing a workflow project
     /// </summary>
-    public class Project : BaseEntity
+    public class Project : BaseGuidEntity
     {
         [Required]
         [MaxLength(200)]
