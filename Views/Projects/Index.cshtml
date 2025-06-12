@@ -88,9 +88,30 @@
             <div class="col-md-2">
                 <select class="form-control" id="filterStatus">
                     <option value="">Všechny stavy</option>
-                    <option value="Active" @(ViewBag.CurrentStatus == "Active" ? "selected" : "")>Aktivní</option>
-                    <option value="Draft" @(ViewBag.CurrentStatus == "Draft" ? "selected" : "")>Rozpracované</option>
-                    <option value="Completed" @(ViewBag.CurrentStatus == "Completed" ? "selected" : "")>Dokončené</option>
+                    @if (ViewBag.CurrentStatus == "Active")
+                    {
+                        <option value="Active" selected>Aktivní</option>
+                    }
+                    else
+                    {
+                        <option value="Active">Aktivní</option>
+                    }
+                    @if (ViewBag.CurrentStatus == "Draft")
+                    {
+                        <option value="Draft" selected>Rozpracované</option>
+                    }
+                    else
+                    {
+                        <option value="Draft">Rozpracované</option>
+                    }
+                    @if (ViewBag.CurrentStatus == "Completed")
+                    {
+                        <option value="Completed" selected>Dokončené</option>
+                    }
+                    else
+                    {
+                        <option value="Completed">Dokončené</option>
+                    }
                 </select>
             </div>
             <div class="col-md-3">
@@ -98,9 +119,14 @@
                     <option value="">Všechny typy workflow</option>
                     @foreach (var type in workflowTypes)
                     {
-                        <option value="@type.Value" @(ViewBag.CurrentWorkflowType == type.Value ? "selected" : "")>
-                            @type.Name
-                        </option>
+                        @if (ViewBag.CurrentWorkflowType == type.Value)
+                        {
+                            <option value="@type.Value" selected>@type.Name</option>
+                        }
+                        else
+                        {
+                            <option value="@type.Value">@type.Name</option>
+                        }
                     }
                 </select>
             </div>
