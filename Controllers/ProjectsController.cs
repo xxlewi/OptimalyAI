@@ -1,538 +1,397 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
-using OAI.Core.DTOs.Projects;
-using OAI.Core.Entities.Projects;
-using OAI.ServiceLayer.Services.Projects;
-using OAI.ServiceLayer.Services.Customers;
-using OptimalyAI.ViewModels;
+using OAI.Core.DTOs;
+using OAI.Core.Interfaces;
+using OAI.Core.Interfaces.Tools;
+using OptimalyAI.Controllers.Base;
 
 namespace OptimalyAI.Controllers
 {
     /// <summary>
-    /// Controller for AI Projects management
+    /// Controller pro správu projektů a workflow - produkční verze s clean architekturou
     /// </summary>
-    public class ProjectsController : Controller
+    public class ProjectsController : BaseApiController
     {
         private readonly IProjectService _projectService;
-        private readonly IProjectWorkflowService _workflowService;
-        private readonly IProjectExecutionService _executionService;
-        private readonly IProjectContextService _contextService;
-        private readonly ICustomerService _customerService;
-        private readonly IWorkflowDesignerService _workflowDesignerService;
-        private readonly ILogger<ProjectsController> _logger;
+        private readonly IToolRegistry _toolRegistry;
 
-        public ProjectsController(
-            IProjectService projectService,
-            IProjectWorkflowService workflowService,
-            IProjectExecutionService executionService,
-            IProjectContextService contextService,
-            ICustomerService customerService,
-            IWorkflowDesignerService workflowDesignerService,
-            ILogger<ProjectsController> logger)
+        public ProjectsController(IProjectService projectService, IToolRegistry toolRegistry)
         {
             _projectService = projectService;
-            _workflowService = workflowService;
-            _executionService = executionService;
-            _contextService = contextService;
-            _customerService = customerService;
-            _workflowDesignerService = workflowDesignerService;
-            _logger = logger;
+            _toolRegistry = toolRegistry;
         }
 
         /// <summary>
-        /// List all projects
+        /// Zobrazí hlavní stránku s přehledem projektů
         /// </summary>
-        public async Task<IActionResult> Index()
+        /// <returns>View s přehledem projektů</returns>
+        [HttpGet]
+        public async Task<IActionResult> Index(int page = 1, int pageSize = 10, string? status = null, string? workflowType = null, string? search = null)
         {
-            var projectDtos = await _projectService.GetAllAsync();
+            // Získat projekty z databáze
+            var (projects, totalCount) = await _projectService.GetProjectsAsync(page, pageSize, status, workflowType, search);
             
-            // Rozdělit projekty na aktivní a archivované
-            var activeProjects = projectDtos.Where(p => p.Status != ProjectStatus.Archived);
-            var archivedProjects = projectDtos.Where(p => p.Status == ProjectStatus.Archived);
+            // Získat statistiky
+            var summary = await _projectService.GetSummaryAsync();
             
-            // Konverze na ViewModely pro zobrazení
-            var projects = activeProjects.Select(p => new ProjectViewModel
-            {
-                Id = p.Id,
-                Name = p.Name,
-                Description = p.CustomerRequirement,
-                Status = p.Status,
-                CreatedAt = p.CreatedAt,
-                UpdatedAt = p.UpdatedAt ?? DateTime.UtcNow,
-                Schedule = p.ActiveWorkflows > 0 ? "Aktivní" : "Neaktivní",
-                LastRun = p.UpdatedAt,
-                NextRun = p.StartDate?.AddDays(1),
-                Configuration = new ProjectConfiguration
-                {
-                    Sources = new List<string>(),
-                    Keywords = new List<string>(),
-                    CrmIntegration = "",
-                    NotificationEmail = ""
-                },
-                Workflow = new List<WorkflowStep>(),
-                Metrics = new ProjectMetrics
-                {
-                    TotalRuns = p.TotalExecutions,
-                    SuccessfulRuns = (int)(p.TotalExecutions * (p.SuccessRate ?? 0) / 100),
-                    FailedRuns = p.TotalExecutions - (int)(p.TotalExecutions * (p.SuccessRate ?? 0) / 100),
-                    ItemsProcessed = 0,
-                    ItemsMatched = 0,
-                    AverageRunTime = TimeSpan.Zero
-                }
+            // Získat dostupné nástroje
+            var tools = await _toolRegistry.GetAllToolsAsync();
+            ViewBag.AvailableTools = tools.Select(t => new { 
+                Id = t.Id, 
+                Name = t.Name, 
+                Category = t.Category,
+                Description = t.Description 
             }).ToList();
-
-            // Konverze archivovaných projektů
-            var archived = archivedProjects.Select(p => new ProjectViewModel
-            {
-                Id = p.Id,
-                Name = p.Name,
-                Description = p.CustomerRequirement,
-                Status = p.Status,
-                CreatedAt = p.CreatedAt,
-                UpdatedAt = p.UpdatedAt ?? DateTime.UtcNow,
-                Schedule = p.ActiveWorkflows > 0 ? "Aktivní" : "Neaktivní",
-                LastRun = p.UpdatedAt,
-                NextRun = p.StartDate?.AddDays(1),
-                Configuration = new ProjectConfiguration
-                {
-                    Sources = new List<string>(),
-                    Keywords = new List<string>(),
-                    CrmIntegration = "",
-                    NotificationEmail = ""
-                },
-                Workflow = new List<WorkflowStep>(),
-                Metrics = new ProjectMetrics
-                {
-                    TotalRuns = p.TotalExecutions,
-                    SuccessfulRuns = (int)(p.TotalExecutions * (p.SuccessRate ?? 0) / 100),
-                    FailedRuns = p.TotalExecutions - (int)(p.TotalExecutions * (p.SuccessRate ?? 0) / 100),
-                    ItemsProcessed = 0,
-                    ItemsMatched = 0,
-                    AverageRunTime = TimeSpan.Zero
-                }
-            }).ToList();
-
-            ViewBag.ArchivedProjects = archived;
+            
+            // Získat workflow typy
+            var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+            ViewBag.WorkflowTypes = workflowTypes;
+            
+            // Předat statistiky do ViewBag
+            ViewBag.Summary = summary;
+            ViewBag.TotalCount = totalCount;
+            ViewBag.CurrentPage = page;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+            ViewBag.CurrentStatus = status;
+            ViewBag.CurrentWorkflowType = workflowType;
+            ViewBag.CurrentSearch = search;
+            
             return View(projects);
         }
 
         /// <summary>
-        /// Project details
+        /// API endpoint pro získání seznamu projektů s filtrováním
         /// </summary>
+        [HttpGet("api")]
+        public async Task<IActionResult> GetProjects(string? status = null, string? workflowType = null, string? search = null, int page = 1, int pageSize = 10)
+        {
+            try
+            {
+                var (projects, totalCount) = await _projectService.GetProjectsAsync(page, pageSize, status, workflowType, search);
+                
+                return Ok(new {
+                    projects,
+                    totalCount,
+                    page,
+                    pageSize,
+                    totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
+                }, "Projects retrieved successfully");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving projects: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro získání statistik projektů
+        /// </summary>
+        [HttpGet("api/summary")]
+        public async Task<IActionResult> GetSummary()
+        {
+            try
+            {
+                var summary = await _projectService.GetSummaryAsync();
+                return Ok(summary, "Summary retrieved successfully");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving summary: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Detail projektu
+        /// </summary>
+        [HttpGet("{id}")]
         public async Task<IActionResult> Details(Guid id)
         {
-            var projectDto = await _projectService.GetByIdAsync(id);
-            var workflows = await _workflowService.GetByProjectIdAsync(id);
-            var executions = await _executionService.GetByProjectIdAsync(id);
-
-            var project = new ProjectViewModel
-            {
-                Id = projectDto.Id,
-                Name = projectDto.Name,
-                Description = projectDto.Description ?? projectDto.CustomerRequirement,
-                Status = projectDto.Status,
-                CreatedAt = projectDto.CreatedAt,
-                UpdatedAt = projectDto.UpdatedAt ?? DateTime.UtcNow,
-                Schedule = workflows.FirstOrDefault(w => w.IsActive && !string.IsNullOrEmpty(w.CronExpression))?.CronExpression ?? "Manuální",
-                LastRun = executions.FirstOrDefault()?.StartedAt,
-                NextRun = projectDto.DueDate,
-                Configuration = new ProjectConfiguration
-                {
-                    Sources = new List<string>(),
-                    Keywords = new List<string>(),
-                    CrmIntegration = "",
-                    NotificationEmail = projectDto.CustomerEmail ?? ""
-                },
-                Workflow = workflows.Select(w => new WorkflowStep
-                {
-                    Order = 1,
-                    Name = w.Name,
-                    Description = w.Description,
-                    ToolId = w.WorkflowType,
-                    Status = w.IsActive ? "active" : "inactive"
-                }).ToList(),
-                Metrics = new ProjectMetrics
-                {
-                    TotalRuns = executions.Count(),
-                    SuccessfulRuns = executions.Count(e => e.Status == OAI.Core.Entities.Projects.ExecutionStatus.Completed),
-                    FailedRuns = executions.Count(e => e.Status == OAI.Core.Entities.Projects.ExecutionStatus.Failed),
-                    ItemsProcessed = executions.Sum(e => e.ItemsProcessedCount),
-                    ItemsMatched = 0,
-                    AverageRunTime = TimeSpan.FromSeconds(executions.Where(e => e.DurationSeconds.HasValue).Select(e => e.DurationSeconds.Value).DefaultIfEmpty(0).Average())
-                },
-                // Customer information
-                CustomerId = projectDto.CustomerId,
-                CustomerName = projectDto.CustomerName ?? "Interní projekt",
-                CustomerEmail = projectDto.CustomerEmail ?? "",
-                CustomerPhone = projectDto.CustomerPhone ?? ""
-            };
-
-            return View(project);
-        }
-
-        /// <summary>
-        /// Create new project - Quick Create form
-        /// </summary>
-        [HttpGet]
-        public async Task<IActionResult> Create(Guid? customerId = null)
-        {
-            var model = new CreateProjectViewModel();
-            
-            if (customerId.HasValue)
-            {
-                var customer = await _customerService.GetByIdAsync(customerId.Value);
-                model.CustomerId = customerId.Value;
-                model.CustomerName = customer.Name;
-                model.CustomerEmail = customer.Email;
-            }
-
-            // Load available customers for dropdown
-            var customers = await _customerService.GetAllAsync();
-            ViewBag.Customers = customers.Select(c => new { c.Id, c.Name }).ToList();
-            
-            return View(model);
-        }
-
-        /// <summary>
-        /// Create new project POST - Quick Create
-        /// </summary>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(CreateProjectViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                // Reload customers for dropdown
-                var customers = await _customerService.GetAllAsync();
-                ViewBag.Customers = customers.Select(c => new { c.Id, c.Name }).ToList();
-                return View(model);
-            }
-
             try
             {
-                // Handle internal vs customer project
-                string customerName = "Interní projekt";
-                string customerEmail = "";
+                var project = await _projectService.GetByIdAsync(id);
+                var executions = await _projectService.GetProjectExecutionsAsync(id, 10);
+                var files = await _projectService.GetProjectFilesAsync(id);
+                var workflowTypes = await _projectService.GetWorkflowTypesAsync();
                 
-                if (model.CustomerId.HasValue)
-                {
-                    var customer = await _customerService.GetByIdAsync(model.CustomerId.Value);
-                    customerName = customer.Name;
-                    customerEmail = customer.Email;
-                }
+                ViewBag.Executions = executions;
+                ViewBag.Files = files;
+                ViewBag.WorkflowTypes = workflowTypes;
                 
-                var createDto = new CreateProjectDto
-                {
-                    Name = model.Name,
-                    Description = model.Description ?? "",
-                    CustomerId = model.CustomerId,
-                    CustomerName = customerName,
-                    CustomerEmail = customerEmail,
-                    ProjectType = "Standard",
-                    Status = ProjectStatus.Draft,
-                    Priority = ProjectPriority.Medium,
-                    EstimatedHours = null,
-                    HourlyRate = null,
-                    IsTemplate = false
-                };
-
-                var project = await _projectService.CreateAsync(createDto);
-                _logger.LogInformation("Created new project {ProjectId}: {ProjectName}", project.Id, project.Name);
-
-                return RedirectToAction("Details", new { id = project.Id });
+                return View(project);
             }
-            catch (Exception ex)
+            catch (KeyNotFoundException)
             {
-                _logger.LogError(ex, "Error creating project");
-                ModelState.AddModelError("", "Chyba při vytváření projektu: " + ex.Message);
-                
-                // Reload customers for dropdown
-                var customers = await _customerService.GetAllAsync();
-                ViewBag.Customers = customers.Select(c => new { c.Id, c.Name }).ToList();
-                return View(model);
-            }
-        }
-
-        /// <summary>
-        /// Edit project - GET
-        /// </summary>
-        [HttpGet]
-        public async Task<IActionResult> Edit(Guid id)
-        {
-            var project = await _projectService.GetByIdAsync(id);
-            
-            var model = new EditProjectViewModel
-            {
-                Id = project.Id,
-                Name = project.Name,
-                Description = project.Description ?? project.CustomerRequirement,
-                CustomerName = project.CustomerName,
-                CustomerEmail = project.CustomerEmail,
-                ProjectType = project.ProjectType ?? "Standard",
-                EstimatedHours = project.EstimatedHours,
-                HourlyRate = project.HourlyRate,
-                Status = project.Status,
-                Priority = project.Priority,
-                CustomerId = project.CustomerId
-            };
-
-            return View(model);
-        }
-
-        /// <summary>
-        /// Edit project - POST
-        /// </summary>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(EditProjectViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            try
-            {
-                var updateDto = new UpdateProjectDto
-                {
-                    Name = model.Name,
-                    Description = model.Description,
-                    ProjectType = model.ProjectType,
-                    Status = model.Status,
-                    Priority = model.Priority,
-                    EstimatedHours = model.EstimatedHours,
-                    HourlyRate = model.HourlyRate,
-                    CustomerName = model.CustomerName,
-                    CustomerEmail = model.CustomerEmail,
-                    CustomerRequirement = model.Description ?? ""
-                };
-
-                await _projectService.UpdateAsync(model.Id, updateDto);
-                
-                TempData["Success"] = "Projekt byl úspěšně aktualizován.";
-                return RedirectToAction(nameof(Details), new { id = model.Id });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating project {Id}", model.Id);
-                ModelState.AddModelError("", "Chyba při aktualizaci projektu: " + ex.Message);
-                return View(model);
-            }
-        }
-
-        /// <summary>
-        /// Pause project
-        /// </summary>
-        [HttpPost]
-        public async Task<IActionResult> Pause(Guid id)
-        {
-            try
-            {
-                await _projectService.UpdateStatusAsync(id, ProjectStatus.Paused, "Pozastaveno uživatelem");
-                _logger.LogInformation("Paused project: {Id}", id);
-                return Json(new { success = true, message = "Projekt byl pozastaven." });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error pausing project {Id}", id);
-                return Json(new { success = false, message = "Chyba při pozastavování projektu." });
-            }
-        }
-
-        /// <summary>
-        /// Resume project
-        /// </summary>
-        [HttpPost]
-        public async Task<IActionResult> Resume(Guid id)
-        {
-            try
-            {
-                await _projectService.UpdateStatusAsync(id, ProjectStatus.Active, "Obnoveno uživatelem");
-                _logger.LogInformation("Resumed project: {Id}", id);
-                return Json(new { success = true, message = "Projekt byl obnoven." });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error resuming project {Id}", id);
-                return Json(new { success = false, message = "Chyba při obnovování projektu." });
-            }
-        }
-
-        /// <summary>
-        /// Delete project
-        /// </summary>
-        [HttpPost]
-        public async Task<IActionResult> Delete(Guid id)
-        {
-            try
-            {
-                await _projectService.DeleteAsync(id);
-                _logger.LogInformation("Archived project: {Id}", id);
-                return Json(new { success = true, message = "Projekt byl archivován." });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error archiving project {Id}", id);
-                return Json(new { success = false, message = "Chyba při archivování projektu." });
-            }
-        }
-
-        /// <summary>
-        /// View project logs
-        /// </summary>
-        public async Task<IActionResult> Logs(Guid id)
-        {
-            var project = await _projectService.GetByIdAsync(id);
-            var executions = await _executionService.GetByProjectIdAsync(id);
-            var history = await _projectService.GetHistoryAsync(id);
-
-            ViewBag.ProjectName = project.Name;
-            ViewBag.ProjectId = id;
-            ViewBag.Executions = executions;
-            ViewBag.History = history;
-
-            return View();
-        }
-
-        /// <summary>
-        /// Execute project
-        /// </summary>
-        [HttpPost]
-        public async Task<IActionResult> Execute(Guid id)
-        {
-            try
-            {
-                var dto = new StartProjectExecutionDto
-                {
-                    ProjectId = id,
-                    InitiatedBy = User.Identity?.Name ?? "System",
-                    Parameters = new Dictionary<string, object>()
-                };
-
-                var execution = await _executionService.StartExecutionAsync(dto);
-                _logger.LogInformation("Started execution {ExecutionId} for project {ProjectId}", execution.Id, id);
-
-                return Json(new { success = true, executionId = execution.Id, message = "Spuštění projektu zahájeno." });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error executing project {Id}", id);
-                return Json(new { success = false, message = ex.Message });
-            }
-        }
-
-        /// <summary>
-        /// Get project context
-        /// </summary>
-        [HttpGet]
-        public async Task<IActionResult> Context(Guid id)
-        {
-            try
-            {
-                var context = await _contextService.GetProjectContextAsync(id);
-                return Content(context, "text/plain");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting project context for {Id}", id);
                 return NotFound();
             }
-        }
-
-        /// <summary>
-        /// Workflow Designer for project
-        /// </summary>
-        [HttpGet]
-        public async Task<IActionResult> WorkflowDesigner(Guid id)
-        {
-            // Přesměruj na WorkflowPrototypeController
-            return RedirectToAction("Index", "WorkflowPrototype", new { projectId = id });
-        }
-
-        /// <summary>
-        /// Show create stage partial
-        /// </summary>
-        [HttpGet]
-        public async Task<IActionResult> CreateStage(Guid projectId)
-        {
-            try 
+            catch (Exception ex)
             {
-                // Verify project exists
-                var project = await _projectService.GetByIdAsync(projectId);
-                if (project == null)
+                return BadRequest($"Error retrieving project: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Formulář pro vytvoření nového projektu
+        /// </summary>
+        [HttpGet("create")]
+        public async Task<IActionResult> Create()
+        {
+            var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+            ViewBag.WorkflowTypes = workflowTypes;
+            
+            return View(new CreateProjectDto());
+        }
+
+        /// <summary>
+        /// Vytvoření nového projektu
+        /// </summary>
+        [HttpPost("create")]
+        public async Task<IActionResult> Create([FromForm] CreateProjectDto createDto, string? nextAction = null)
+        {
+            if (!ModelState.IsValid)
+            {
+                var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+                ViewBag.WorkflowTypes = workflowTypes;
+                return View(createDto);
+            }
+
+            try
+            {
+                var project = await _projectService.CreateProjectAsync(createDto);
+                
+                // Handle next action based on form selection
+                return nextAction switch
+                {
+                    "designer" => RedirectToAction("Index", "WorkflowDesigner", new { projectId = project.Id }),
+                    "list" => RedirectToAction(nameof(Index)),
+                    "detail" or _ => RedirectToAction(nameof(Details), new { id = project.Id })
+                };
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", $"Chyba při vytváření projektu: {ex.Message}");
+                var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+                ViewBag.WorkflowTypes = workflowTypes;
+                return View(createDto);
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro vytvoření projektu
+        /// </summary>
+        [HttpPost("api")]
+        public async Task<IActionResult> CreateProject([FromBody] CreateProjectDto createDto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                var project = await _projectService.CreateProjectAsync(createDto);
+                return Ok(project, "Project created successfully");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error creating project: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro aktualizaci projektu
+        /// </summary>
+        [HttpPut("api/{id}")]
+        public async Task<IActionResult> UpdateProject(Guid id, [FromBody] UpdateProjectDto updateDto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                var project = await _projectService.UpdateProjectAsync(id, updateDto);
+                return Ok(project, "Project updated successfully");
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Project not found");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error updating project: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro smazání projektu
+        /// </summary>
+        [HttpDelete("api/{id}")]
+        public async Task<IActionResult> DeleteProject(Guid id)
+        {
+            try
+            {
+                var deleted = await _projectService.DeleteAsync(id);
+                if (!deleted)
                 {
                     return NotFound("Project not found");
                 }
-
-                // Get available components with fallback values
-                Dictionary<string, List<string>> components;
-                try 
-                {
-                    components = await _workflowDesignerService.GetAvailableComponentsAsync();
-                }
-                catch (Exception)
-                {
-                    // Fallback to default components if service fails
-                    components = new Dictionary<string, List<string>>
-                    {
-                        ["orchestrators"] = new List<string> { "ConversationOrchestrator", "ToolChainOrchestrator", "CustomOrchestrator" },
-                        ["reactAgents"] = new List<string> { "ConversationReActAgent", "AnalysisReActAgent" },
-                        ["tools"] = new List<string> { "web_search", "image_analyzer", "data_analyzer", "excel_exporter" },
-                        ["stageTypes"] = new List<string> { "Analysis", "Search", "Processing", "Export", "Custom" },
-                        ["executionStrategies"] = new List<string> { "Sequential", "Parallel", "Conditional" }
-                    };
-                }
-
-                ViewBag.Components = components;
-                ViewBag.ProjectId = projectId;
-
-                return PartialView("~/Views/WorkflowPrototype/_CreateStage.cshtml", new CreateProjectStageDto { ProjectId = projectId });
+                
+                return Ok("Project deleted successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error loading CreateStage form for project {ProjectId}", projectId);
-                return StatusCode(500, "Error loading create stage form");
+                return BadRequest($"Error deleting project: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Show edit stage partial
+        /// API endpoint pro spuštění workflow
         /// </summary>
-        [HttpGet]
-        public async Task<IActionResult> EditStage(Guid stageId)
+        [HttpPost("api/{id}/execute")]
+        public async Task<IActionResult> ExecuteWorkflow(Guid id, [FromBody] CreateProjectExecutionDto executionDto)
         {
-            var stageService = HttpContext.RequestServices.GetService<IProjectStageService>();
-            var stage = await stageService.GetStageAsync(stageId);
-            if (stage == null)
+            if (id != executionDto.ProjectId)
             {
-                return NotFound();
+                return BadRequest("Project ID mismatch");
             }
 
-            var components = await _workflowDesignerService.GetAvailableComponentsAsync();
-            ViewBag.Components = components;
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
 
-            return PartialView("~/Views/WorkflowPrototype/_EditStage.cshtml", stage);
+            try
+            {
+                var execution = await _projectService.ExecuteProjectAsync(executionDto);
+                return Ok(execution, "Workflow execution started");
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Project not found");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing workflow: {ex.Message}");
+            }
         }
 
         /// <summary>
-        /// Show test workflow partial
+        /// API endpoint pro získání historie spuštění
         /// </summary>
-        [HttpGet]
-        public async Task<IActionResult> TestWorkflow(Guid projectId)
+        [HttpGet("api/{id}/executions")]
+        public async Task<IActionResult> GetExecutions(Guid id, int limit = 10)
         {
-            var project = await _projectService.GetByIdAsync(projectId);
-            if (project == null)
+            try
             {
-                return NotFound();
+                var executions = await _projectService.GetProjectExecutionsAsync(id, limit);
+                return Ok(executions, "Executions retrieved successfully");
             }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving executions: {ex.Message}");
+            }
+        }
 
-            ViewBag.Project = project;
-            return PartialView("~/Views/WorkflowPrototype/_TestWorkflow.cshtml", new TestProjectWorkflowDto { ProjectId = projectId });
+        /// <summary>
+        /// API endpoint pro aktualizaci workflow definice
+        /// </summary>
+        [HttpPut("api/{id}/workflow")]
+        public async Task<IActionResult> UpdateWorkflow(Guid id, [FromBody] object workflowDefinition)
+        {
+            try
+            {
+                var project = await _projectService.UpdateWorkflowDefinitionAsync(id, workflowDefinition);
+                return Ok(project, "Workflow updated successfully");
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Project not found");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error updating workflow: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro aktualizaci orchestrátor nastavení
+        /// </summary>
+        [HttpPut("api/{id}/orchestrator")]
+        public async Task<IActionResult> UpdateOrchestratorSettings(Guid id, [FromBody] object orchestratorSettings)
+        {
+            try
+            {
+                var project = await _projectService.UpdateOrchestratorSettingsAsync(id, orchestratorSettings);
+                return Ok(project, "Orchestrator settings updated successfully");
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Project not found");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error updating orchestrator settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro aktualizaci I/O konfigurace
+        /// </summary>
+        [HttpPut("api/{id}/io-configuration")]
+        public async Task<IActionResult> UpdateIOConfiguration(Guid id, [FromBody] object ioConfiguration)
+        {
+            try
+            {
+                var project = await _projectService.UpdateIOConfigurationAsync(id, ioConfiguration);
+                return Ok(project, "I/O configuration updated successfully");
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Project not found");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error updating I/O configuration: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro validaci workflow
+        /// </summary>
+        [HttpPost("api/{id}/validate")]
+        public async Task<IActionResult> ValidateWorkflow(Guid id)
+        {
+            try
+            {
+                var (isValid, errors) = await _projectService.ValidateWorkflowAsync(id);
+                return Ok(new { isValid, errors }, isValid ? "Workflow is valid" : "Workflow validation failed");
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Project not found");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error validating workflow: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// API endpoint pro získání workflow typů
+        /// </summary>
+        [HttpGet("api/workflow-types")]
+        public async Task<IActionResult> GetWorkflowTypes()
+        {
+            try
+            {
+                var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+                return Ok(workflowTypes, "Workflow types retrieved successfully");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving workflow types: {ex.Message}");
+            }
         }
     }
 }

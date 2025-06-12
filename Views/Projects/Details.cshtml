@@ -1,318 +1,445 @@
-@model OptimalyAI.ViewModels.ProjectViewModel
-@using OAI.Core.Entities.Projects
+@model OAI.Core.DTOs.ProjectDto
 @{
-    ViewData["Title"] = $"Projekt: {Model.Name}";
+    ViewData["Title"] = "Detail projektu";
+    var executions = ViewBag.Executions as IEnumerable<OAI.Core.DTOs.ProjectExecutionDto> ?? new List<OAI.Core.DTOs.ProjectExecutionDto>();
+    var files = ViewBag.Files as IEnumerable<OAI.Core.DTOs.ProjectFileDto> ?? new List<OAI.Core.DTOs.ProjectFileDto>();
+    var workflowTypes = ViewBag.WorkflowTypes as IEnumerable<OAI.Core.DTOs.WorkflowTypeDto> ?? new List<OAI.Core.DTOs.WorkflowTypeDto>();
 }
 
-<div class="content-header">
+<section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">
-                    @Model.Name
-                    <span class="badge badge-@(Model.Status switch { 
-                        ProjectStatus.Active => "success",
-                        ProjectStatus.Failed => "danger",
-                        ProjectStatus.Paused => "warning",
-                        ProjectStatus.Completed => "info",
-                        _ => "secondary"
-                    }) ml-2">
-                        <i class="fas fa-@(Model.Status switch {
-                            ProjectStatus.Active => "play-circle",
-                            ProjectStatus.Failed => "times-circle",
-                            ProjectStatus.Paused => "pause-circle",
-                            ProjectStatus.Completed => "check-circle",
-                            ProjectStatus.Draft => "pencil-alt",
-                            _ => "flag"
-                        })"></i> @Model.Status
-                    </span>
+                <h1>
+                    <i class="fas fa-project-diagram"></i> @Model.Name
+                    @if (Model.Status == "Active")
+                    {
+                        <span class="badge badge-success">Aktivní</span>
+                    }
+                    else if (Model.Status == "Draft")
+                    {
+                        <span class="badge badge-warning">Rozpracovaný</span>
+                    }
+                    else if (Model.Status == "Completed")
+                    {
+                        <span class="badge badge-info">Dokončený</span>
+                    }
                 </h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a asp-action="Index">Projekty</a></li>
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index")">Projekty</a></li>
                     <li class="breadcrumb-item active">@Model.Name</li>
                 </ol>
             </div>
         </div>
     </div>
-</div>
+</section>
 
 <section class="content">
     <div class="container-fluid">
-        @* Show welcome message for new projects *@
-        @if (Model.Status == ProjectStatus.Draft && Model.Workflow.Count == 0)
-        {
-            <div class="alert alert-info alert-dismissible">
-                <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
-                <h5><i class="icon fas fa-info"></i> Projekt byl úspěšně vytvořen!</h5>
-                Co chcete udělat dál?
-            </div>
-        }
-
-        <div class="row">
-            @* Project overview card *@
-            <div class="col-md-12">
-                <div class="card card-primary card-outline">
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-8">
-                                <p class="lead">@Model.Description</p>
-                                
-                                @* Customer information *@
-                                <div class="mt-3">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <strong>Zákazník:</strong>
-                                            @if (Model.CustomerId.HasValue)
-                                            {
-                                                <a href="@Url.Action("Details", "Customers", new { id = Model.CustomerId })" class="text-primary">
-                                                    <i class="fas fa-user"></i> @Model.CustomerName
-                                                </a>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">@Model.CustomerName</span>
-                                            }
-                                        </div>
-                                        <div class="col-md-6">
-                                            <strong>Vytvořeno:</strong>
-                                            <span class="text-muted">@Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</span>
-                                        </div>
-                                    </div>
-                                    
-                                    @if (Model.CustomerId.HasValue)
-                                    {
-                                        <div class="row mt-2">
-                                            @if (!string.IsNullOrEmpty(Model.CustomerEmail))
-                                            {
-                                                <div class="col-md-6">
-                                                    <strong>Email:</strong>
-                                                    <span class="text-muted">
-                                                        <i class="fas fa-envelope"></i> @Model.CustomerEmail
-                                                    </span>
-                                                </div>
-                                            }
-                                            @if (!string.IsNullOrEmpty(Model.CustomerPhone))
-                                            {
-                                                <div class="col-md-6">
-                                                    <strong>Telefon:</strong>
-                                                    <span class="text-muted">
-                                                        <i class="fas fa-phone"></i> @Model.CustomerPhone
-                                                    </span>
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                            <div class="col-md-4 text-right">
-                                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-primary">
-                                    <i class="fas fa-edit"></i> Upravit základní informace
-                                </a>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Project Actions -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="btn-group">
+                    <a href="@Url.Action("Index")" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Zpět na seznam
+                    </a>
+                    <button type="button" class="btn btn-success" onclick="executeWorkflow()">
+                        <i class="fas fa-play"></i> Spustit workflow
+                    </button>
+                    <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = Model.Id })" class="btn btn-primary">
+                        <i class="fas fa-edit"></i> Upravit workflow
+                    </a>
+                    <button type="button" class="btn btn-warning" onclick="validateWorkflow()">
+                        <i class="fas fa-check-circle"></i> Validovat workflow
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="deleteProject()">
+                        <i class="fas fa-trash"></i> Smazat projekt
+                    </button>
                 </div>
             </div>
         </div>
 
-        @* Action cards for new projects *@
-        @if (Model.Status == ProjectStatus.Draft && Model.Workflow.Count == 0)
-        {
-            <div class="row">
-                <div class="col-lg-4 col-md-6">
-                    <div class="card card-widget widget-user-2">
-                        <div class="widget-user-header bg-gradient-primary">
-                            <h3 class="widget-user-username">
-                                <i class="fas fa-magic"></i> Nastavit workflow
-                            </h3>
-                            <h5 class="widget-user-desc">Definujte kroky zpracování</h5>
-                        </div>
-                        <div class="card-body">
-                            <p>Vytvořte automatický proces pro zpracování vašeho projektu - definujte jednotlivé kroky, nástroje a podmínky.</p>
-                            <a asp-action="WorkflowDesigner" asp-route-id="@Model.Id" class="btn btn-primary btn-block">
-                                <i class="fas fa-project-diagram"></i> Otevřít Workflow Designer
-                            </a>
-                        </div>
+        <div class="row">
+            <!-- Project Information -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-info-circle"></i> Informace o projektu
+                        </h3>
                     </div>
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <div class="card card-widget widget-user-2">
-                        <div class="widget-user-header bg-gradient-success">
-                            <h3 class="widget-user-username">
-                                <i class="fas fa-play"></i> Rychlé spuštění
-                            </h3>
-                            <h5 class="widget-user-desc">Spusťte projekt ručně</h5>
-                        </div>
-                        <div class="card-body">
-                            <p>Pokud máte workflow připravené, můžete projekt spustit okamžitě a sledovat jeho průběh v reálném čase.</p>
-                            <button class="btn btn-success btn-block" disabled>
-                                <i class="fas fa-play"></i> Nejdřív nastavte workflow
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-lg-4 col-md-6">
-                    <div class="card card-widget widget-user-2">
-                        <div class="widget-user-header bg-gradient-info">
-                            <h3 class="widget-user-username">
-                                <i class="fas fa-clock"></i> Automatizace
-                            </h3>
-                            <h5 class="widget-user-desc">Naplánujte pravidelné spouštění</h5>
-                        </div>
-                        <div class="card-body">
-                            <p>Nastavte automatické spouštění projektu - každou hodinu, denně, týdně nebo podle vlastního plánu.</p>
-                            <button class="btn btn-info btn-block" disabled>
-                                <i class="fas fa-calendar-alt"></i> Nejdřív nastavte workflow
-                            </button>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Název:</strong><br>
+                                @Model.Name<br><br>
+                                
+                                <strong>Popis:</strong><br>
+                                @(string.IsNullOrEmpty(Model.Description) ? "Bez popisu" : Model.Description)<br><br>
+                                
+                                <strong>Zákazník:</strong><br>
+                                @if (!string.IsNullOrEmpty(Model.CustomerName))
+                                {
+                                    <i class="fas fa-user"></i> @Model.CustomerName
+                                    @if (!string.IsNullOrEmpty(Model.CustomerEmail))
+                                    {
+                                        <br><small class="text-muted"><i class="fas fa-envelope"></i> @Model.CustomerEmail</small>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Interní projekt</span>
+                                }
+                                <br><br>
+                                
+                                <strong>Typ workflow:</strong><br>
+                                @{
+                                    var workflowType = workflowTypes.FirstOrDefault(w => w.Value == Model.WorkflowType);
+                                }
+                                @if (workflowType != null)
+                                {
+                                    <i class="@workflowType.Icon"></i> @workflowType.Name
+                                }
+                                else
+                                {
+                                    @Model.WorkflowType
+                                }
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Priorita:</strong><br>
+                                @switch (Model.Priority)
+                                {
+                                    case "Critical":
+                                        <span class="badge badge-danger">Kritická</span>
+                                        break;
+                                    case "High":
+                                        <span class="badge badge-warning">Vysoká</span>
+                                        break;
+                                    case "Low":
+                                        <span class="badge badge-secondary">Nízká</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-info">Normální</span>
+                                        break;
+                                }
+                                <br><br>
+                                
+                                <strong>Spouštění:</strong><br>
+                                @switch (Model.TriggerType)
+                                {
+                                    case "Manual":
+                                        <i class="fas fa-hand-pointer"></i> Manuální
+                                        break;
+                                    case "Schedule":
+                                        <i class="fas fa-clock"></i> Plánované
+                                        @if (!string.IsNullOrEmpty(Model.CronExpression))
+                                        {
+                                            <br><small class="text-muted">Cron: @Model.CronExpression</small>
+                                        }
+                                        break;
+                                    case "Event":
+                                        <i class="fas fa-bolt"></i> Událostmi
+                                        break;
+                                    default:
+                                        @Model.TriggerType
+                                        break;
+                                }
+                                <br><br>
+                                
+                                <strong>Vytvořen:</strong><br>
+                                @Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")<br><br>
+                                
+                                <strong>Aktualizován:</strong><br>
+                                @Model.UpdatedAt.ToString("dd.MM.yyyy HH:mm")
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        }
-
-        @* Workflow section for projects with workflow *@
-        @if (Model.Workflow.Count > 0)
-        {
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">
-                                <i class="fas fa-project-diagram"></i> Workflow
-                            </h3>
-                            <div class="card-tools">
-                                <a asp-action="WorkflowDesigner" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-edit"></i> Upravit
-                                </a>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="timeline timeline-inverse">
-                                @foreach (var step in Model.Workflow.OrderBy(s => s.Order))
-                                {
-                                    <div>
-                                        <i class="fas fa-@(step.Status == "completed" ? "check-circle" : "circle") bg-@(step.Status == "active" ? "primary" : step.Status == "completed" ? "success" : "gray")"></i>
-                                        <div class="timeline-item">
-                                            <h3 class="timeline-header">@step.Name</h3>
-                                            @if (!string.IsNullOrEmpty(step.Description))
-                                            {
-                                                <div class="timeline-body">
-                                                    @step.Description
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                                <div>
-                                    <i class="fas fa-flag-checkered bg-green"></i>
-                                </div>
-                            </div>
-                        </div>
+            
+            <!-- Statistics -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-bar"></i> Statistiky
+                        </h3>
                     </div>
-                </div>
-
-                <div class="col-md-4">
-                    @* Action buttons *@
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">
-                                <i class="fas fa-cogs"></i> Akce
-                            </h3>
+                    <div class="card-body">
+                        <div class="text-center">
+                            <h3>@Model.SuccessRate%</h3>
+                            <div class="progress mb-3">
+                                <div class="progress-bar @(Model.SuccessRate >= 80 ? "bg-success" : Model.SuccessRate >= 50 ? "bg-warning" : "bg-danger")" 
+                                     style="width: @Model.SuccessRate%"></div>
+                            </div>
+                            <p class="text-muted">Úspěšnost</p>
                         </div>
-                        <div class="card-body">
-                            <button type="button" class="btn btn-success btn-block mb-2" onclick="executeProject()">
-                                <i class="fas fa-play"></i> Spustit nyní
-                            </button>
-                            <a href="/ProjectWorkflows/Monitor?projectId=@Model.Id" class="btn btn-info btn-block mb-2">
-                                <i class="fas fa-chart-line"></i> Sledovat průběh
-                            </a>
-                            <button type="button" class="btn btn-warning btn-block mb-2" onclick="scheduleProject()">
-                                <i class="fas fa-clock"></i> Nastavit plánování
-                            </button>
+                        
+                        <hr>
+                        
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h4>@Model.TotalRuns</h4>
+                                <p class="text-muted">Celkem běhů</p>
+                            </div>
+                            <div class="col-6">
+                                <h4>@Model.StageCount</h4>
+                                <p class="text-muted">Kroků</p>
+                            </div>
                         </div>
+                        
+                        @if (Model.LastRun.HasValue)
+                        {
+                            <hr>
+                            <strong>Poslední běh:</strong><br>
+                            @Model.LastRun.Value.ToString("dd.MM.yyyy HH:mm")<br>
+                            @if (Model.LastRunSuccess)
+                            {
+                                <span class="badge badge-success">Úspěch</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-danger">Selhalo</span>
+                            }
+                        }
                     </div>
-
-                    @* Metrics *@
-                    @if (Model.Metrics.TotalRuns > 0)
-                    {
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">
-                                    <i class="fas fa-chart-bar"></i> Statistiky
-                                </h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span>Celkem spuštění:</span>
-                                    <span class="font-weight-bold">@Model.Metrics.TotalRuns</span>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span>Úspěšnost:</span>
-                                    <span class="font-weight-bold text-success">@Model.Metrics.SuccessRate.ToString("F0")%</span>
-                                </div>
-                                <div class="progress progress-sm mb-3">
-                                    <div class="progress-bar bg-success" style="width: @Model.Metrics.SuccessRate%"></div>
-                                </div>
-                                @if (Model.LastRun.HasValue)
-                                {
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span>Poslední běh:</span>
-                                        <span class="text-muted">@Model.LastRun.Value.ToString("dd.MM. HH:mm")</span>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
                 </div>
             </div>
-        }
-
-        @* Help section *@
-        <div class="row mt-4">
+        </div>
+        
+        <!-- Execution History -->
+        <div class="row mt-3">
             <div class="col-12">
-                <div class="callout callout-info">
-                    <h5><i class="fas fa-info"></i> Potřebujete pomoc?</h5>
-                    <p>
-                        <strong>Workflow Designer</strong> - Vytváří automatické procesy s podmínkami a větvením<br>
-                        <strong>Spustit nyní</strong> - Okamžité jednorázové spuštění projektu<br>
-                        <strong>Nastavit plánování</strong> - Pravidelné automatické spouštění (každou hodinu, denně, atd.)
-                    </p>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-history"></i> Historie spuštění
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="refreshExecutions()">
+                                <i class="fas fa-sync"></i> Obnovit
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (executions.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Spuštěno</th>
+                                            <th>Režim</th>
+                                            <th>Status</th>
+                                            <th>Trvání</th>
+                                            <th>Kroků</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var execution in executions)
+                                        {
+                                            <tr>
+                                                <td>@execution.StartedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                                <td>
+                                                    @if (execution.Mode == "test")
+                                                    {
+                                                        <span class="badge badge-warning">Test</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-primary">Production</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @switch (execution.Status)
+                                                    {
+                                                        case "Running":
+                                                            <span class="badge badge-info">Běží</span>
+                                                            break;
+                                                        case "Completed":
+                                                            <span class="badge badge-success">Dokončeno</span>
+                                                            break;
+                                                        case "Failed":
+                                                            <span class="badge badge-danger">Selhalo</span>
+                                                            break;
+                                                        case "Cancelled":
+                                                            <span class="badge badge-secondary">Zrušeno</span>
+                                                            break;
+                                                        default:
+                                                            <span class="badge badge-light">@execution.Status</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (execution.CompletedAt.HasValue)
+                                                    {
+                                                        var duration = execution.CompletedAt.Value - execution.StartedAt;
+                                                        @duration.TotalMinutes.ToString("F1") min
+                                                    }
+                                                    else if (execution.Status == "Running")
+                                                    {
+                                                        var duration = DateTime.UtcNow - execution.StartedAt;
+                                                        @duration.TotalMinutes.ToString("F1") min
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>@execution.StepsCompleted/@execution.TotalSteps</td>
+                                                <td>
+                                                    @if (execution.Status == "Running")
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-warning" onclick="cancelExecution('@execution.Id')">
+                                                            <i class="fas fa-stop"></i>
+                                                        </button>
+                                                    }
+                                                    <button type="button" class="btn btn-sm btn-info" onclick="viewExecutionDetails('@execution.Id')">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Žádné spuštění</h5>
+                                <p class="text-muted">Tento projekt ještě nebyl spuštěn.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Project Files -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-file"></i> Soubory projektu
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="uploadFile()">
+                                <i class="fas fa-upload"></i> Nahrát soubor
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (files.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Název</th>
+                                            <th>Typ</th>
+                                            <th>Velikost</th>
+                                            <th>Nahráno</th>
+                                            <th>Akce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var file in files)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <i class="fas fa-file"></i> @file.OriginalFileName
+                                                    @if (!string.IsNullOrEmpty(file.Description))
+                                                    {
+                                                        <br><small class="text-muted">@file.Description</small>
+                                                    }
+                                                </td>
+                                                <td>@file.FileType</td>
+                                                <td>@((file.FileSize / 1024.0 / 1024.0).ToString("F2")) MB</td>
+                                                <td>
+                                                    @file.CreatedAt.ToString("dd.MM.yyyy HH:mm")
+                                                    @if (!string.IsNullOrEmpty(file.UploadedBy))
+                                                    {
+                                                        <br><small class="text-muted">@file.UploadedBy</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-sm btn-primary" onclick="downloadFile('@file.Id')">
+                                                        <i class="fas fa-download"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteFile('@file.Id')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <i class="fas fa-file fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Žádné soubory</h5>
+                                <p class="text-muted">K tomuto projektu nejsou připojené žádné soubory.</p>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- Execute Workflow Modal -->
-<div class="modal fade" id="executeWorkflowModal" tabindex="-1" role="dialog" aria-labelledby="executeWorkflowModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
+<!-- Run Workflow Modal -->
+<div class="modal fade" id="runWorkflowModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="executeWorkflowModalLabel">Spustit Workflow</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
+                <h5 class="modal-title">
+                    <i class="fas fa-play"></i> Spustit workflow
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
                 </button>
             </div>
             <div class="modal-body">
-                <form id="executeWorkflowForm">
-                    <div class="form-group">
-                        <label for="parameters">Vstupní parametry (JSON)</label>
-                        <textarea class="form-control" id="parameters" name="parameters" rows="5" placeholder='{"key": "value"}'>{}</textarea>
-                        <small class="form-text text-muted">Zadejte parametry ve formátu JSON</small>
+                <div class="form-group">
+                    <label>Režim spuštění:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="runMode" id="testMode" value="test" checked>
+                        <label class="form-check-label" for="testMode">
+                            <i class="fas fa-vial"></i> Test režim
+                            <small class="text-muted d-block">Bezpečné testování s omezeními</small>
+                        </label>
                     </div>
-                    <div class="form-group">
-                        <label for="initiatedBy">Spuštěno kým</label>
-                        <input type="text" class="form-control" id="initiatedBy" name="initiatedBy" value="@User.Identity.Name" />
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="runMode" id="productionMode" value="production">
+                        <label class="form-check-label" for="productionMode">
+                            <i class="fas fa-rocket"></i> Produkční režim
+                            <small class="text-muted d-block">Plné spuštění bez omezení</small>
+                        </label>
                     </div>
-                </form>
+                </div>
+                
+                <div id="testModeOptions" class="form-group">
+                    <label for="testItemLimit">Limit položek pro test:</label>
+                    <input type="number" id="testItemLimit" class="form-control" value="10" min="1" max="100">
+                    <small class="form-text text-muted">Maximální počet položek k zpracování v test režimu</small>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                <button type="button" class="btn btn-success" onclick="executeWorkflow()">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Zrušit
+                </button>
+                <button type="button" class="btn btn-success" onclick="runWorkflow()">
                     <i class="fas fa-play"></i> Spustit
                 </button>
             </div>
@@ -322,109 +449,116 @@
 
 @section Scripts {
     <script>
-        function executeProject() {
-            const projectId = '@Model.Id';
-            
-            if (!confirm('Opravdu chcete spustit projekt nyní?')) {
-                return;
-            }
-            
-            // Show loading on button
-            const btn = event.target;
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spouštím...';
-            
-            fetch(`/Projects/Execute`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
-                },
-                body: JSON.stringify({ id: projectId })
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    toastr.success(result.message || 'Projekt byl úspěšně spuštěn');
-                    
-                    // Redirect to monitor page after short delay
-                    setTimeout(() => {
-                        window.location.href = `/ProjectWorkflows/Monitor?projectId=${projectId}`;
-                    }, 1500);
-                } else {
-                    toastr.error(result.message || 'Chyba při spouštění projektu');
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                }
-            })
-            .catch(error => {
-                toastr.error('Chyba při komunikaci se serverem');
-                console.error('Error:', error);
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            });
-        }
-
-        function scheduleProject() {
-            // For now, just redirect to workflow designer where scheduling can be set
-            window.location.href = '@Url.Action("WorkflowDesigner", new { id = Model.Id })&tab=schedule';
-        }
-
         function executeWorkflow() {
-            const projectId = '@Model.Id';
-            const parameters = document.getElementById('parameters').value;
-            const initiatedBy = document.getElementById('initiatedBy').value;
+            $('#runWorkflowModal').modal('show');
+        }
+        
+        function runWorkflow() {
+            const mode = $('input[name="runMode"]:checked').val();
+            const testItemLimit = mode === 'test' ? $('#testItemLimit').val() : null;
             
-            let parsedParams = {};
-            try {
-                if (parameters.trim()) {
-                    parsedParams = JSON.parse(parameters);
-                }
-            } catch (e) {
-                toastr.error('Neplatný JSON formát parametrů');
-                return;
-            }
-            
-            const data = {
-                parameters: parsedParams,
-                initiatedBy: initiatedBy
+            const executionData = {
+                projectId: '@Model.Id',
+                mode: mode,
+                testItemLimit: testItemLimit ? parseInt(testItemLimit) : null
             };
             
-            // Disable button during execution
-            const btn = event.target;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spouštím...';
-            
-            fetch(`/api/workflow/${projectId}/execute`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+            $.ajax({
+                url: '@Url.Action("ExecuteWorkflow", "Projects", new { id = Model.Id })',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(executionData),
+                success: function(response) {
+                    toastr.success('Workflow byl spuštěn');
+                    $('#runWorkflowModal').modal('hide');
+                    setTimeout(() => location.reload(), 1000);
                 },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.isSuccess) {
-                    toastr.success('Workflow byl úspěšně spuštěn');
-                    $('#executeWorkflowModal').modal('hide');
-                    
-                    // Redirect to monitor page
-                    setTimeout(() => {
-                        window.location.href = `/ProjectWorkflows/Monitor?executionId=${result.data.executionId}`;
-                    }, 1500);
-                } else {
-                    toastr.error(result.error || 'Chyba při spouštění workflow');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-play"></i> Spustit';
+                error: function(xhr) {
+                    const response = xhr.responseJSON || { message: 'Chyba při spouštění workflow' };
+                    toastr.error(response.message);
                 }
-            })
-            .catch(error => {
-                toastr.error('Chyba při komunikaci se serverem');
-                console.error('Error:', error);
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play"></i> Spustit';
             });
         }
+        
+        function validateWorkflow() {
+            $.ajax({
+                url: '@Url.Action("ValidateWorkflow", "Projects", new { id = Model.Id })',
+                type: 'POST',
+                success: function(response) {
+                    if (response.data.isValid) {
+                        toastr.success('Workflow je validní');
+                    } else {
+                        toastr.error('Workflow obsahuje chyby: ' + response.data.errors.join(', '));
+                    }
+                },
+                error: function(xhr) {
+                    const response = xhr.responseJSON || { message: 'Chyba při validaci workflow' };
+                    toastr.error(response.message);
+                }
+            });
+        }
+        
+        function deleteProject() {
+            if (confirm('Opravdu smazat tento projekt? Tato akce je nevratná.')) {
+                $.ajax({
+                    url: '@Url.Action("DeleteProject", "Projects")'.replace('Projects', 'api') + '/@Model.Id',
+                    type: 'DELETE',
+                    success: function(response) {
+                        toastr.success('Projekt byl smazán');
+                        setTimeout(() => {
+                            window.location.href = '@Url.Action("Index")';
+                        }, 1000);
+                    },
+                    error: function(xhr) {
+                        const response = xhr.responseJSON || { message: 'Chyba při mazání projektu' };
+                        toastr.error(response.message);
+                    }
+                });
+            }
+        }
+        
+        function cancelExecution(executionId) {
+            if (confirm('Opravdu zrušit běžící workflow?')) {
+                // TODO: Implement cancel execution API
+                toastr.info('Zrušení spuštění (implementace v produkci)');
+            }
+        }
+        
+        function viewExecutionDetails(executionId) {
+            // TODO: Implement execution details view
+            toastr.info('Detail spuštění (implementace v produkci)');
+        }
+        
+        function refreshExecutions() {
+            location.reload();
+        }
+        
+        function uploadFile() {
+            // TODO: Implement file upload
+            toastr.info('Nahrání souboru (implementace v produkci)');
+        }
+        
+        function downloadFile(fileId) {
+            // TODO: Implement file download
+            toastr.info('Stažení souboru (implementace v produkci)');
+        }
+        
+        function deleteFile(fileId) {
+            if (confirm('Opravdu smazat tento soubor?')) {
+                // TODO: Implement file deletion
+                toastr.info('Smazání souboru (implementace v produkci)');
+            }
+        }
+        
+        // Handle run mode change
+        $(document).ready(function() {
+            $('input[name="runMode"]').on('change', function() {
+                if ($(this).val() === 'test') {
+                    $('#testModeOptions').show();
+                } else {
+                    $('#testModeOptions').hide();
+                }
+            });
+        });
     </script>
 }
