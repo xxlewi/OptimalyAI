@@ -885,8 +885,8 @@
         
         // Global mouseup to cancel connection
         $(document).on('mouseup.connection', function(e) {
-            // If not on a valid input, cancel
-            if (!$(e.target).hasClass('connection-dot') || !$(e.target).hasClass('input')) {
+            // If not on a valid input dot, cancel
+            if (!($(e.target).hasClass('connection-dot') && $(e.target).hasClass('input'))) {
                 console.log('Connection cancelled');
                 
                 // Clean up
@@ -908,6 +908,14 @@
             );
             
             if (!exists) {
+                // Check if target already has an input connection - but allow it for now
+                const existingToInput = connections.filter(c => c.to === nodeId);
+                if (existingToInput.length > 0) {
+                    console.log('Warning: Node already has input connection, but allowing new one');
+                    // Remove the old connection to this node
+                    connections = connections.filter(c => c.to !== nodeId);
+                }
+                
                 // Check if output already has a connection (except for parallel gateway)
                 const fromNode = nodes[connectionStart.nodeId];
                 const existingFromOutput = connections.filter(c => 
@@ -1145,6 +1153,7 @@
     
     // Convert visual workflow to orchestrator format
     function convertToOrchestratorFormat() {
+        console.log('Converting workflow with connections:', connections);
         const steps = [];
         const nodeMap = {};
         
@@ -1193,8 +1202,9 @@
         // Build step sequence
         steps.forEach(step => {
             const outgoingConnections = connections.filter(c => c.from === step.id);
+            console.log(`Processing ${step.id} (${step.type}), outgoing connections:`, outgoingConnections);
             
-            if (step.type === 'condition') {
+            if (step.type === 'decision') {
                 // For conditions, use the branch info from connection
                 outgoingConnections.forEach(conn => {
                     const targetStep = nodeMap[conn.to];
@@ -1203,11 +1213,15 @@
                         step.branches[branch].push(targetStep.id);
                     }
                 });
-            } else if (step.type === 'parallel') {
+                // Remove 'next' if it was set
+                delete step.next;
+            } else if (step.type === 'parallel-gateway') {
                 // For parallel, all connections are branches
                 step.branches = outgoingConnections
                     .map(conn => nodeMap[conn.to]?.id)
                     .filter(id => id != null);
+                // Remove 'next' if it was set
+                delete step.next;
             } else {
                 // For regular steps, find next step
                 const nextConnection = outgoingConnections[0];
@@ -1330,54 +1344,116 @@
             startNodeId = Object.keys(nodes)[0];
         }
         
-        // Build ordered list based on connections
-        const orderedNodes = [];
-        const visited = new Set();
-        const queue = [startNodeId];
-        
-        while (queue.length > 0) {
-            const currentId = queue.shift();
-            if (visited.has(currentId)) continue;
-            
-            visited.add(currentId);
-            const currentNode = nodes[currentId];
-            if (currentNode) {
-                orderedNodes.push(currentNode);
-                
-                // Find all connections from this node
-                const outgoing = connections.filter(c => c.from === currentId);
-                outgoing.forEach(conn => {
-                    if (!visited.has(conn.to)) {
-                        queue.push(conn.to);
-                    }
-                });
-            }
-        }
-        
-        // Position nodes vertically in order - center on canvas
+        // Layout parameters
         const canvasWidth = $('#workflow-canvas').width();
         const centerX = canvasWidth / 2;
-        let y = 100;
-        const spacing = 150;
+        const verticalSpacing = 150;
+        const horizontalSpacing = 250;
+        const visited = new Set();
+        let maxY = 100;
         
-        orderedNodes.forEach(node => {
-            // Center all nodes properly
-            let x = centerX;
-            if (node.type === 'condition' || node.type === 'parallel') {
-                x = centerX - 70; // Half of diamond width (140px)
-            } else if (node.type === 'start' || node.type === 'end') {
-                x = centerX - 90; // Approximate half of start/end node width
-            } else {
-                x = centerX - 90; // Half of normal node min-width (180px)
+        // Helper function to get node connections
+        function getNodeConnections(nodeId) {
+            const node = nodes[nodeId];
+            const outgoing = connections.filter(c => c.from === nodeId);
+            const result = {
+                next: null,
+                branches: {}
+            };
+            
+            if (node.type === 'condition') {
+                outgoing.forEach(conn => {
+                    const branch = conn.branch || 'true';
+                    result.branches[branch] = conn.to;
+                });
+            } else if (node.type === 'parallel') {
+                result.branches = outgoing.reduce((acc, conn, idx) => {
+                    acc[`branch${idx}`] = conn.to;
+                    return acc;
+                }, {});
+            } else if (outgoing.length > 0) {
+                result.next = outgoing[0].to;
             }
             
-            node.x = x;
+            return result;
+        }
+        
+        // Recursive layout function
+        function layoutNode(nodeId, x, y) {
+            if (visited.has(nodeId)) return y;
+            visited.add(nodeId);
+            
+            const node = nodes[nodeId];
+            if (!node) return y;
+            
+            // Center node based on type
+            let adjustedX = x;
+            if (node.type === 'condition' || node.type === 'parallel') {
+                adjustedX = x - 70; // Half of diamond width
+            } else {
+                adjustedX = x - 90; // Half of normal node width
+            }
+            
+            // Position node
+            node.x = adjustedX;
             node.y = y;
             $('#' + node.id).css({
                 left: node.x + 'px',
                 top: node.y + 'px'
             });
-            y += spacing;
+            
+            maxY = Math.max(maxY, y);
+            
+            // Get connections
+            const conns = getNodeConnections(nodeId);
+            let nextY = y + verticalSpacing;
+            
+            if (node.type === 'condition' && Object.keys(conns.branches).length > 0) {
+                // Layout branches side by side at the same Y position
+                const leftX = x - horizontalSpacing / 2;
+                const rightX = x + horizontalSpacing / 2;
+                const branchY = nextY + 50; // Add 50px offset for better visual clarity
+                let branchMaxY = branchY;
+                
+                if (conns.branches.true) {
+                    branchMaxY = Math.max(branchMaxY, layoutNode(conns.branches.true, leftX, branchY));
+                }
+                if (conns.branches.false) {
+                    branchMaxY = Math.max(branchMaxY, layoutNode(conns.branches.false, rightX, branchY));
+                }
+                nextY = branchMaxY;
+            } else if (node.type === 'parallel' && Object.keys(conns.branches).length > 0) {
+                // Layout parallel branches at the same Y position
+                const branchCount = Object.keys(conns.branches).length;
+                // Reduce spacing if too many branches
+                const adjustedSpacing = branchCount > 4 ? horizontalSpacing * 0.7 : horizontalSpacing;
+                const totalWidth = (branchCount - 1) * adjustedSpacing;
+                let branchX = x - totalWidth / 2;
+                const branchY = nextY + 50; // Add 50px offset for better visual clarity
+                let branchMaxY = branchY;
+                
+                Object.values(conns.branches).forEach(targetId => {
+                    branchMaxY = Math.max(branchMaxY, layoutNode(targetId, branchX, branchY));
+                    branchX += adjustedSpacing;
+                });
+                nextY = branchMaxY;
+            } else if (conns.next) {
+                // Regular next node
+                nextY = layoutNode(conns.next, x, nextY);
+            }
+            
+            return nextY;
+        }
+        
+        // Start layout from entry point
+        layoutNode(startNodeId, centerX, 100);
+        
+        // Layout any unvisited nodes (disconnected components)
+        Object.keys(nodes).forEach(nodeId => {
+            if (!visited.has(nodeId)) {
+                maxY += verticalSpacing;
+                layoutNode(nodeId, centerX, maxY);
+            }
         });
         
         updateConnections();
@@ -1481,6 +1557,8 @@
                 if (response.success && response.orchestratorData) {
                     // Load saved workflow
                     loadFromOrchestratorFormat(response.orchestratorData);
+                    console.log('Loaded nodes:', nodes);
+                    console.log('Loaded connections:', connections);
                 } else {
                     // Create new workflow with start/end
                     loadInitialWorkflow();

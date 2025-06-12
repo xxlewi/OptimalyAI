@@ -368,19 +368,85 @@
             });
             
             // Calculate vertical spacing - make nodes closer
-            const nodeCount = Object.keys(nodes).length;
             const verticalSpacing = 80; // Fixed closer spacing
+            const horizontalSpacing = 200; // Spacing for branches
             const startY = 50;
             
-            // Sort nodes by original Y position and reassign with even spacing
-            const sortedNodes = Object.values(nodes).sort((a, b) => a.y - b.y);
-            sortedNodes.forEach((node, index) => {
-                node.newY = startY + (index * verticalSpacing);
-                node.newX = centerX - 75; // Center all nodes
+            // Build a layout that respects branching
+            const layoutMap = new Map();
+            const visited = new Set();
+            let currentY = startY;
+            
+            // Helper function to layout nodes
+            function layoutNode(nodeId, x, y, level = 0) {
+                if (visited.has(nodeId)) return y;
+                visited.add(nodeId);
+                
+                const node = nodes[nodeId];
+                if (!node) return y;
+                
+                layoutMap.set(nodeId, { x, y });
+                
+                // Find connected nodes
+                const step = data.steps?.find(s => s.id === nodeId);
+                if (!step) {
+                    node.newX = x;
+                    node.newY = y;
+                    return y;
+                }
+                
+                let nextY = y + verticalSpacing;
+                
+                if (step.type === 'decision' && step.branches) {
+                    // Layout branches side by side at the same Y position
+                    const leftX = x - horizontalSpacing / 2;
+                    const rightX = x + horizontalSpacing / 2;
+                    let branchMaxY = nextY;
+                    
+                    if (step.branches.true && step.branches.true[0]) {
+                        branchMaxY = Math.max(branchMaxY, layoutNode(step.branches.true[0], leftX, nextY, level + 1));
+                    }
+                    if (step.branches.false && step.branches.false[0]) {
+                        branchMaxY = Math.max(branchMaxY, layoutNode(step.branches.false[0], rightX, nextY, level + 1));
+                    }
+                    nextY = branchMaxY;
+                } else if (step.type === 'parallel-gateway' && step.branches) {
+                    // Layout parallel branches at the same Y position
+                    const branchCount = step.branches.length;
+                    const totalWidth = (branchCount - 1) * horizontalSpacing;
+                    let branchX = x - totalWidth / 2;
+                    let branchMaxY = nextY;
+                    
+                    step.branches.forEach(targetId => {
+                        branchMaxY = Math.max(branchMaxY, layoutNode(targetId, branchX, nextY, level + 1));
+                        branchX += horizontalSpacing;
+                    });
+                    nextY = branchMaxY;
+                } else if (step.next) {
+                    // Regular next node
+                    nextY = layoutNode(step.next, x, nextY, level + 1);
+                }
+                
+                node.newX = x;
+                node.newY = y;
+                return nextY;
+            }
+            
+            // Start layout from first step
+            if (data.firstStepId) {
+                layoutNode(data.firstStepId, centerX - 75, currentY);
+            }
+            
+            // Layout any unvisited nodes
+            Object.entries(nodes).forEach(([nodeId, node]) => {
+                if (!visited.has(nodeId)) {
+                    currentY += verticalSpacing;
+                    layoutNode(nodeId, centerX - 75, currentY);
+                }
             });
             
             // Render nodes with new positions
-            sortedNodes.forEach(node => {
+            Object.values(nodes).forEach(node => {
                 const nodeDiv = $('<div>')
                     .addClass('workflow-node-readonly')
                     .addClass(node.type)
@@ -415,7 +481,7 @@
             
             // Render connections
             setTimeout(() => {
-                renderConnections(data, sortedNodes);
+                renderConnections(data, nodes);
             }, 50);
             
             // Center diagram
@@ -426,10 +492,10 @@
             }, 100);
         }
         
-        function renderConnections(data, nodes) {
+        function renderConnections(data, nodesObj) {
             const svg = document.getElementById('connections-svg');
             const nodeMap = {};
-            nodes.forEach(n => nodeMap[n.id] = n);
+            Object.values(nodesObj).forEach(n => nodeMap[n.id] = n);
             
             // Connection from start to first step
             if (data.startNodeId && data.firstStepId) {
