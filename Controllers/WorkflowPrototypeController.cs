@@ -28,11 +28,31 @@ namespace OptimalyAI.Controllers
 
         private static List<ProjectListItemViewModel> InitializeDemoProjects()
         {
+            // Initialize demo workflow for first project
+            var firstProjectId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+            if (!_workflows.ContainsKey(firstProjectId))
+            {
+                _workflows[firstProjectId] = new WorkflowPrototypeViewModel
+                {
+                    ProjectId = firstProjectId,
+                    ProjectName = "E-commerce vyhledávač produktů",
+                    WorkflowType = "ecommerce_search",
+                    Stages = new List<WorkflowStagePrototype>
+                    {
+                        new() { Name = "Analýza vstupních fotek", Type = "Analysis", UseReAct = true, Tools = new() { "image_analyzer" }, Order = 1, Status = "Active" },
+                        new() { Name = "Vyhledávání produktů", Type = "Search", ExecutionStrategy = "Parallel", Tools = new() { "aliexpress_search", "web_search" }, Order = 2, Status = "Active" },
+                        new() { Name = "Filtrování výsledků", Type = "Processing", UseReAct = true, Tools = new() { "product_filter", "similarity_scorer" }, Order = 3, Status = "Active" },
+                        new() { Name = "Cenová analýza", Type = "Analysis", Tools = new() { "price_analyzer" }, Order = 4, Status = "Active" },
+                        new() { Name = "Export dat", Type = "Export", Tools = new() { "excel_exporter" }, Order = 5, Status = "Active" }
+                    }
+                };
+            }
+            
             return new List<ProjectListItemViewModel>
             {
                 new ProjectListItemViewModel
                 { 
-                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), 
+                    Id = firstProjectId, 
                     Name = "E-commerce vyhledávač produktů",
                     Description = "Automatické vyhledávání podobných produktů podle fotek",
                     Status = "Active",
@@ -177,12 +197,18 @@ namespace OptimalyAI.Controllers
             // Získej workflow data pokud existují
             var workflow = _workflows.ContainsKey(projectId) ? _workflows[projectId] : null;
             
+            // For now, just check if project has stages (simple check)
+            // In production, this would check the actual workflow designer data
+            
             ViewBag.Project = project;
             ViewBag.Workflow = workflow;
             ViewBag.HasWorkflow = workflow != null && workflow.Stages.Any();
             
             // Simulace historie běhů
             ViewBag.ExecutionHistory = GenerateExecutionHistory(projectId);
+            
+            // Add tools data for the edit modal
+            ViewBag.ToolsByCategory = WorkflowPrototypeData.GetToolsByCategory();
             
             return View();
         }

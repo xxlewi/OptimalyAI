@@ -259,6 +259,17 @@ namespace OptimalyAI.ViewModels
         public bool UseReAct { get; set; }
         public string Orchestrator { get; set; } // ConversationOrchestrator, ToolChainOrchestrator, etc.
         
+        // AI/LLM Configuration
+        public string SystemPrompt { get; set; } // System prompt for AI tasks
+        public string Model { get; set; } // Model override (e.g., "llama3.1:70b")
+        public double? Temperature { get; set; } // Temperature override
+        public int? MaxTokens { get; set; } // Max tokens override
+        
+        // Context & Memory
+        public List<string> InputVariables { get; set; } = new(); // Variables to read from context
+        public Dictionary<string, string> OutputVariables { get; set; } = new(); // Variables to write to context
+        public string MemoryStrategy { get; set; } // "none", "sliding_window", "summary"
+        
         // Input/Output definitions
         public List<NodePort> InputPorts { get; set; } = new();
         public List<NodePort> OutputPorts { get; set; } = new();
@@ -372,5 +383,17 @@ namespace OptimalyAI.ViewModels
         public int MaxRetries { get; set; } = 3;
         public bool EnableDebugLogging { get; set; } = true;
         public string ErrorHandling { get; set; } = "StopOnError"; // StopOnError, ContinueOnError, Rollback
+        
+        // Orchestrator settings
+        public string DefaultOrchestrator { get; set; } = "ConversationOrchestrator";
+        public string DefaultModel { get; set; } = "llama3.1:latest";
+        public double DefaultTemperature { get; set; } = 0.7;
+        public string DefaultSystemPrompt { get; set; } = "You are a helpful AI assistant.";
+        public bool EnableReActByDefault { get; set; } = false;
+        
+        // Memory settings
+        public string MemoryType { get; set; } = "sliding_window"; // none, sliding_window, summary
+        public int MemoryWindowSize { get; set; } = 10;
+        public bool PersistMemory { get; set; } = true;
     }
 }

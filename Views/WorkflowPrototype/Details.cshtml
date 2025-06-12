@@ -30,13 +30,10 @@
                 </a>
                 @if (hasWorkflow)
                 {
-                    <button class="btn btn-success" onclick="runWorkflow()">
+                    <button class="btn btn-success" onclick="testWorkflow()">
                         <i class="fas fa-play"></i> Spustit workflow
                     </button>
                 }
-                <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-primary">
-                    <i class="fas fa-edit"></i> Upravit workflow
-                </a>
             </div>
         </div>
     </div>
@@ -160,6 +157,68 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Orchestrátor nastavení -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-robot"></i> AI & Orchestrátor</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form id="orchestratorSettingsForm">
+                            <div class="form-group">
+                                <label>Orchestrátor</label>
+                                <select class="form-control" id="defaultOrchestrator">
+                                    <option value="ConversationOrchestrator">Conversation Orchestrator</option>
+                                    <option value="ToolChainOrchestrator">Tool Chain Orchestrator</option>
+                                    <option value="ReActOrchestrator">ReAct Orchestrator</option>
+                                    <option value="CustomOrchestrator">Custom Orchestrator</option>
+                                </select>
+                                <small class="text-muted">Výchozí orchestrátor pro celý workflow</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Model</label>
+                                <select class="form-control" id="defaultModel">
+                                    <option value="llama3.1:latest">Llama 3.1 (latest)</option>
+                                    <option value="llama3.1:70b">Llama 3.1 (70B)</option>
+                                    <option value="mistral:latest">Mistral (latest)</option>
+                                    <option value="codellama:latest">Code Llama (latest)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Temperature <span id="tempValue">0.7</span></label>
+                                <input type="range" class="custom-range" id="defaultTemperature" 
+                                       min="0" max="2" step="0.1" value="0.7">
+                                <small class="text-muted">0 = deterministické, 2 = kreativní</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>System Prompt</label>
+                                <textarea class="form-control" id="defaultSystemPrompt" rows="3">You are a helpful AI assistant.</textarea>
+                                <small class="text-muted">Výchozí instrukce pro AI</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="enableReActByDefault">
+                                    <label class="custom-control-label" for="enableReActByDefault">
+                                        Povolit ReAct pattern ve výchozím nastavení
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <button type="button" class="btn btn-sm btn-primary" onclick="saveOrchestratorSettings()">
+                                <i class="fas fa-save"></i> Uložit nastavení
+                            </button>
+                        </form>
+                    </div>
+                </div>
             </div>
 
             <!-- Workflow kroky -->
@@ -169,6 +228,12 @@
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-project-diagram"></i> Workflow diagram</h3>
                         <div class="card-tools">
+                            <button type="button" class="btn btn-sm btn-info" onclick="exportWorkflow()">
+                                <i class="fas fa-file-export"></i> Export
+                            </button>
+                            <button type="button" class="btn btn-sm btn-success" onclick="testWorkflow()">
+                                <i class="fas fa-play"></i> Test
+                            </button>
                             <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-sm btn-primary">
                                 <i class="fas fa-edit"></i> Upravit
                             </a>
@@ -194,67 +259,11 @@
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-layer-group"></i> Kroky workflow</h3>
                     </div>
-                    <div class="card-body">
-                        @if (hasWorkflow && workflow.Stages.Any())
-                        {
-                            <div class="timeline">
-                                @foreach (var stage in workflow.Stages.OrderBy(s => s.Order))
-                                {
-                                    <div class="time-label">
-                                        <span class="bg-primary">Krok @stage.Order</span>
-                                    </div>
-                                    <div>
-                                        <i class="fas fa-cog bg-@(stage.Status == "Active" ? "success" : "warning")"></i>
-                                        <div class="timeline-item">
-                                            <h3 class="timeline-header">
-                                                @stage.Name
-                                                @if (stage.UseReAct)
-                                                {
-                                                    <span class="badge badge-purple float-right">
-                                                        <i class="fas fa-brain"></i> ReAct
-                                                    </span>
-                                                }
-                                            </h3>
-                                            <div class="timeline-body">
-                                                @if (!string.IsNullOrEmpty(stage.Description))
-                                                {
-                                                    <p>@stage.Description</p>
-                                                }
-                                                <div class="mb-2">
-                                                    <span class="badge badge-info">@stage.Type</span>
-                                                    <span class="badge badge-secondary">@stage.ExecutionStrategy</span>
-                                                </div>
-                                                @if (stage.Tools.Any())
-                                                {
-                                                    <div>
-                                                        <small class="text-muted">Nástroje:</small><br>
-                                                        @foreach (var tool in stage.Tools)
-                                                        {
-                                                            <span class="badge badge-light mr-1">
-                                                                <i class="fas fa-wrench"></i> @tool
-                                                            </span>
-                                                        }
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    </div>
-                                }
-                                <div>
-                                    <i class="fas fa-check bg-success"></i>
-                                </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="text-center py-5">
-                                <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">Workflow ještě nebylo nakonfigurováno</p>
-                                <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-primary">
-                                    <i class="fas fa-plus"></i> Vytvořit workflow
-                                </a>
-                            </div>
-                        }
+                    <div class="card-body" id="workflow-steps-container">
+                        <div class="text-center py-5">
+                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                            <p class="text-muted mt-2">Načítám kroky workflow...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -315,11 +324,99 @@
     </div>
 </section>
 
+<!-- Edit Step Modal -->
+<div class="modal fade" id="stepEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit krok workflow</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editingStepId">
+                <div class="form-group">
+                    <label>Název kroku</label>
+                    <input type="text" class="form-control" id="stepName" required>
+                </div>
+                <div class="form-group">
+                    <label>Popis</label>
+                    <textarea class="form-control" id="stepDescription" rows="2"></textarea>
+                </div>
+                <div class="form-group" id="stepToolsSection">
+                    <label>AI Nástroje</label>
+                    <select multiple class="form-control select2" id="stepTools" style="width: 100%;">
+                        @foreach(var cat in ViewBag.ToolsByCategory ?? new Dictionary<string, List<string>>())
+                        {
+                            <optgroup label="@cat.Key">
+                                @foreach(var tool in cat.Value)
+                                {
+                                    <option value="@tool">@tool.Replace("_", " ")</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    <small class="text-muted">Vyberte nástroje pro tento krok</small>
+                </div>
+                <div class="form-group" id="stepOrchestratorSection">
+                    <div class="custom-control custom-switch mb-3">
+                        <input type="checkbox" class="custom-control-input" id="stepUseReAct">
+                        <label class="custom-control-label" for="stepUseReAct">
+                            <i class="fas fa-brain"></i> Použít ReAct pattern
+                        </label>
+                    </div>
+                    <label>Orchestrátor (volitelné)</label>
+                    <select class="form-control" id="stepOrchestrator">
+                        <option value="">-- Použít výchozí --</option>
+                        <option value="ConversationOrchestrator">Conversation Orchestrator</option>
+                        <option value="ToolChainOrchestrator">Tool Chain Orchestrator</option>
+                        <option value="ReActOrchestrator">ReAct Orchestrator</option>
+                        <option value="CustomOrchestrator">Custom Orchestrator</option>
+                    </select>
+                </div>
+                <div class="form-group" id="stepAdvancedSection">
+                    <button type="button" class="btn btn-sm btn-link" onclick="toggleStepAdvancedSettings()">
+                        <i class="fas fa-cog"></i> Pokročilá nastavení
+                    </button>
+                    <div id="stepAdvancedSettingsContent" style="display: none;">
+                        <div class="form-group">
+                            <label>Model (volitelné)</label>
+                            <input type="text" class="form-control" id="stepModel" placeholder="např. llama3.1:70b">
+                        </div>
+                        <div class="form-group">
+                            <label>Temperature (volitelné)</label>
+                            <input type="number" class="form-control" id="stepTemperature" min="0" max="2" step="0.1" placeholder="0.7">
+                        </div>
+                        <div class="form-group">
+                            <label>System Prompt (volitelné)</label>
+                            <textarea class="form-control" id="stepSystemPrompt" rows="2" placeholder="Specifický prompt pro tento krok"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" id="stepConditionSection" style="display: none;">
+                    <label>Podmínka</label>
+                    <input type="text" class="form-control" id="stepCondition" placeholder="result > 0">
+                    <small class="text-muted">Podmínka pro rozhodovací uzel</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="saveStepChanges()">
+                    <i class="fas fa-save"></i> Uložit změny
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         // Load workflow diagram
         $(document).ready(function() {
             loadWorkflowDiagram();
+            loadOrchestratorSettings();
+            loadWorkflowSteps();
         });
         
         function loadWorkflowDiagram() {
@@ -328,19 +425,70 @@
                 type: 'GET',
                 data: { projectId: '@project.Id' },
                 success: function(response) {
-                    if (response.success && response.orchestratorData) {
+                    console.log('LoadWorkflow response:', response);
+                    if (response.success) {
                         renderWorkflowDiagram(response.orchestratorData);
+                    } else {
+                        // No workflow yet
+                        $('#workflow-diagram').html(`
+                            <div class="text-center p-5">
+                                <i class="fas fa-project-diagram fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Začněte vytvořením workflow</p>
+                                <a href="/WorkflowDesigner/Index?projectId=@project.Id" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Vytvořit workflow
+                                </a>
+                            </div>
+                        `);
                     }
                 },
-                error: function() {
-                    $('#workflow-diagram').html('<div class="text-center p-5 text-muted"><i class="fas fa-exclamation-circle"></i> Nepodařilo se načíst diagram</div>');
+                error: function(xhr, status, error) {
+                    console.error('LoadWorkflow error:', status, error);
+                    $('#workflow-diagram').html(`
+                        <div class="text-center p-5 text-danger">
+                            <i class="fas fa-exclamation-circle"></i> Chyba při načítání diagramu
+                            <br><small>${error || 'Neznámá chyba'}</small>
+                        </div>
+                    `);
                 }
             });
         }
         
         function renderWorkflowDiagram(data) {
-            if (!data || !data.metadata || !data.metadata.nodePositions) {
+            // Check if we have any workflow data
+            if (!data) {
                 $('#workflow-diagram').html('<div class="text-center p-5 text-muted"><i class="fas fa-info-circle"></i> Žádný uložený diagram</div>');
+                return;
+            }
+            
+            // If we only have settings but no actual workflow steps
+            if (!data.steps || data.steps.length === 0) {
+                $('#workflow-diagram').html(`
+                    <div class="text-center p-5">
+                        <i class="fas fa-project-diagram fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Workflow ještě nebylo vytvořeno</p>
+                        <a href="/WorkflowDesigner/Index?projectId=@project.Id" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Vytvořit workflow
+                        </a>
+                    </div>
+                `);
+                return;
+            }
+            
+            // Check for node positions
+            if (!data.metadata || !data.metadata.nodePositions || Object.keys(data.metadata.nodePositions).length === 0) {
+                // If we have steps but no positions, show a simple list
+                $('#workflow-diagram').html(`
+                    <div class="p-4">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> Workflow existuje, ale nemá uložené pozice uzlů. 
+                            <a href="/WorkflowDesigner/Index?projectId=@project.Id">Otevřete designer</a> pro vizualizaci.
+                        </div>
+                        <h5>Kroky workflow:</h5>
+                        <ul>
+                            ${data.steps.map(s => `<li>${s.name} (${s.type})</li>`).join('')}
+                        </ul>
+                    </div>
+                `);
                 return;
             }
             
@@ -553,14 +701,336 @@
             }
         }
         
-        function runWorkflow() {
-            toastr.info('Spouštím workflow...');
+        function testWorkflow() {
+            // Show test modal or redirect to test page
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: '@project.Id' },
+                success: function(response) {
+                    if (response.success && response.orchestratorData) {
+                        // Convert to JSON and show/download
+                        const jsonStr = JSON.stringify(response.orchestratorData, null, 2);
+                        
+                        // Create modal to show workflow
+                        const modal = `
+                            <div class="modal fade" id="workflowTestModal" tabindex="-1">
+                                <div class="modal-dialog modal-lg">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Test Workflow - Orchestrator Format</h5>
+                                            <button type="button" class="close" data-dismiss="modal">
+                                                <span>&times;</span>
+                                            </button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="alert alert-info">
+                                                <i class="fas fa-info-circle"></i> Toto je orchestrátor formát vašeho workflow připravený ke spuštění.
+                                            </div>
+                                            <pre class="bg-light p-3" style="max-height: 400px; overflow-y: auto;">${escapeHtml(jsonStr)}</pre>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-primary" onclick="downloadWorkflow()">
+                                                <i class="fas fa-download"></i> Stáhnout JSON
+                                            </button>
+                                            <button type="button" class="btn btn-success" onclick="executeWorkflow()">
+                                                <i class="fas fa-play"></i> Spustit (Demo)
+                                            </button>
+                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // Remove existing modal if any
+                        $('#workflowTestModal').remove();
+                        $('body').append(modal);
+                        $('#workflowTestModal').modal('show');
+                        
+                        // Store workflow data for download
+                        window.currentWorkflowData = response.orchestratorData;
+                    } else {
+                        toastr.warning('Workflow ještě není nakonfigurováno');
+                    }
+                },
+                error: function() {
+                    toastr.error('Chyba při načítání workflow');
+                }
+            });
+        }
+        
+        function showWorkflowInfo() {
+            // Show workflow statistics and info
+            const modal = `
+                <div class="modal fade" id="workflowInfoModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Informace o Workflow</h5>
+                                <button type="button" class="close" data-dismiss="modal">
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <dl class="row">
+                                    <dt class="col-sm-4">Typ workflow:</dt>
+                                    <dd class="col-sm-8">@project.WorkflowType</dd>
+                                    
+                                    <dt class="col-sm-4">Počet kroků:</dt>
+                                    <dd class="col-sm-8">@project.StageCount</dd>
+                                    
+                                    <dt class="col-sm-4">Spouštění:</dt>
+                                    <dd class="col-sm-8">@project.TriggerType</dd>
+                                    
+                                    <dt class="col-sm-4">Úspěšnost:</dt>
+                                    <dd class="col-sm-8">@project.SuccessRate%</dd>
+                                    
+                                    <dt class="col-sm-4">Celkem běhů:</dt>
+                                    <dd class="col-sm-8">@project.TotalRuns</dd>
+                                </dl>
+                                
+                                <div class="alert alert-info mt-3">
+                                    <h6>Orchestrátor integrace:</h6>
+                                    <p class="mb-0">Tento workflow využívá orchestrátory pro inteligentní řízení AI úloh a nástrojů.</p>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" class="btn btn-primary">
+                                    <i class="fas fa-edit"></i> Upravit
+                                </a>
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            $('#workflowInfoModal').remove();
+            $('body').append(modal);
+            $('#workflowInfoModal').modal('show');
+        }
+        
+        function downloadWorkflow() {
+            if (window.currentWorkflowData) {
+                const jsonStr = JSON.stringify(window.currentWorkflowData, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `workflow-${('@project.Id').substring(0, 8)}-orchestrator.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                toastr.success('Workflow staženo');
+            }
+        }
+        
+        function executeWorkflow() {
+            toastr.info('Spouštím workflow v demo módu...');
+            
+            // Simulate workflow execution
             setTimeout(() => {
-                toastr.success('Workflow bylo úspěšně spuštěno!');
+                toastr.success('Krok 1: Inicializace orchestrátoru');
                 setTimeout(() => {
-                    location.reload();
-                }, 1500);
-            }, 1000);
+                    toastr.success('Krok 2: Načítání AI modelů');
+                    setTimeout(() => {
+                        toastr.success('Krok 3: Spouštění workflow kroků');
+                        setTimeout(() => {
+                            toastr.success('Workflow dokončeno úspěšně!');
+                            $('#workflowTestModal').modal('hide');
+                        }, 1500);
+                    }, 1000);
+                }, 1000);
+            }, 500);
+        }
+        
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        
+        function loadWorkflowSteps() {
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: '@project.Id' },
+                success: function(response) {
+                    if (response.success && response.orchestratorData && response.orchestratorData.steps) {
+                        renderWorkflowSteps(response.orchestratorData.steps);
+                    } else {
+                        $('#workflow-steps-container').html(`
+                            <div class="text-center py-5">
+                                <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Workflow ještě nebylo nakonfigurováno</p>
+                                <a href="/WorkflowDesigner/Index?projectId=@project.Id" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Vytvořit workflow
+                                </a>
+                            </div>
+                        `);
+                    }
+                },
+                error: function() {
+                    $('#workflow-steps-container').html(`
+                        <div class="text-center py-5 text-danger">
+                            <i class="fas fa-exclamation-circle fa-2x"></i>
+                            <p class="mt-2">Nepodařilo se načíst kroky workflow</p>
+                        </div>
+                    `);
+                }
+            });
+        }
+        
+        function renderWorkflowSteps(steps) {
+            if (!steps || steps.length === 0) {
+                $('#workflow-steps-container').html(`
+                    <div class="text-center py-5">
+                        <p class="text-muted">Žádné kroky v workflow</p>
+                    </div>
+                `);
+                return;
+            }
+            
+            let timelineHtml = '<div class="timeline">';
+            
+            steps.forEach((step, index) => {
+                const typeIcons = {
+                    'process': 'fas fa-cog',
+                    'ai-tool': 'fas fa-robot',
+                    'decision': 'fas fa-code-branch',
+                    'parallel-gateway': 'fas fa-project-diagram'
+                };
+                
+                const typeLabels = {
+                    'process': 'Proces',
+                    'ai-tool': 'AI nástroj',
+                    'decision': 'Rozhodnutí',
+                    'parallel-gateway': 'Paralelní brána'
+                };
+                
+                timelineHtml += `
+                    <div class="time-label">
+                        <span class="bg-primary">Krok ${index + 1}</span>
+                    </div>
+                    <div>
+                        <i class="${typeIcons[step.type] || 'fas fa-circle'} bg-info"></i>
+                        <div class="timeline-item">
+                            <h3 class="timeline-header">
+                                ${step.name}
+                                <div class="float-right">
+                `;
+                
+                // Add badges
+                if (step.useReAct) {
+                    timelineHtml += `
+                        <span class="badge badge-purple">
+                            <i class="fas fa-brain"></i> ReAct
+                        </span>
+                    `;
+                }
+                
+                if (step.tools && step.tools.length > 0) {
+                    timelineHtml += `
+                        <span class="badge badge-info">
+                            <i class="fas fa-wrench"></i> ${step.tools.length}
+                        </span>
+                    `;
+                }
+                
+                if (step.orchestrator) {
+                    timelineHtml += `
+                        <span class="badge badge-warning" title="${step.orchestrator}">
+                            <i class="fas fa-brain"></i> Custom
+                        </span>
+                    `;
+                }
+                
+                timelineHtml += `
+                                    <button class="btn btn-xs btn-outline-primary" onclick="editWorkflowStep('${step.id}')"
+                                            title="Upravit krok">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </div>
+                            </h3>
+                            <div class="timeline-body">
+                `;
+                
+                if (step.description) {
+                    timelineHtml += `<p>${step.description}</p>`;
+                }
+                
+                timelineHtml += `
+                    <div class="mb-2">
+                        <span class="badge badge-secondary">${typeLabels[step.type] || step.type}</span>
+                `;
+                
+                if (step.type === 'decision' && step.branches) {
+                    const trueBranch = step.branches.true && step.branches.true.length > 0;
+                    const falseBranch = step.branches.false && step.branches.false.length > 0;
+                    if (trueBranch || falseBranch) {
+                        timelineHtml += `<span class="badge badge-light ml-1">Větve: ${trueBranch ? '✓' : ''} ${falseBranch ? '✗' : ''}</span>`;
+                    }
+                }
+                
+                timelineHtml += '</div>';
+                
+                // Show tools
+                if (step.tools && step.tools.length > 0) {
+                    timelineHtml += '<div><small class="text-muted">Nástroje:</small><br>';
+                    step.tools.forEach(tool => {
+                        timelineHtml += `<span class="badge badge-light mr-1"><i class="fas fa-wrench"></i> ${tool.replace(/_/g, ' ')}</span>`;
+                    });
+                    timelineHtml += '</div>';
+                }
+                
+                // Show custom settings if any
+                if (step.systemPrompt || step.model || step.temperature !== null) {
+                    timelineHtml += '<div class="mt-2"><small class="text-muted">Vlastní nastavení:</small><br>';
+                    if (step.model) timelineHtml += `<span class="badge badge-dark mr-1">Model: ${step.model}</span>`;
+                    if (step.temperature !== null) timelineHtml += `<span class="badge badge-dark mr-1">Temp: ${step.temperature}</span>`;
+                    if (step.systemPrompt) timelineHtml += `<br><small class="text-muted font-italic">"${step.systemPrompt.substring(0, 50)}..."</small>`;
+                    timelineHtml += '</div>';
+                }
+                
+                timelineHtml += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            timelineHtml += '<div><i class="fas fa-check bg-success"></i></div></div>';
+            
+            $('#workflow-steps-container').html(timelineHtml);
+        }
+        
+        function exportWorkflow() {
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: '@project.Id' },
+                success: function(response) {
+                    if (response.success && response.orchestratorData) {
+                        const jsonStr = JSON.stringify(response.orchestratorData, null, 2);
+                        const blob = new Blob([jsonStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `workflow-@project.Name.Replace(" ", "_")-export.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toastr.success('Workflow exportováno');
+                    } else {
+                        toastr.warning('Žádné workflow k exportu');
+                    }
+                },
+                error: function() {
+                    toastr.error('Chyba při exportu workflow');
+                }
+            });
         }
         
         function refreshHistory() {
@@ -576,6 +1046,215 @@
         
         function downloadLog(executionId) {
             toastr.info('Stahování logu (v produkci)');
+        }
+        
+        // Update temperature value display
+        $('#defaultTemperature').on('input', function() {
+            $('#tempValue').text($(this).val());
+        });
+        
+        // Load orchestrator settings on page load
+        function loadOrchestratorSettings() {
+            // Load from workflow metadata if available
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: '@project.Id' },
+                success: function(response) {
+                    if (response.success && response.orchestratorData && response.orchestratorData.metadata && response.orchestratorData.metadata.settings) {
+                        const settings = response.orchestratorData?.metadata?.settings || {};
+                        $('#defaultOrchestrator').val(settings.defaultOrchestrator || 'ConversationOrchestrator');
+                        $('#defaultModel').val(settings.defaultModel || 'llama3.1:latest');
+                        $('#defaultTemperature').val(settings.defaultTemperature || 0.7);
+                        $('#tempValue').text(settings.defaultTemperature || 0.7);
+                        $('#defaultSystemPrompt').val(settings.defaultSystemPrompt || 'You are a helpful AI assistant.');
+                        $('#enableReActByDefault').prop('checked', settings.enableReActByDefault || false);
+                    }
+                }
+            });
+        }
+        
+        // Save orchestrator settings
+        function saveOrchestratorSettings() {
+            const settings = {
+                defaultOrchestrator: $('#defaultOrchestrator').val(),
+                defaultModel: $('#defaultModel').val(),
+                defaultTemperature: parseFloat($('#defaultTemperature').val()),
+                defaultSystemPrompt: $('#defaultSystemPrompt').val(),
+                enableReActByDefault: $('#enableReActByDefault').is(':checked')
+            };
+            
+            // Save settings as part of workflow metadata
+            $.ajax({
+                url: '/WorkflowDesigner/SaveOrchestratorSettings',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    projectId: '@project.Id',
+                    settings: settings
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success('Nastavení orchestrátoru uloženo!');
+                    } else {
+                        toastr.error('Chyba při ukládání nastavení');
+                    }
+                },
+                error: function() {
+                    toastr.error('Chyba při komunikaci se serverem');
+                }
+            });
+        }
+        
+        // Store workflow data globally for editing
+        let currentWorkflowData = null;
+        
+        // Edit workflow step
+        function editWorkflowStep(stepId) {
+            if (!currentWorkflowData || !currentWorkflowData.steps) {
+                toastr.error('Workflow data není k dispozici');
+                return;
+            }
+            
+            const step = currentWorkflowData.steps.find(s => s.id === stepId);
+            if (!step) {
+                toastr.error('Krok nebyl nalezen');
+                return;
+            }
+            
+            // Populate modal with step data
+            $('#editingStepId').val(stepId);
+            $('#stepName').val(step.name);
+            $('#stepDescription').val(step.description || '');
+            
+            // Show/hide sections based on step type
+            if (step.type === 'decision') {
+                $('#stepToolsSection').hide();
+                $('#stepOrchestratorSection').hide();
+                $('#stepAdvancedSection').hide();
+                $('#stepConditionSection').show();
+                $('#stepCondition').val(step.condition || '');
+            } else if (step.type === 'parallel-gateway') {
+                $('#stepToolsSection').hide();
+                $('#stepOrchestratorSection').hide();
+                $('#stepAdvancedSection').hide();
+                $('#stepConditionSection').hide();
+            } else {
+                $('#stepToolsSection').show();
+                $('#stepOrchestratorSection').show();
+                $('#stepAdvancedSection').show();
+                $('#stepConditionSection').hide();
+                
+                // Initialize Select2 if not already done
+                if (!$('#stepTools').hasClass('select2-hidden-accessible')) {
+                    $('#stepTools').select2({
+                        placeholder: 'Vyberte nástroje',
+                        allowClear: true
+                    });
+                }
+                
+                // Set selected tools
+                $('#stepTools').val(step.tools || []).trigger('change');
+                
+                // Set orchestrator settings
+                $('#stepUseReAct').prop('checked', step.useReAct || false);
+                $('#stepOrchestrator').val(step.orchestrator || '');
+                $('#stepModel').val(step.model || '');
+                $('#stepTemperature').val(step.temperature || '');
+                $('#stepSystemPrompt').val(step.systemPrompt || '');
+            }
+            
+            // Reset advanced settings visibility
+            $('#stepAdvancedSettingsContent').hide();
+            
+            $('#stepEditModal').modal('show');
+        }
+        
+        // Save step changes
+        function saveStepChanges() {
+            const stepId = $('#editingStepId').val();
+            const step = currentWorkflowData.steps.find(s => s.id === stepId);
+            if (!step) return;
+            
+            // Update step data
+            step.name = $('#stepName').val();
+            step.description = $('#stepDescription').val();
+            
+            if (step.type === 'decision') {
+                step.condition = $('#stepCondition').val();
+            } else if (step.type !== 'parallel-gateway') {
+                step.tools = $('#stepTools').val() || [];
+                step.useReAct = $('#stepUseReAct').is(':checked');
+                step.orchestrator = $('#stepOrchestrator').val() || null;
+                step.model = $('#stepModel').val() || null;
+                step.temperature = $('#stepTemperature').val() ? parseFloat($('#stepTemperature').val()) : null;
+                step.systemPrompt = $('#stepSystemPrompt').val() || null;
+            }
+            
+            // Save to server
+            $.ajax({
+                url: '/WorkflowDesigner/SaveWorkflow',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    ProjectId: '@project.Id',
+                    WorkflowData: currentWorkflowData
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success('Krok byl úspěšně upraven');
+                        $('#stepEditModal').modal('hide');
+                        
+                        // Reload workflow steps to show updated data
+                        loadWorkflowSteps();
+                    } else {
+                        toastr.error('Chyba při ukládání změn');
+                    }
+                },
+                error: function() {
+                    toastr.error('Chyba při komunikaci se serverem');
+                }
+            });
+        }
+        
+        // Toggle advanced settings in step edit modal
+        function toggleStepAdvancedSettings() {
+            $('#stepAdvancedSettingsContent').slideToggle();
+        }
+        
+        // Update loadWorkflowSteps to store data globally
+        function loadWorkflowSteps() {
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: '@project.Id' },
+                success: function(response) {
+                    if (response.success && response.orchestratorData && response.orchestratorData.steps) {
+                        currentWorkflowData = response.orchestratorData; // Store globally
+                        renderWorkflowSteps(response.orchestratorData.steps);
+                    } else {
+                        currentWorkflowData = null;
+                        $('#workflow-steps-container').html(`
+                            <div class="text-center py-5">
+                                <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Workflow ještě nebylo nakonfigurováno</p>
+                                <a href="/WorkflowDesigner/Index?projectId=@project.Id" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Vytvořit workflow
+                                </a>
+                            </div>
+                        `);
+                    }
+                },
+                error: function() {
+                    currentWorkflowData = null;
+                    $('#workflow-steps-container').html(`
+                        <div class="text-center py-5 text-danger">
+                            <i class="fas fa-exclamation-circle fa-2x"></i>
+                            <p class="mt-2">Nepodařilo se načíst kroky workflow</p>
+                        </div>
+                    `);
+                }
+            });
         }
     </script>
 }
@@ -694,6 +1373,35 @@
                 linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
             background-size: 20px 20px;
+        }
+        
+        .btn-xs {
+            padding: 0.125rem 0.5rem;
+            font-size: 0.75rem;
+            line-height: 1.5;
+            border-radius: 0.2rem;
+        }
+        
+        .btn-outline-primary {
+            color: #007bff;
+            border-color: #007bff;
+            background-color: transparent;
+        }
+        
+        .btn-outline-primary:hover {
+            color: #fff;
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        
+        .timeline-header .btn {
+            margin-left: 10px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .timeline-item:hover .timeline-header .btn {
+            opacity: 1;
         }
     </style>
 }

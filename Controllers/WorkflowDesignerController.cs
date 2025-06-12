@@ -46,13 +46,37 @@ namespace OptimalyAI.Controllers
             if (_workflows.ContainsKey(projectId))
             {
                 var workflow = _workflows[projectId];
+                
+                // If OrchestratorData exists, ensure it has the current settings
+                if (workflow.Metadata?.OrchestratorData != null)
+                {
+                    // Return the orchestrator data as-is with settings
+                    return Json(new { 
+                        success = true, 
+                        orchestratorData = workflow.Metadata.OrchestratorData 
+                    });
+                }
+                
+                // Return empty workflow structure with settings
                 return Json(new { 
                     success = true, 
-                    orchestratorData = workflow.Metadata?.OrchestratorData 
+                    orchestratorData = new
+                    {
+                        steps = new List<object>(),
+                        metadata = new
+                        {
+                            settings = workflow.Metadata?.Settings,
+                            nodePositions = new Dictionary<string, object>()
+                        }
+                    }
                 });
             }
             
-            return Json(new { success = false });
+            // No workflow exists at all
+            return Json(new { 
+                success = true,
+                orchestratorData = (object)null
+            });
         }
         
         private WorkflowGraphViewModel CreateDefaultWorkflow(Guid projectId)
@@ -120,20 +144,28 @@ namespace OptimalyAI.Controllers
             
             try
             {
-                // Convert the visual workflow data to our model
-                var workflow = new WorkflowGraphViewModel
+                // Get existing workflow or create new one
+                WorkflowGraphViewModel workflow;
+                if (_workflows.ContainsKey(request.ProjectId))
                 {
-                    ProjectId = request.ProjectId,
-                    ProjectName = "Workflow " + request.ProjectId,
-                    LastModified = DateTime.Now,
-                    Nodes = new List<WorkflowNode>(),
-                    Edges = new List<WorkflowEdge>(),
-                    Metadata = new WorkflowMetadata
+                    workflow = _workflows[request.ProjectId];
+                }
+                else
+                {
+                    workflow = new WorkflowGraphViewModel
                     {
-                        OrchestratorData = request.WorkflowData,
-                        Description = "Visual workflow"
-                    }
-                };
+                        ProjectId = request.ProjectId,
+                        ProjectName = "Workflow " + request.ProjectId,
+                        Nodes = new List<WorkflowNode>(),
+                        Edges = new List<WorkflowEdge>(),
+                        Metadata = new WorkflowMetadata()
+                    };
+                }
+                
+                // Update workflow data
+                workflow.Metadata.OrchestratorData = request.WorkflowData;
+                workflow.Metadata.Description = "Visual workflow";
+                workflow.LastModified = DateTime.Now;
                 
                 // Store in memory for now (TODO: save to database)
                 _workflows[request.ProjectId] = workflow;
@@ -469,6 +501,80 @@ namespace OptimalyAI.Controllers
             _workflows[projectId] = workflow;
             
             return Json(new { success = true, message = "Workflow importováno" });
+        }
+        
+        [HttpPost]
+        public IActionResult SaveOrchestratorSettings([FromBody] OrchestratorSettingsRequest request)
+        {
+            if (request == null || request.ProjectId == Guid.Empty)
+            {
+                return Json(new { success = false, message = "Neplatná data" });
+            }
+            
+            try
+            {
+                // Get or create workflow
+                if (!_workflows.ContainsKey(request.ProjectId))
+                {
+                    _workflows[request.ProjectId] = CreateDefaultWorkflow(request.ProjectId);
+                }
+                
+                var workflow = _workflows[request.ProjectId];
+                
+                // Update orchestrator settings in metadata
+                if (workflow.Metadata == null)
+                {
+                    workflow.Metadata = new WorkflowMetadata();
+                }
+                
+                if (workflow.Metadata.Settings == null)
+                {
+                    workflow.Metadata.Settings = new WorkflowSettings();
+                }
+                
+                // Apply settings
+                workflow.Metadata.Settings.DefaultOrchestrator = request.Settings.DefaultOrchestrator;
+                workflow.Metadata.Settings.DefaultModel = request.Settings.DefaultModel;
+                workflow.Metadata.Settings.DefaultTemperature = request.Settings.DefaultTemperature;
+                workflow.Metadata.Settings.DefaultSystemPrompt = request.Settings.DefaultSystemPrompt;
+                workflow.Metadata.Settings.EnableReActByDefault = request.Settings.EnableReActByDefault;
+                
+                // Ensure we have orchestrator data structure
+                if (workflow.Metadata.OrchestratorData == null)
+                {
+                    workflow.Metadata.OrchestratorData = new
+                    {
+                        metadata = new
+                        {
+                            settings = workflow.Metadata.Settings,
+                            nodePositions = new Dictionary<string, object>()
+                        }
+                    };
+                }
+                
+                workflow.LastModified = DateTime.Now;
+                
+                return Json(new { success = true, message = "Nastavení uloženo" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+        
+        public class OrchestratorSettingsRequest
+        {
+            public Guid ProjectId { get; set; }
+            public OrchestratorSettings Settings { get; set; }
+        }
+        
+        public class OrchestratorSettings
+        {
+            public string DefaultOrchestrator { get; set; }
+            public string DefaultModel { get; set; }
+            public double DefaultTemperature { get; set; }
+            public string DefaultSystemPrompt { get; set; }
+            public bool EnableReActByDefault { get; set; }
         }
     }
 }

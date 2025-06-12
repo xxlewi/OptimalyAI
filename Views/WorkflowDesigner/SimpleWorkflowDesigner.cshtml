@@ -377,6 +377,15 @@
         min-width: 50px;
         text-align: center;
     }
+    
+    .badge-purple {
+        background-color: #6f42c1;
+        color: #fff;
+    }
+    
+    .badge-purple:hover {
+        background-color: #563d7c;
+    }
 </style>
 
 <div class="content-header">
@@ -518,6 +527,42 @@
                         }
                     </select>
                     <small class="text-muted">Držte Ctrl pro výběr více nástrojů</small>
+                </div>
+                <div class="form-group" id="orchestratorSection">
+                    <div class="custom-control custom-switch mb-3">
+                        <input type="checkbox" class="custom-control-input" id="nodeUseReAct">
+                        <label class="custom-control-label" for="nodeUseReAct">
+                            <i class="fas fa-brain"></i> Použít ReAct pattern
+                        </label>
+                    </div>
+                    <label>Orchestrátor (volitelné)</label>
+                    <select class="form-control" id="nodeOrchestrator">
+                        <option value="">-- Použít výchozí --</option>
+                        @foreach(var orchestrator in ViewBag.Orchestrators ?? new List<string>())
+                        {
+                            <option value="@orchestrator">@orchestrator</option>
+                        }
+                    </select>
+                    <small class="text-muted">Přepíše výchozí orchestrátor pro tento uzel</small>
+                </div>
+                <div class="form-group" id="advancedSection" style="display: none;">
+                    <button type="button" class="btn btn-sm btn-link" onclick="toggleAdvancedSettings()">
+                        <i class="fas fa-cog"></i> Pokročilá nastavení
+                    </button>
+                    <div id="advancedSettingsContent" style="display: none;">
+                        <div class="form-group">
+                            <label>Model (volitelné)</label>
+                            <input type="text" class="form-control" id="nodeModel" placeholder="např. llama3.1:70b">
+                        </div>
+                        <div class="form-group">
+                            <label>Temperature (volitelné)</label>
+                            <input type="number" class="form-control" id="nodeTemperature" min="0" max="2" step="0.1" placeholder="0.7">
+                        </div>
+                        <div class="form-group">
+                            <label>System Prompt (volitelné)</label>
+                            <textarea class="form-control" id="nodeSystemPrompt" rows="2" placeholder="Specifický prompt pro tento uzel"></textarea>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group" id="conditionSection" style="display: none;">
                     <label>Podmínka</label>
@@ -728,6 +773,20 @@
                 toolsDiv.append($('<span>').addClass('tool-badge').text(tool.replace(/_/g, ' ')));
             });
             contentWrapper.append(toolsDiv);
+        }
+        
+        // ReAct badge
+        if (node.useReAct) {
+            const reactBadge = $('<span>')
+                .addClass('badge badge-purple')
+                .html('<i class="fas fa-brain"></i> ReAct')
+                .css({
+                    position: 'absolute',
+                    top: '5px',
+                    right: '25px',
+                    fontSize: '11px'
+                });
+            nodeEl.append(reactBadge);
         }
         
         // Connection dots - all nodes can have input and output
@@ -1045,17 +1104,33 @@
         $('#nodeDescription').val(node.description || '');
         
         // Show/hide sections based on type
-        if (node.type === 'condition') {
+        if (node.type === 'condition' || node.type === 'parallel') {
             $('#toolsSection').hide();
-            $('#conditionSection').show();
-            $('#nodeCondition').val(node.condition || '');
+            $('#orchestratorSection').hide();
+            $('#advancedSection').hide();
+            $('#conditionSection').toggle(node.type === 'condition');
+            if (node.type === 'condition') {
+                $('#nodeCondition').val(node.condition || '');
+            }
         } else {
             $('#toolsSection').show();
+            $('#orchestratorSection').show();
+            $('#advancedSection').show();
             $('#conditionSection').hide();
             
             // Set selected tools
             $('#nodeTools').val(node.tools || []);
+            
+            // Set orchestrator settings
+            $('#nodeUseReAct').prop('checked', node.useReAct || false);
+            $('#nodeOrchestrator').val(node.orchestrator || '');
+            $('#nodeModel').val(node.model || '');
+            $('#nodeTemperature').val(node.temperature || '');
+            $('#nodeSystemPrompt').val(node.systemPrompt || '');
         }
+        
+        // Reset advanced settings visibility
+        $('#advancedSettingsContent').hide();
         
         $('#nodeEditModal').modal('show');
     }
@@ -1073,6 +1148,13 @@
             node.condition = $('#nodeCondition').val();
         } else {
             node.tools = $('#nodeTools').val() || [];
+            
+            // Save orchestrator settings
+            node.useReAct = $('#nodeUseReAct').is(':checked');
+            node.orchestrator = $('#nodeOrchestrator').val() || null;
+            node.model = $('#nodeModel').val() || null;
+            node.temperature = $('#nodeTemperature').val() ? parseFloat($('#nodeTemperature').val()) : null;
+            node.systemPrompt = $('#nodeSystemPrompt').val() || null;
         }
         
         // Re-render node
@@ -1175,6 +1257,11 @@
             if (node.type === 'task' || node.type === 'ai-tool') {
                 step.tools = node.tools || [];
                 step.useReAct = node.useReAct || false;
+                // Add orchestrator-specific properties
+                step.orchestrator = node.orchestrator || null;
+                step.systemPrompt = node.systemPrompt || null;
+                step.model = node.model || null;
+                step.temperature = node.temperature || null;
             } else if (node.type === 'condition') {
                 step.condition = node.condition || 'true';
                 step.branches = {
@@ -1237,6 +1324,10 @@
             }
         });
         
+        // Get the current orchestrator settings if available
+        const model = @Html.Raw(Json.Serialize(Model));
+        const currentSettings = model?.metadata?.settings || {};
+        
         return {
             name: 'Workflow ' + new Date().toISOString(),
             description: 'Visual workflow designer output',
@@ -1253,7 +1344,8 @@
                         type: node.type
                     };
                     return acc;
-                }, {})
+                }, {}),
+                settings: currentSettings // Preserve orchestrator settings
             }
         };
     }
@@ -1500,7 +1592,11 @@
                 tools: step.tools || [],
                 description: step.description || '',
                 condition: step.condition,
-                useReAct: step.useReAct
+                useReAct: step.useReAct,
+                orchestrator: step.orchestrator,
+                systemPrompt: step.systemPrompt,
+                model: step.model,
+                temperature: step.temperature
             };
             renderNode(nodes[nodeId]);
         });
@@ -1600,6 +1696,11 @@
         
         // Adjust canvas size to prevent cutoff
         $('.canvas-container').css('overflow', 'auto');
+    }
+    
+    // Toggle advanced settings in node edit modal
+    function toggleAdvancedSettings() {
+        $('#advancedSettingsContent').slideToggle();
     }
 </script>
 }
