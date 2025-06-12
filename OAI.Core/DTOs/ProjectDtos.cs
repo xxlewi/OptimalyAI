@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using OAI.Core.DTOs.Base;
 
 namespace OAI.Core.DTOs
@@ -119,6 +120,8 @@ namespace OAI.Core.DTOs
         public object? Results { get; set; }
         public object? Metadata { get; set; }
         public List<ProjectExecutionStepDto> Steps { get; set; } = new();
+        public int StepsCompleted => Steps.Count(s => s.Status == "Completed");
+        public int TotalSteps => Steps.Count;
     }
 
     public class CreateProjectExecutionDto : CreateDtoBase
@@ -191,5 +194,13 @@ namespace OAI.Core.DTOs
         public int RunningExecutions { get; set; }
         public double AverageSuccessRate { get; set; }
         public DateTime? LastActivity { get; set; }
+    }
+
+    public class WorkflowTypeDto
+    {
+        public string Value { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Icon { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
     }
 }

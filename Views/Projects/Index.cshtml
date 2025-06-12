@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Seznam projektů - Produkční verze";
     var summary = ViewBag.Summary as OAI.Core.DTOs.ProjectSummaryDto;
-    var workflowTypes = ViewBag.WorkflowTypes as IEnumerable<OAI.Core.Interfaces.WorkflowTypeDto> ?? new List<OAI.Core.Interfaces.WorkflowTypeDto>();
+    var workflowTypes = ViewBag.WorkflowTypes as IEnumerable<OAI.Core.DTOs.WorkflowTypeDto> ?? new List<OAI.Core.DTOs.WorkflowTypeDto>();
 }
 
 <section class="content-header">
@@ -119,7 +119,7 @@
                     <option value="">Všechny typy workflow</option>
                     @foreach (var type in workflowTypes)
                     {
-                        @if (ViewBag.CurrentWorkflowType == type.Value)
+                        @if (ViewBag.CurrentWorkflowType?.ToString() == type.Value)
                         {
                             <option value="@type.Value" selected>@type.Name</option>
                         }
