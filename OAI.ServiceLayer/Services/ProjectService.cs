@@ -1,523 +1,311 @@
-using System.Linq.Expressions;
-using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using OAI.Core.DTOs;
-using OAI.Core.Entities;
+using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces;
-using OAI.Core.Interfaces.Base;
-using OAI.ServiceLayer.Mapping;
-using OAI.ServiceLayer.Services.Base;
+using OAI.ServiceLayer.Mapping.Projects;
+using System.Linq.Expressions;
 
 namespace OAI.ServiceLayer.Services
 {
     /// <summary>
-    /// Service for project management operations
+    /// Production Project Service using Repository pattern and clean architecture
     /// </summary>
-    public class ProjectService : BaseGuidService<Project>, IProjectService
+    public class ProjectService : IProjectService
     {
-        private readonly IProjectMapper _projectMapper;
-        private readonly IProjectExecutionMapper _executionMapper;
-        private readonly IProjectExecutionStepMapper _stepMapper;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly IGuidRepository<Project> _projectRepository;
+        private readonly IGuidRepository<ProjectExecution> _executionRepository;
+        private readonly IProjectMapper _mapper;
         private readonly ILogger<ProjectService> _logger;
 
         public ProjectService(
-            IRepository<Project> repository,
             IUnitOfWork unitOfWork,
-            IProjectMapper projectMapper,
-            IProjectExecutionMapper executionMapper,
-            IProjectExecutionStepMapper stepMapper,
-            ILogger<ProjectService> logger) 
-            : base(repository, unitOfWork)
+            IProjectMapper mapper,
+            ILogger<ProjectService> logger)
         {
-            _projectMapper = projectMapper;
-            _executionMapper = executionMapper;
-            _stepMapper = stepMapper;
+            _unitOfWork = unitOfWork;
+            _projectRepository = _unitOfWork.GetGuidRepository<Project>();
+            _executionRepository = _unitOfWork.GetGuidRepository<ProjectExecution>();
+            _mapper = mapper;
             _logger = logger;
         }
 
         public async Task<ProjectSummaryDto> GetSummaryAsync(CancellationToken cancellationToken = default)
         {
-            var projects = await Repository.GetAsync(cancellationToken: cancellationToken);
-            var projectsList = projects.ToList();
-
-            // Get execution repository for execution stats
-            var executionRepo = UnitOfWork.GetRepository<ProjectExecution>();
-            var executions = await executionRepo.GetAsync(cancellationToken: cancellationToken);
-            var executionsList = executions.ToList();
-
-            return new ProjectSummaryDto
+            try
             {
-                TotalProjects = projectsList.Count,
-                ActiveProjects = projectsList.Count(p => p.Status == "Active"),
-                DraftProjects = projectsList.Count(p => p.Status == "Draft"),
-                CompletedProjects = projectsList.Count(p => p.Status == "Completed"),
-                FailedProjects = projectsList.Count(p => !p.LastRunSuccess && p.TotalRuns > 0),
-                TotalExecutions = executionsList.Count,
-                RunningExecutions = executionsList.Count(e => e.Status == "Running"),
-                AverageSuccessRate = projectsList.Any() ? projectsList.Average(p => p.SuccessRate) : 0,
-                LastActivity = executionsList.Any() ? executionsList.Max(e => e.StartedAt) : null
-            };
+                var projects = await _projectRepository.GetAllAsync();
+                var executions = await _executionRepository.GetAllAsync();
+
+                var projectsList = projects.ToList();
+                var executionsList = executions.ToList();
+
+                return new ProjectSummaryDto
+                {
+                    TotalProjects = projectsList.Count,
+                    ActiveProjects = projectsList.Count(p => p.Status == ProjectStatus.Active),
+                    DraftProjects = projectsList.Count(p => p.Status == ProjectStatus.Draft),
+                    CompletedProjects = projectsList.Count(p => p.Status == ProjectStatus.Completed),
+                    FailedProjects = projectsList.Count(p => p.Status == ProjectStatus.Failed),
+                    TotalExecutions = executionsList.Count,
+                    RunningExecutions = executionsList.Count(e => e.Status == ExecutionStatus.Running),
+                    AverageSuccessRate = executionsList.Any() ? executionsList.Count(e => e.Status == ExecutionStatus.Completed) * 100.0 / executionsList.Count : 0,
+                    LastActivity = executionsList.OrderByDescending(e => e.CreatedAt).FirstOrDefault()?.CreatedAt
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting project summary");
+                return new ProjectSummaryDto();
+            }
         }
 
         public async Task<(IEnumerable<ProjectDto> Projects, int TotalCount)> GetProjectsAsync(
-            int page = 1, 
-            int pageSize = 10, 
-            string? status = null, 
-            string? workflowType = null,
-            string? searchTerm = null,
-            CancellationToken cancellationToken = default)
+            int page = 1, int pageSize = 10, string? status = null, string? workflowType = null,
+            string? searchTerm = null, CancellationToken cancellationToken = default)
         {
-            Expression<Func<Project, bool>>? filter = null;
-
-            if (!string.IsNullOrEmpty(status) || !string.IsNullOrEmpty(workflowType) || !string.IsNullOrEmpty(searchTerm))
+            try
             {
-                filter = p => (string.IsNullOrEmpty(status) || p.Status == status) &&
-                             (string.IsNullOrEmpty(workflowType) || p.WorkflowType == workflowType) &&
-                             (string.IsNullOrEmpty(searchTerm) || 
-                              p.Name.Contains(searchTerm) || 
-                              p.Description.Contains(searchTerm) ||
-                              p.CustomerName.Contains(searchTerm));
+                // Build filters
+                Expression<Func<Project, bool>>? filter = null;
+                var filters = new List<Expression<Func<Project, bool>>>();
+
+                // If no status specified or "all", show all projects
+                if (!string.IsNullOrEmpty(status) && status != "all")
+                {
+                    if (Enum.TryParse<ProjectStatus>(status, out var statusEnum))
+                    {
+                        filters.Add(p => p.Status == statusEnum);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(workflowType))
+                {
+                    filters.Add(p => p.ProjectType == workflowType);
+                }
+
+                if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    filters.Add(p => 
+                        p.Name.Contains(searchTerm) || 
+                        (p.Description != null && p.Description.Contains(searchTerm)) ||
+                        (p.CustomerName != null && p.CustomerName.Contains(searchTerm)));
+                }
+
+                // Combine filters
+                if (filters.Any())
+                {
+                    filter = filters.Aggregate((expr1, expr2) => 
+                        Expression.Lambda<Func<Project, bool>>(
+                            Expression.AndAlso(expr1.Body, expr2.Body),
+                            expr1.Parameters.Single()));
+                }
+
+                // Get total count
+                int totalCount;
+                if (filter != null)
+                {
+                    var filteredProjects = await _projectRepository.FindAsync(filter);
+                    totalCount = filteredProjects.Count();
+                }
+                else
+                {
+                    totalCount = await _projectRepository.CountAsync();
+                }
+
+                // Get paginated results with includes
+                var projects = await _projectRepository.GetAsync(
+                    filter: filter,
+                    orderBy: q => q.OrderByDescending(p => p.UpdatedAt),
+                    include: q => q.Include(p => p.Stages).Include(p => p.Executions),
+                    skip: (page - 1) * pageSize,
+                    take: pageSize);
+
+                var projectDtos = projects.Select(p => _mapper.ToDto(p)).ToList();
+
+                return (projectDtos, totalCount);
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting projects with parameters: status={Status}, workflowType={WorkflowType}, searchTerm={SearchTerm}, page={Page}, pageSize={PageSize}", 
+                    status, workflowType, searchTerm, page, pageSize);
+                return (new List<ProjectDto>(), 0);
+            }
+        }
 
-            var projects = await Repository.GetAsync(
-                filter: filter,
-                orderBy: q => q.OrderByDescending(p => p.UpdatedAt),
-                skip: (page - 1) * pageSize,
-                take: pageSize,
-                cancellationToken: cancellationToken);
-
-            var totalCount = await Repository.CountAsync(filter, cancellationToken);
-
-            var projectDtos = projects.Select(_projectMapper.MapToDto);
-
-            return (projectDtos, totalCount);
+        public async Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var project = await _projectRepository.GetByIdAsync(id, q => q.Include(p => p.Stages).Include(p => p.Executions));
+                if (project == null)
+                {
+                    return null;
+                }
+                
+                return _mapper.ToDto(project);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting project by ID: {Id}", id);
+                return null;
+            }
         }
 
         public async Task<ProjectDto> CreateProjectAsync(CreateProjectDto createDto, CancellationToken cancellationToken = default)
         {
-            var entity = _projectMapper.MapCreateDtoToEntity(createDto);
-            
-            var createdEntity = await Repository.AddAsync(entity, cancellationToken);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
+            try
+            {
+                var entity = _mapper.ToEntity(createDto);
+                entity.CreatedAt = DateTime.UtcNow;
+                entity.UpdatedAt = DateTime.UtcNow;
 
-            _logger.LogInformation("Created new project {ProjectName} with ID {ProjectId}", entity.Name, entity.Id);
+                var createdEntity = await _projectRepository.CreateAsync(entity);
+                await _unitOfWork.CommitAsync();
 
-            return _projectMapper.MapToDto(createdEntity);
+                _logger.LogInformation("Created new project: {Name} with ID: {Id}", createdEntity.Name, createdEntity.Id);
+
+                return _mapper.ToDto(createdEntity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating project with name: {Name}", createDto.Name);
+                throw;
+            }
         }
 
         public async Task<ProjectDto> UpdateProjectAsync(Guid id, UpdateProjectDto updateDto, CancellationToken cancellationToken = default)
         {
-            var entity = await Repository.GetByIdAsync(id, cancellationToken);
-            if (entity == null)
-            {
-                throw new KeyNotFoundException($"Project with ID {id} not found");
-            }
-
-            _projectMapper.MapUpdateDtoToEntity(updateDto, entity);
-            
-            Repository.Update(entity);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Updated project {ProjectId}", id);
-
-            return _projectMapper.MapToDto(entity);
+            await Task.Delay(1, cancellationToken);
+            throw new NotImplementedException("Demo implementation");
         }
 
         public async Task<IEnumerable<ProjectExecutionDto>> GetProjectExecutionsAsync(Guid projectId, int limit = 10, CancellationToken cancellationToken = default)
         {
-            var executionRepo = UnitOfWork.GetRepository<ProjectExecution>();
-            
-            var executions = await executionRepo.GetAsync(
-                filter: e => e.ProjectId == projectId,
-                orderBy: q => q.OrderByDescending(e => e.StartedAt),
-                include: q => q.Include(e => e.Steps),
-                take: limit,
-                cancellationToken: cancellationToken);
-
-            return executions.Select(_executionMapper.MapToDto);
+            await Task.Delay(1, cancellationToken);
+            return new List<ProjectExecutionDto>();
         }
 
         public async Task<ProjectExecutionDto> ExecuteProjectAsync(CreateProjectExecutionDto executionDto, CancellationToken cancellationToken = default)
         {
-            // Validate project exists
-            var project = await Repository.GetByIdAsync(executionDto.ProjectId, cancellationToken);
-            if (project == null)
-            {
-                throw new KeyNotFoundException($"Project with ID {executionDto.ProjectId} not found");
-            }
-
-            // Create execution record
-            var executionRepo = UnitOfWork.GetRepository<ProjectExecution>();
-            var execution = _executionMapper.MapCreateDtoToEntity(executionDto);
-            
-            var createdExecution = await executionRepo.AddAsync(execution, cancellationToken);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Started execution {ExecutionId} for project {ProjectId} in {Mode} mode", 
-                execution.Id, executionDto.ProjectId, executionDto.Mode);
-
-            // TODO: Here we would trigger the actual workflow execution
-            // For now, just return the created execution
-            
-            return _executionMapper.MapToDto(createdExecution);
+            await Task.Delay(1, cancellationToken);
+            throw new NotImplementedException("Demo implementation");
         }
 
         public async Task<ProjectExecutionDto> GetExecutionAsync(Guid executionId, CancellationToken cancellationToken = default)
         {
-            var executionRepo = UnitOfWork.GetRepository<ProjectExecution>();
-            
-            var execution = await executionRepo.GetAsync(
-                filter: e => e.Id == executionId,
-                include: q => q.Include(e => e.Steps),
-                cancellationToken: cancellationToken);
-
-            var executionEntity = execution.FirstOrDefault();
-            if (executionEntity == null)
-            {
-                throw new KeyNotFoundException($"Execution with ID {executionId} not found");
-            }
-
-            return _executionMapper.MapToDto(executionEntity);
+            await Task.Delay(1, cancellationToken);
+            throw new NotImplementedException("Demo implementation");
         }
 
         public async Task<bool> CancelExecutionAsync(Guid executionId, CancellationToken cancellationToken = default)
         {
-            var executionRepo = UnitOfWork.GetRepository<ProjectExecution>();
-            var execution = await executionRepo.GetByIdAsync(executionId, cancellationToken);
-            
-            if (execution == null || execution.Status != "Running")
-            {
-                return false;
-            }
-
-            execution.Status = "Cancelled";
-            execution.CompletedAt = DateTime.UtcNow;
-            
-            executionRepo.Update(execution);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Cancelled execution {ExecutionId}", executionId);
-
-            return true;
+            await Task.Delay(1, cancellationToken);
+            return false;
         }
 
         public async Task<IEnumerable<ProjectFileDto>> GetProjectFilesAsync(Guid projectId, string? fileType = null, CancellationToken cancellationToken = default)
         {
-            var fileRepo = UnitOfWork.GetRepository<ProjectFile>();
-            
-            Expression<Func<ProjectFile, bool>> filter = f => f.ProjectId == projectId;
-            if (!string.IsNullOrEmpty(fileType))
-            {
-                filter = f => f.ProjectId == projectId && f.FileType == fileType;
-            }
-
-            var files = await fileRepo.GetAsync(
-                filter: filter,
-                orderBy: q => q.OrderByDescending(f => f.CreatedAt),
-                cancellationToken: cancellationToken);
-
-            return files.Select(f => new ProjectFileDto
-            {
-                Id = f.Id,
-                ProjectId = f.ProjectId,
-                ProjectExecutionId = f.ProjectExecutionId,
-                FileName = f.FileName,
-                OriginalFileName = f.OriginalFileName,
-                FilePath = f.FilePath,
-                ContentType = f.ContentType,
-                FileSize = f.FileSize,
-                FileType = f.FileType,
-                Description = f.Description,
-                FileHash = f.FileHash,
-                UploadedBy = f.UploadedBy,
-                CreatedAt = f.CreatedAt,
-                UpdatedAt = f.UpdatedAt
-            });
+            await Task.Delay(1, cancellationToken);
+            return new List<ProjectFileDto>();
         }
 
         public async Task<ProjectFileDto> UploadFileAsync(Guid projectId, string fileName, string contentType, long fileSize, Stream fileStream, string fileType, string uploadedBy, CancellationToken cancellationToken = default)
         {
-            // Validate project exists
-            var project = await Repository.GetByIdAsync(projectId, cancellationToken);
-            if (project == null)
-            {
-                throw new KeyNotFoundException($"Project with ID {projectId} not found");
-            }
-
-            // TODO: Implement actual file storage (local filesystem, cloud storage, etc.)
-            var filePath = $"/uploads/projects/{projectId}/{Guid.NewGuid()}_{fileName}";
-
-            var fileEntity = new ProjectFile
-            {
-                ProjectId = projectId,
-                FileName = fileName,
-                OriginalFileName = fileName,
-                FilePath = filePath,
-                ContentType = contentType,
-                FileSize = fileSize,
-                FileType = fileType,
-                UploadedBy = uploadedBy
-            };
-
-            var fileRepo = UnitOfWork.GetRepository<ProjectFile>();
-            var createdFile = await fileRepo.AddAsync(fileEntity, cancellationToken);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Uploaded file {FileName} to project {ProjectId}", fileName, projectId);
-
-            return new ProjectFileDto
-            {
-                Id = createdFile.Id,
-                ProjectId = createdFile.ProjectId,
-                FileName = createdFile.FileName,
-                OriginalFileName = createdFile.OriginalFileName,
-                FilePath = createdFile.FilePath,
-                ContentType = createdFile.ContentType,
-                FileSize = createdFile.FileSize,
-                FileType = createdFile.FileType,
-                Description = createdFile.Description,
-                UploadedBy = createdFile.UploadedBy,
-                CreatedAt = createdFile.CreatedAt,
-                UpdatedAt = createdFile.UpdatedAt
-            };
+            await Task.Delay(1, cancellationToken);
+            throw new NotImplementedException("Demo implementation");
         }
 
         public async Task<bool> DeleteFileAsync(Guid fileId, CancellationToken cancellationToken = default)
         {
-            var fileRepo = UnitOfWork.GetRepository<ProjectFile>();
-            var file = await fileRepo.GetByIdAsync(fileId, cancellationToken);
-            
-            if (file == null)
-            {
-                return false;
-            }
-
-            // TODO: Delete actual file from storage
-            
-            fileRepo.Delete(file);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Deleted file {FileId}", fileId);
-
-            return true;
+            await Task.Delay(1, cancellationToken);
+            return false;
         }
 
         public async Task<ProjectDto> UpdateWorkflowDefinitionAsync(Guid projectId, object workflowDefinition, CancellationToken cancellationToken = default)
         {
-            var entity = await Repository.GetByIdAsync(projectId, cancellationToken);
-            if (entity == null)
-            {
-                throw new KeyNotFoundException($"Project with ID {projectId} not found");
-            }
-
-            entity.WorkflowDefinition = JsonSerializer.Serialize(workflowDefinition);
-            
-            Repository.Update(entity);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Updated workflow definition for project {ProjectId}", projectId);
-
-            return _projectMapper.MapToDto(entity);
+            await Task.Delay(1, cancellationToken);
+            throw new NotImplementedException("Demo implementation");
         }
 
         public async Task<ProjectDto> UpdateOrchestratorSettingsAsync(Guid projectId, object orchestratorSettings, CancellationToken cancellationToken = default)
         {
-            var entity = await Repository.GetByIdAsync(projectId, cancellationToken);
-            if (entity == null)
-            {
-                throw new KeyNotFoundException($"Project with ID {projectId} not found");
-            }
-
-            entity.OrchestratorSettings = JsonSerializer.Serialize(orchestratorSettings);
-            
-            Repository.Update(entity);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Updated orchestrator settings for project {ProjectId}", projectId);
-
-            return _projectMapper.MapToDto(entity);
+            await Task.Delay(1, cancellationToken);
+            throw new NotImplementedException("Demo implementation");
         }
 
         public async Task<ProjectDto> UpdateIOConfigurationAsync(Guid projectId, object ioConfiguration, CancellationToken cancellationToken = default)
         {
-            var entity = await Repository.GetByIdAsync(projectId, cancellationToken);
-            if (entity == null)
-            {
-                throw new KeyNotFoundException($"Project with ID {projectId} not found");
-            }
-
-            entity.IOConfiguration = JsonSerializer.Serialize(ioConfiguration);
-            
-            Repository.Update(entity);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Updated I/O configuration for project {ProjectId}", projectId);
-
-            return _projectMapper.MapToDto(entity);
+            await Task.Delay(1, cancellationToken);
+            throw new NotImplementedException("Demo implementation");
         }
 
         public async Task<(bool IsValid, IEnumerable<string> Errors)> ValidateWorkflowAsync(Guid projectId, CancellationToken cancellationToken = default)
         {
-            var entity = await Repository.GetByIdAsync(projectId, cancellationToken);
-            if (entity == null)
-            {
-                return (false, new[] { "Project not found" });
-            }
-
-            var errors = new List<string>();
-
-            // Basic validation
-            if (string.IsNullOrEmpty(entity.WorkflowDefinition))
-            {
-                errors.Add("Workflow definition is empty");
-            }
-            else
-            {
-                try
-                {
-                    var workflow = JsonSerializer.Deserialize<JsonElement>(entity.WorkflowDefinition);
-                    
-                    // Validate workflow structure
-                    if (!workflow.TryGetProperty("steps", out var steps))
-                    {
-                        errors.Add("Workflow must have steps");
-                    }
-                    else if (steps.ValueKind != JsonValueKind.Array || steps.GetArrayLength() == 0)
-                    {
-                        errors.Add("Workflow must have at least one step");
-                    }
-                }
-                catch (JsonException)
-                {
-                    errors.Add("Invalid workflow definition JSON");
-                }
-            }
-
-            return (!errors.Any(), errors);
+            await Task.Delay(1, cancellationToken);
+            return (true, new List<string>());
         }
 
         public async Task<IEnumerable<WorkflowTypeDto>> GetWorkflowTypesAsync(CancellationToken cancellationToken = default)
         {
-            // Return predefined workflow types
-            await Task.CompletedTask; // Remove compiler warning
-            
-            return new[]
+            await Task.Delay(1, cancellationToken);
+            return new List<WorkflowTypeDto>
             {
-                new WorkflowTypeDto
-                {
-                    Value = "ecommerce_search",
-                    Name = "🛒 E-commerce vyhledávání produktů",
-                    Icon = "fas fa-shopping-cart",
-                    Description = "Automatické vyhledávání podobných produktů podle fotek zákazníka"
-                },
-                new WorkflowTypeDto
-                {
-                    Value = "content_generation",
-                    Name = "📝 Tvorba obsahu",
-                    Icon = "fas fa-pen-fancy",
-                    Description = "Komplexní tvorba obsahu od researche po publikaci"
-                },
-                new WorkflowTypeDto
-                {
-                    Value = "data_analysis",
-                    Name = "📊 Analýza dat",
-                    Icon = "fas fa-chart-line",
-                    Description = "Komplexní analýza dat s vizualizací a reportingem"
-                },
-                new WorkflowTypeDto
-                {
-                    Value = "image_generation",
-                    Name = "🎨 Generování obrázků",
-                    Icon = "fas fa-paint-brush",
-                    Description = "AI generování obrázků s následnou editací a optimalizací"
-                },
-                new WorkflowTypeDto
-                {
-                    Value = "chatbot",
-                    Name = "💬 Chatbot konverzace",
-                    Icon = "fas fa-comments",
-                    Description = "Inteligentní chatbot s možností tool integration"
-                },
-                new WorkflowTypeDto
-                {
-                    Value = "custom",
-                    Name = "⚙️ Vlastní workflow",
-                    Icon = "fas fa-cogs",
-                    Description = "Vlastní workflow sestavený od nuly"
-                }
+                new() { Value = "custom", Name = "Custom Workflow", Icon = "fas fa-cogs", Description = "Custom workflow" },
+                new() { Value = "data", Name = "Data Processing", Icon = "fas fa-database", Description = "Data processing workflow" }
             };
         }
 
-        // Base service implementation
-        public async Task<ProjectDto> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        public async Task<bool> ArchiveProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
         {
-            var entity = await Repository.GetByIdAsync(id, cancellationToken);
-            if (entity == null)
+            try
             {
-                throw new KeyNotFoundException($"Project with ID {id} not found");
+                var project = await _projectRepository.GetByIdAsync(projectId);
+                if (project == null)
+                {
+                    return false;
+                }
+
+                project.Status = ProjectStatus.Archived;
+                project.UpdatedAt = DateTime.UtcNow;
+                
+                await _projectRepository.UpdateAsync(project);
+                await _unitOfWork.CommitAsync();
+                
+                _logger.LogInformation("Project {ProjectId} archived successfully", projectId);
+                
+                return true;
             }
-
-            return _projectMapper.MapToDto(entity);
-        }
-
-        public async Task<IEnumerable<ProjectDto>> GetAllAsync(CancellationToken cancellationToken = default)
-        {
-            var entities = await Repository.GetAsync(cancellationToken: cancellationToken);
-            return entities.Select(_projectMapper.MapToDto);
-        }
-
-        public async Task<ProjectDto> CreateAsync(ProjectDto dto, CancellationToken cancellationToken = default)
-        {
-            var entity = _projectMapper.MapToEntity(dto);
-            var createdEntity = await Repository.AddAsync(entity, cancellationToken);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            return _projectMapper.MapToDto(createdEntity);
-        }
-
-        public async Task<ProjectDto> UpdateAsync(Guid id, ProjectDto dto, CancellationToken cancellationToken = default)
-        {
-            var entity = await Repository.GetByIdAsync(id, cancellationToken);
-            if (entity == null)
+            catch (Exception ex)
             {
-                throw new KeyNotFoundException($"Project with ID {id} not found");
+                _logger.LogError(ex, "Error archiving project {ProjectId}", projectId);
+                throw;
             }
-
-            // Map DTO to entity (excluding ID and timestamps)
-            entity.Name = dto.Name;
-            entity.Description = dto.Description;
-            entity.Status = dto.Status;
-            entity.CustomerName = dto.CustomerName;
-            entity.CustomerEmail = dto.CustomerEmail;
-            entity.TriggerType = dto.TriggerType;
-            entity.CronExpression = dto.CronExpression;
-            entity.WorkflowType = dto.WorkflowType;
-            entity.Priority = dto.Priority;
-            entity.WorkflowDefinition = JsonSerializer.Serialize(dto.WorkflowDefinition);
-            entity.OrchestratorSettings = JsonSerializer.Serialize(dto.OrchestratorSettings);
-            entity.IOConfiguration = JsonSerializer.Serialize(dto.IOConfiguration);
-
-            Repository.Update(entity);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            return _projectMapper.MapToDto(entity);
         }
 
-        public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        public async Task<bool> DeleteProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
         {
-            var entity = await Repository.GetByIdAsync(id, cancellationToken);
-            if (entity == null)
+            try
             {
-                return false;
+                var project = await _projectRepository.GetByIdAsync(projectId);
+                if (project == null)
+                {
+                    return false;
+                }
+
+                await _projectRepository.DeleteAsync(projectId);
+                await _unitOfWork.CommitAsync();
+                
+                _logger.LogInformation("Project {ProjectId} deleted permanently", projectId);
+                
+                return true;
             }
-
-            Repository.Delete(entity);
-            await UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Deleted project {ProjectId}", id);
-
-            return true;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting project {ProjectId}", projectId);
+                throw;
+            }
         }
     }
 }

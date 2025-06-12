@@ -1,8 +1,12 @@
-@using OptimalyAI.ViewModels
-@model IEnumerable<ProjectListItemViewModel>
+@using OAI.Core.DTOs
 @{
     ViewData["Title"] = "Seznam projektů";
-    var projects = Model ?? new List<ProjectListItemViewModel>();
+    var projects = ViewBag.Projects as IEnumerable<ProjectDto> ?? new List<ProjectDto>();
+    var totalCount = ViewBag.TotalCount ?? 0;
+    var currentPage = ViewBag.CurrentPage ?? 1;
+    var totalPages = ViewBag.TotalPages ?? 1;
+    var currentSearch = ViewBag.CurrentSearch as string;
+    var currentStatus = ViewBag.CurrentStatus as string;
 }
 
 <section class="content-header">
@@ -62,33 +66,50 @@
                 </div>
             </div>
             <div class="col-lg-3 col-6">
-                <div class="small-box bg-danger">
+                <div class="small-box bg-primary">
                     <div class="inner">
-                        <h3>@ViewBag.FailedProjects</h3>
-                        <p>Selhané</p>
+                        <h3>@ViewBag.CompletedProjects</h3>
+                        <p>Dokončené</p>
                     </div>
                     <div class="icon">
-                        <i class="fas fa-exclamation-triangle"></i>
+                        <i class="fas fa-check"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Search Section -->
+        <!-- Search and Filter Section -->
         <div class="row mb-3">
-            <div class="col-md-6">
-                <div class="input-group">
-                    <input type="text" class="form-control" id="searchProjects" 
-                           placeholder="Vyhledat projekt...">
-                    <div class="input-group-append">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <div class="col-md-12">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchProjects" 
+                                   placeholder="Vyhledat projekt..." autocomplete="off">
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-primary" onclick="filterProjects()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="statusFilter" class="form-control" onchange="filterProjects()">
+                            <option value="all">Všechny projekty</option>
+                            <option value="archived">Pouze archivované</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-default" onclick="clearFilters()">
+                            <i class="fas fa-times"></i> Vymazat filtry
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="/Projects/Create" class="btn btn-success">
+                            <i class="fas fa-plus"></i> Nový projekt
+                        </a>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-6">
-                <button class="btn btn-default" onclick="clearSearch()" title="Vymazat hledání">
-                    <i class="fas fa-times"></i> Vymazat
-                </button>
             </div>
         </div>
 
@@ -119,7 +140,7 @@
                         <tbody>
                             @foreach (var project in projects)
                             {
-                                <tr>
+                                <tr data-status="@project.Status" data-name="@project.Name.ToLower()" data-customer="@project.CustomerName?.ToLower()">
                                     <td>
                                         <div>
                                             <strong>
@@ -138,6 +159,10 @@
                                             else if (project.Status == "Completed")
                                             {
                                                 <span class="badge badge-info float-right">Dokončený</span>
+                                            }
+                                            else if (project.Status == "Archived")
+                                            {
+                                                <span class="badge badge-secondary float-right">Archivovaný</span>
                                             }
                                             <br>
                                             <small class="text-muted">
@@ -268,53 +293,153 @@
     </div>
 </section>
 
+<!-- Delete Project Modal -->
+<div class="modal fade" id="deleteProjectModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Smazat projekt</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Jak chcete naložit s projektem <strong id="projectNameToDelete"></strong>?</p>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="deleteOption" id="archiveOption" value="archive" checked>
+                    <label class="form-check-label" for="archiveOption">
+                        <i class="fas fa-archive text-warning"></i> Archivovat projekt (bude možné jej později obnovit)
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="deleteOption" id="deleteOption" value="delete">
+                    <label class="form-check-label" for="deleteOption">
+                        <i class="fas fa-trash text-danger"></i> Trvale smazat projekt (nelze vrátit zpět)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Potvrdit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
-        function clearSearch() {
-            $('#searchProjects').val('');
-            filterProjects();
-        }
+        let projectToDelete = null;
         
         function executeWorkflow(projectId) {
-            // Přesměruj na WorkflowPrototype controller pro spuštění
             window.location.href = '/WorkflowPrototype/Details?projectId=' + projectId;
         }
         
         function deleteProject(projectId) {
-            if (confirm('Opravdu smazat tento projekt? Tato akce je nevratná.')) {
-                toastr.warning('Smazání projektu (demo režim - žádná skutečná akce)');
-            }
+            const projectRow = $(`button[onclick="deleteProject('${projectId}')"]`).closest('tr');
+            const projectName = projectRow.find('td:first strong a').text();
+            
+            projectToDelete = { id: projectId, name: projectName };
+            $('#projectNameToDelete').text(projectName);
+            $('#deleteProjectModal').modal('show');
         }
+        
+        $('#confirmDeleteBtn').click(async function() {
+            if (!projectToDelete) return;
+            
+            const deleteOption = $('input[name="deleteOption"]:checked').val();
+            const isArchive = deleteOption === 'archive';
+            
+            try {
+                const response = await fetch(`/Projects/api/${projectToDelete.id}/${isArchive ? 'archive' : 'delete'}`, {
+                    method: isArchive ? 'PUT' : 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    $('#deleteProjectModal').modal('hide');
+                    
+                    if (isArchive) {
+                        toastr.success(`Projekt "${projectToDelete.name}" byl archivován`);
+                    } else {
+                        toastr.success(`Projekt "${projectToDelete.name}" byl trvale smazán`);
+                    }
+                    
+                    // Reload stránky pro zobrazení aktuálních dat z databáze
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    const error = await response.text();
+                    toastr.error(`Chyba při ${isArchive ? 'archivaci' : 'mazání'} projektu: ${error}`);
+                }
+            } catch (error) {
+                toastr.error(`Chyba při ${isArchive ? 'archivaci' : 'mazání'} projektu: ${error.message}`);
+            }
+            
+            projectToDelete = null;
+        });
         
         function filterProjects() {
             const searchTerm = $('#searchProjects').val().toLowerCase();
+            const statusFilter = $('#statusFilter').val();
             
             $('#projectsTable tbody tr').each(function() {
                 const row = $(this);
-                const projectName = row.find('td:first strong a').text().toLowerCase();
+                const status = row.attr('data-status');
+                const name = row.attr('data-name') || '';
+                const customer = row.attr('data-customer') || '';
                 const description = row.find('td:first small').text().toLowerCase();
-                const customer = row.find('td:nth-child(2) a').text().toLowerCase();
                 
-                const matches = !searchTerm || 
-                    projectName.includes(searchTerm) || 
+                // Status filter
+                let statusMatch = true;
+                if (statusFilter === 'archived') {
+                    statusMatch = status === 'Archived';
+                }
+                // statusFilter === 'all' zobrazí všechny
+                
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    name.includes(searchTerm) || 
                     description.includes(searchTerm) ||
                     customer.includes(searchTerm);
                 
-                if (matches) {
+                if (statusMatch && searchMatch) {
                     row.show();
                 } else {
                     row.hide();
                 }
             });
+            
+            // Zobrazit počet filtrovaných projektů
+            const visibleCount = $('#projectsTable tbody tr:visible').length;
+            const totalCount = $('#projectsTable tbody tr').length;
+            
+            if (visibleCount < totalCount) {
+                if ($('#filterInfo').length === 0) {
+                    $('.card-header').append(`<span id="filterInfo" class="float-right text-muted"></span>`);
+                }
+                $('#filterInfo').text(`Zobrazeno ${visibleCount} z ${totalCount} projektů`);
+            } else {
+                $('#filterInfo').remove();
+            }
         }
         
-        // Handle Enter key in search
+        function clearFilters() {
+            $('#searchProjects').val('');
+            $('#statusFilter').val('all');
+            filterProjects();
+        }
+        
+        // Real-time search při psaní
         $('#searchProjects').on('keyup', function() {
             filterProjects();
         });
         
         $(document).ready(function() {
-            // Initialize
+            // Aplikovat výchozí filtr při načtení stránky
+            filterProjects();
         });
     </script>
 }

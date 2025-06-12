@@ -28,6 +28,11 @@ namespace OAI.Core.Interfaces
             CancellationToken cancellationToken = default);
         
         /// <summary>
+        /// Get project by ID
+        /// </summary>
+        Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+        
+        /// <summary>
         /// Create new project
         /// </summary>
         Task<ProjectDto> CreateProjectAsync(CreateProjectDto createDto, CancellationToken cancellationToken = default);
@@ -96,17 +101,15 @@ namespace OAI.Core.Interfaces
         /// Get available workflow types
         /// </summary>
         Task<IEnumerable<WorkflowTypeDto>> GetWorkflowTypesAsync(CancellationToken cancellationToken = default);
-    }
-    
-    /// <summary>
-    /// Workflow type definition
-    /// </summary>
-    public class WorkflowTypeDto
-    {
-        public string Value { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string Icon { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public object? DefaultWorkflow { get; set; }
+        
+        /// <summary>
+        /// Archive project (soft delete)
+        /// </summary>
+        Task<bool> ArchiveProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
+        
+        /// <summary>
+        /// Delete project permanently
+        /// </summary>
+        Task<bool> DeleteProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
     }
 }

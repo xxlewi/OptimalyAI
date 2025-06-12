@@ -1,106 +1,87 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs;
 using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Tools;
-using OptimalyAI.Controllers.Base;
 using OptimalyAI.ViewModels;
 
 namespace OptimalyAI.Controllers
 {
     /// <summary>
-    /// Controller pro správu projektů a workflow - produkční verze s clean architekturou
+    /// Controller pro správu projektů - produkční verze s clean architekturou
     /// </summary>
-    public class ProjectsController : BaseApiController
+    [Route("[controller]")]
+    public class ProjectsController : Controller
     {
+        private readonly IProjectService _projectService;
         private readonly IToolRegistry _toolRegistry;
+        private readonly ILogger<ProjectsController> _logger;
 
-        public ProjectsController(IToolRegistry toolRegistry)
+        public ProjectsController(
+            IProjectService projectService,
+            IToolRegistry toolRegistry,
+            ILogger<ProjectsController> logger)
         {
+            _projectService = projectService;
             _toolRegistry = toolRegistry;
+            _logger = logger;
         }
 
         /// <summary>
         /// Zobrazí hlavní stránku s přehledem projektů
         /// </summary>
         /// <returns>View s přehledem projektů</returns>
-        [HttpGet]
-        public async Task<IActionResult> Index()
+        [HttpGet("")]
+        [HttpGet("Index")]
+        public async Task<IActionResult> Index(string? status = null, string? workflowType = null, string? search = null, int page = 1, int pageSize = 10)
         {
-            // Demo data pro testing
-            var projects = GetDemoProjects();
-            
-            // Získat dostupné nástroje
-            var tools = await _toolRegistry.GetAllToolsAsync();
-            ViewBag.AvailableTools = tools.Select(t => new { 
-                Id = t.Id, 
-                Name = t.Name, 
-                Category = t.Category,
-                Description = t.Description 
-            }).ToList();
-            
-            // Demo statistiky
-            ViewBag.TotalProjects = projects.Count;
-            ViewBag.ActiveProjects = projects.Count(p => p.Status == "Active");
-            ViewBag.DraftProjects = projects.Count(p => p.Status == "Draft");
-            ViewBag.FailedProjects = 0;
-            
-            return View(projects);
+            try
+            {
+                // Získat projekty z databáze - pro view načíst všechny včetně archivovaných
+                var (projects, totalCount) = await _projectService.GetProjectsAsync(page, pageSize, "all", workflowType, search);
+                
+                // Získat statistiky
+                var summary = await _projectService.GetSummaryAsync();
+                
+                // Získat dostupné nástroje pro filter
+                var tools = await _toolRegistry.GetAllToolsAsync();
+                var availableTools = tools.Select(t => new { 
+                    Id = t.Id, 
+                    Name = t.Name, 
+                    Category = t.Category,
+                    Description = t.Description 
+                }).ToList();
+                
+                // Předat data do ViewBag
+                ViewBag.Projects = projects;
+                ViewBag.TotalCount = totalCount;
+                ViewBag.CurrentPage = page;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+                ViewBag.CurrentStatus = status;
+                ViewBag.CurrentWorkflowType = workflowType;
+                ViewBag.CurrentSearch = search;
+                
+                // Statistiky
+                ViewBag.TotalProjects = summary.TotalProjects;
+                ViewBag.ActiveProjects = summary.ActiveProjects;
+                ViewBag.DraftProjects = summary.DraftProjects;
+                ViewBag.CompletedProjects = summary.CompletedProjects;
+                ViewBag.FailedProjects = summary.FailedProjects;
+                
+                // Dostupné nástroje
+                ViewBag.AvailableTools = availableTools;
+                
+                return View();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading projects list");
+                TempData["Error"] = "Nepodařilo se načíst seznam projektů.";
+                return View();
+            }
         }
 
-        private List<ProjectListItemViewModel> GetDemoProjects()
-        {
-            return new List<ProjectListItemViewModel>
-            {
-                new ProjectListItemViewModel
-                {
-                    Id = Guid.NewGuid(),
-                    Name = "E-commerce Product Search",
-                    Description = "Vyhledávání podobných produktů podle fotek zákazníka",
-                    Status = "Active",
-                    CustomerName = "Fashion Store CZ",
-                    CustomerEmail = "info@fashionstore.cz",
-                    WorkflowType = "ecommerce_search",
-                    TriggerType = "Manual",
-                    LastRun = DateTime.Now.AddHours(-2),
-                    LastRunSuccess = true,
-                    SuccessRate = 95,
-                    TotalRuns = 124,
-                    StageCount = 5
-                },
-                new ProjectListItemViewModel
-                {
-                    Id = Guid.NewGuid(),
-                    Name = "Content Generation Pipeline",
-                    Description = "Automatická tvorba obsahu pro blog a sociální sítě",
-                    Status = "Active",
-                    CustomerName = "TechGadgets s.r.o.",
-                    CustomerEmail = "marketing@techgadgets.cz",
-                    WorkflowType = "content_generation",
-                    TriggerType = "Schedule",
-                    LastRun = DateTime.Now.AddMinutes(-30),
-                    LastRunSuccess = true,
-                    SuccessRate = 87,
-                    TotalRuns = 67,
-                    StageCount = 8
-                },
-                new ProjectListItemViewModel
-                {
-                    Id = Guid.NewGuid(),
-                    Name = "Data Analysis Dashboard",
-                    Description = "Analýza prodejních dat s vizualizací trendů",
-                    Status = "Draft",
-                    CustomerName = "Market Leaders",
-                    CustomerEmail = "data@marketleaders.com",
-                    WorkflowType = "data_analysis",
-                    TriggerType = "Event",
-                    LastRun = null,
-                    LastRunSuccess = false,
-                    SuccessRate = 0,
-                    TotalRuns = 0,
-                    StageCount = 3
-                }
-            };
-        }
 
         /// <summary>
         /// API endpoint pro získání seznamu projektů s filtrováním
@@ -112,13 +93,17 @@ namespace OptimalyAI.Controllers
             {
                 var (projects, totalCount) = await _projectService.GetProjectsAsync(page, pageSize, status, workflowType, search);
                 
-                return Ok(new {
-                    projects,
-                    totalCount,
-                    page,
-                    pageSize,
-                    totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
-                }, "Projects retrieved successfully");
+                return Json(new {
+                    success = true,
+                    data = new {
+                        projects,
+                        totalCount,
+                        page,
+                        pageSize,
+                        totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
+                    },
+                    message = "Projects retrieved successfully"
+                });
             }
             catch (Exception ex)
             {
@@ -135,7 +120,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var summary = await _projectService.GetSummaryAsync();
-                return Ok(summary, "Summary retrieved successfully");
+                return Json(new { success = true, data = summary, message = "Summary retrieved successfully" });
             }
             catch (Exception ex)
             {
@@ -152,6 +137,11 @@ namespace OptimalyAI.Controllers
             try
             {
                 var project = await _projectService.GetByIdAsync(id);
+                if (project == null)
+                {
+                    return NotFound();
+                }
+                
                 var executions = await _projectService.GetProjectExecutionsAsync(id, 10);
                 var files = await _projectService.GetProjectFilesAsync(id);
                 var workflowTypes = await _projectService.GetWorkflowTypesAsync();
@@ -162,13 +152,11 @@ namespace OptimalyAI.Controllers
                 
                 return View(project);
             }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
-            }
             catch (Exception ex)
             {
-                return BadRequest($"Error retrieving project: {ex.Message}");
+                _logger.LogError(ex, "Error retrieving project details for ID: {Id}", id);
+                TempData["Error"] = "Nepodařilo se načíst detail projektu.";
+                return RedirectToAction(nameof(Index));
             }
         }
 
@@ -232,7 +220,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var project = await _projectService.CreateProjectAsync(createDto);
-                return Ok(project, "Project created successfully");
+                return Json(new { success = true, data = project, message = "Project created successfully" });
             }
             catch (Exception ex)
             {
@@ -254,7 +242,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var project = await _projectService.UpdateProjectAsync(id, updateDto);
-                return Ok(project, "Project updated successfully");
+                return Json(new { success = true, data = project, message = "Project updated successfully" });
             }
             catch (KeyNotFoundException)
             {
@@ -267,20 +255,42 @@ namespace OptimalyAI.Controllers
         }
 
         /// <summary>
+        /// API endpoint pro archivaci projektu
+        /// </summary>
+        [HttpPut("api/{id}/archive")]
+        public async Task<IActionResult> ArchiveProject(Guid id)
+        {
+            try
+            {
+                var archived = await _projectService.ArchiveProjectAsync(id);
+                if (!archived)
+                {
+                    return NotFound("Project not found");
+                }
+                
+                return Json(new { success = true, message = "Project archived successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error archiving project: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// API endpoint pro smazání projektu
         /// </summary>
-        [HttpDelete("api/{id}")]
+        [HttpDelete("api/{id}/delete")]
         public async Task<IActionResult> DeleteProject(Guid id)
         {
             try
             {
-                var deleted = await _projectService.DeleteAsync(id);
+                var deleted = await _projectService.DeleteProjectAsync(id);
                 if (!deleted)
                 {
                     return NotFound("Project not found");
                 }
                 
-                return Ok("Project deleted successfully");
+                return Json(new { success = true, message = "Project deleted permanently" });
             }
             catch (Exception ex)
             {
@@ -307,7 +317,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var execution = await _projectService.ExecuteProjectAsync(executionDto);
-                return Ok(execution, "Workflow execution started");
+                return Json(new { success = true, data = execution, message = "Workflow execution started" });
             }
             catch (KeyNotFoundException)
             {
@@ -328,7 +338,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var executions = await _projectService.GetProjectExecutionsAsync(id, limit);
-                return Ok(executions, "Executions retrieved successfully");
+                return Json(new { success = true, data = executions, message = "Executions retrieved successfully" });
             }
             catch (Exception ex)
             {
@@ -345,7 +355,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var project = await _projectService.UpdateWorkflowDefinitionAsync(id, workflowDefinition);
-                return Ok(project, "Workflow updated successfully");
+                return Json(new { success = true, data = project, message = "Workflow updated successfully" });
             }
             catch (KeyNotFoundException)
             {
@@ -366,7 +376,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var project = await _projectService.UpdateOrchestratorSettingsAsync(id, orchestratorSettings);
-                return Ok(project, "Orchestrator settings updated successfully");
+                return Json(new { success = true, data = project, message = "Orchestrator settings updated successfully" });
             }
             catch (KeyNotFoundException)
             {
@@ -387,7 +397,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var project = await _projectService.UpdateIOConfigurationAsync(id, ioConfiguration);
-                return Ok(project, "I/O configuration updated successfully");
+                return Json(new { success = true, data = project, message = "I/O configuration updated successfully" });
             }
             catch (KeyNotFoundException)
             {
@@ -408,7 +418,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var (isValid, errors) = await _projectService.ValidateWorkflowAsync(id);
-                return Ok(new { isValid, errors }, isValid ? "Workflow is valid" : "Workflow validation failed");
+                return Json(new { success = true, data = new { isValid, errors }, message = isValid ? "Workflow is valid" : "Workflow validation failed" });
             }
             catch (KeyNotFoundException)
             {
@@ -429,7 +439,7 @@ namespace OptimalyAI.Controllers
             try
             {
                 var workflowTypes = await _projectService.GetWorkflowTypesAsync();
-                return Ok(workflowTypes, "Workflow types retrieved successfully");
+                return Json(new { success = true, data = workflowTypes, message = "Workflow types retrieved successfully" });
             }
             catch (Exception ex)
             {
