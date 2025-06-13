@@ -150,6 +150,15 @@ public class AppDbContext : DbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        // Automatické nastavení CreatedAt pro nové BaseEntity
+        var newBaseEntries = ChangeTracker.Entries<BaseEntity>()
+            .Where(e => e.State == EntityState.Added);
+
+        foreach (var entry in newBaseEntries)
+        {
+            entry.Entity.CreatedAt = DateTime.UtcNow;
+        }
+
         // Automatické nastavení UpdatedAt pro modifikované BaseEntity
         var baseEntries = ChangeTracker.Entries<BaseEntity>()
             .Where(e => e.State == EntityState.Modified);
@@ -157,6 +166,15 @@ public class AppDbContext : DbContext
         foreach (var entry in baseEntries)
         {
             entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Automatické nastavení CreatedAt pro nové BaseGuidEntity
+        var newGuidEntries = ChangeTracker.Entries<BaseGuidEntity>()
+            .Where(e => e.State == EntityState.Added);
+
+        foreach (var entry in newGuidEntries)
+        {
+            entry.Entity.CreatedAt = DateTime.UtcNow;
         }
 
         // Automatické nastavení UpdatedAt pro modifikované BaseGuidEntity

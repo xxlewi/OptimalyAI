@@ -260,8 +260,15 @@
                                            class="btn btn-info btn-sm ml-1" title="Detail projektu">
                                             <i class="fas fa-eye"></i>
                                         </a>
+                                        @if (project.Status != "Archived")
+                                        {
+                                            <button type="button" class="btn btn-warning btn-sm ml-1" 
+                                                    onclick="archiveProject('@project.Id', '@project.Name')" title="Archivovat projekt">
+                                                <i class="fas fa-archive"></i>
+                                            </button>
+                                        }
                                         <button type="button" class="btn btn-danger btn-sm ml-1" 
-                                                onclick="deleteProject('@project.Id')" title="Smazat projekt">
+                                                onclick="deleteProject('@project.Id', '@project.Name')" title="Smazat projekt">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -294,79 +301,49 @@
             window.location.href = '/Projects/' + projectId;
         }
         
-        function deleteProject(projectId) {
-            const projectRow = $(`button[onclick="deleteProject('${projectId}')"]`).closest('tr');
-            const projectName = projectRow.find('td:first strong a').text();
-            
-            Swal.fire({
-                title: 'Smazat projekt?',
-                text: `Co chcete udělat s projektem "${projectName}"?`,
-                icon: 'warning',
-                showCancelButton: true,
-                showDenyButton: true,
-                confirmButtonColor: '#ffc107',
-                denyButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: '<i class="fas fa-archive"></i> Archivovat',
-                denyButtonText: '<i class="fas fa-trash"></i> Trvale smazat',
-                cancelButtonText: 'Zrušit'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Archive project
-                    archiveProject(projectId, projectName);
-                } else if (result.isDenied) {
-                    // Delete permanently without additional confirmation
-                    deleteProjectPermanently(projectId, projectName);
-                }
-            });
+        function deleteProject(projectId, projectName) {
+            // Directly delete the project without confirmation
+            deleteProjectPermanently(projectId, projectName);
         }
         
         function archiveProject(projectId, projectName) {
             $.ajax({
-                url: `/Projects/api/${projectId}/archive`,
+                url: `/api/projects/${projectId}/archive`,
                 type: 'PUT',
                 success: function(response) {
-                    Swal.fire(
-                        'Archivováno!',
-                        `Projekt "${projectName}" byl úspěšně archivován.`,
-                        'success'
-                    ).then(() => {
+                    toastr.success(`Projekt "${projectName}" byl úspěšně archivován.`);
+                    setTimeout(() => {
                         window.location.reload();
-                    });
+                    }, 1000);
                 },
                 error: function(xhr) {
                     console.error('Archive error:', xhr);
                     const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nepodařilo se archivovat projekt';
-                    Swal.fire(
-                        'Chyba!',
-                        `Chyba při archivaci projektu: ${errorMessage}`,
-                        'error'
-                    );
+                    toastr.error(`Chyba při archivaci projektu: ${errorMessage}`);
                 }
             });
         }
         
         function deleteProjectPermanently(projectId, projectName) {
             $.ajax({
-                url: `/Projects/api/${projectId}/delete`,
+                url: `/api/projects/${projectId}`,
                 type: 'DELETE',
                 success: function(response) {
-                    Swal.fire(
-                        'Smazáno!',
-                        `Projekt "${projectName}" byl trvale smazán.`,
-                        'success'
-                    ).then(() => {
-                        window.location.reload();
+                    toastr.success(`Projekt "${projectName}" byl trvale smazán.`);
+                    // Remove the row with animation
+                    const projectRow = $(`button[onclick="deleteProject('${projectId}', '${projectName}')"]`).closest('tr');
+                    projectRow.fadeOut(400, function() {
+                        projectRow.remove();
+                        // Update filter count if exists
+                        if ($('#filterInfo').length > 0) {
+                            filterProjects();
+                        }
                     });
                 },
                 error: function(xhr) {
                     console.error('Delete error:', xhr);
                     const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nepodařilo se smazat projekt';
-                    Swal.fire(
-                        'Chyba!',
-                        `Chyba při mazání projektu: ${errorMessage}`,
-                        'error'
-                    );
+                    toastr.error(`Chyba při mazání projektu: ${errorMessage}`);
                 }
             });
         }

@@ -1,249 +1,279 @@
 @model IEnumerable<OAI.Core.DTOs.Customers.CustomerListDto>
 @using OAI.Core.Entities.Customers
 @{
-    ViewData["Title"] = "Zákazníci";
+    ViewData["Title"] = "Seznam zákazníků";
+    var customers = Model.ToList();
+    var totalCount = customers.Count;
+    var activeCount = customers.Count(c => c.Status == CustomerStatus.Active && !c.IsDeleted);
+    var archivedCount = customers.Count(c => c.IsDeleted);
+    var totalProjectsValue = customers.Sum(c => c.TotalProjectsValue);
 }
 
-<div class="content-header">
+<section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">Správa zákazníků</h1>
+                <h1>
+                    <i class="fas fa-users"></i> Zákazníci
+                    <small class="text-muted">CRM systém</small>
+                </h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
                     <li class="breadcrumb-item active">Zákazníci</li>
                 </ol>
             </div>
         </div>
     </div>
-</div>
+</section>
 
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row">
-                            <div class="col-sm-4">
-                                <a asp-action="Create" class="btn btn-primary">
-                                    <i class="fas fa-plus"></i> Nový zákazník
-                                </a>
-                            </div>
-                            <div class="col-sm-4 text-center">
-                                <div class="btn-group" role="group">
-                                    <a asp-action="Index" asp-route-showDeleted="false" class="btn @(ViewBag.ShowDeleted == false ? "btn-primary" : "btn-outline-primary")">
-                                        <i class="fas fa-users"></i> Aktivní
-                                    </a>
-                                    <a asp-action="Index" asp-route-showDeleted="true" class="btn @(ViewBag.ShowDeleted == true ? "btn-secondary" : "btn-outline-secondary")">
-                                        <i class="fas fa-archive"></i> Archivované
-                                    </a>
-                                </div>
-                            </div>
-                            <div class="col-sm-4">
-                                <div class="card-tools float-right">
-                                    <div class="input-group input-group-sm" style="width: 250px;">
-                                        <input type="text" id="customerSearch" class="form-control float-right" placeholder="Hledat zákazníka...">
-                                        <div class="input-group-append">
-                                            <button type="button" class="btn btn-default" onclick="searchCustomers()">
-                                                <i class="fas fa-search"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+        <!-- Stats Row -->
+        <div class="row mb-3">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@totalCount</h3>
+                        <p>Celkem zákazníků</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@activeCount</h3>
+                        <p>Aktivní zákazníci</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@customers.Sum(c => c.ActiveProjectsCount)</h3>
+                        <p>Aktivní projekty</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-project-diagram"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@totalProjectsValue.ToString("C0")</h3>
+                        <p>Celková hodnota</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Section -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchCustomers" 
+                                   placeholder="Vyhledat zákazníka..." autocomplete="off">
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-primary" onclick="filterCustomers()">
+                                    <i class="fas fa-search"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-hover text-nowrap">
-                            <thead>
-                                <tr>
-                                    <th>Název</th>
-                                    <th>IČO</th>
-                                    <th>Email</th>
-                                    <th>Telefon</th>
-                                    <th>Typ</th>
-                                    <th>Segment</th>
-                                    <th>Status</th>
-                                    @if (ViewBag.ShowDeleted == true)
-                                    {
-                                        <th>Archivován</th>
-                                    }
-                                    <th>Projekty</th>
-                                    <th>Požadavky</th>
-                                    <th>Akce</th>
-                                </tr>
-                            </thead>
-                            <tbody id="customerTableBody">
-                                @foreach (var customer in Model)
-                                {
-                                    <tr>
-                                        <td>
-                                            <a asp-action="Details" asp-route-id="@customer.Id" class="text-primary">
-                                                <strong>@customer.Name</strong>
+                    <div class="col-md-3">
+                        <select id="statusFilter" class="form-control" onchange="filterCustomers()">
+                            <option value="all">Všichni zákazníci</option>
+                            <option value="active">Pouze aktivní</option>
+                            <option value="archived">Pouze archivovaní</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <button type="button" class="btn btn-default" onclick="clearFilters()">
+                            <i class="fas fa-times"></i> Vymazat filtry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customers Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Seznam zákazníků</h3>
+                <div class="card-tools">
+                    <a href="@Url.Action("Create")" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Nový zákazník
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (customers.Any())
+                {
+                    <table class="table table-bordered table-striped table-hover" id="customersTable">
+                        <thead>
+                            <tr>
+                                <th>Zákazník</th>
+                                <th>Kontakt</th>
+                                <th>Segment</th>
+                                <th>Projekty</th>
+                                <th>Hodnota</th>
+                                <th style="width: 200px">Akce</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var customer in customers)
+                            {
+                                <tr data-status="@(customer.IsDeleted ? "Archived" : "Active")" data-name="@customer.Name.ToLower()" data-company="@customer.CompanyName?.ToLower()">
+                                    <td>
+                                        <div>
+                                            <strong>
+                                                <a href="@Url.Action("Details", new { id = customer.Id })" class="text-dark">
+                                                    @customer.Name
+                                                </a>
+                                            </strong>
+                                            @if (customer.Status == CustomerStatus.Active && !customer.IsDeleted)
+                                            {
+                                                <span class="badge badge-success float-right">Aktivní</span>
+                                            }
+                                            else if (customer.Status == CustomerStatus.Lead)
+                                            {
+                                                <span class="badge badge-info float-right">Potenciální</span>
+                                            }
+                                            else if (customer.IsDeleted)
+                                            {
+                                                <span class="badge badge-secondary float-right">Archivovaný</span>
+                                            }
+                                            <br>
+                                            <small class="text-muted">
                                                 @if (!string.IsNullOrEmpty(customer.CompanyName))
                                                 {
-                                                    <br />
-                                                    <small class="text-muted">@customer.CompanyName</small>
+                                                    @customer.CompanyName
                                                 }
-                                            </a>
-                                        </td>
-                                        <td>@(customer.CompanyName ?? "-")</td>
-                                        <td>
+                                                else
+                                                {
+                                                    <text>@GetTypeText(customer.Type)</text>
+                                                }
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <i class="fas fa-envelope text-muted"></i> 
                                             @if (!string.IsNullOrEmpty(customer.Email))
                                             {
-                                                <a href="mailto:@customer.Email">@customer.Email</a>
+                                                <a href="mailto:@customer.Email" class="text-muted">@customer.Email</a>
                                             }
                                             else
                                             {
                                                 <span class="text-muted">-</span>
                                             }
-                                        </td>
-                                        <td>@(customer.Phone ?? "-")</td>
-                                        <td>
-                                            <span class="badge badge-@(customer.Type switch {
-                                                CustomerType.Individual => "info",
-                                                CustomerType.Company => "primary",
-                                                CustomerType.Government => "warning",
-                                                CustomerType.NonProfit => "success",
-                                                _ => "secondary"
-                                            })">@GetTypeText(customer.Type)</span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-@(customer.Segment switch {
-                                                CustomerSegment.VIP => "danger",
-                                                CustomerSegment.Premium => "warning",
-                                                CustomerSegment.Strategic => "purple",
-                                                _ => "secondary"
-                                            })">@GetSegmentText(customer.Segment)</span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-@(customer.Status switch {
-                                                CustomerStatus.Active => "success",
-                                                CustomerStatus.Lead => "info",
-                                                CustomerStatus.Inactive => "secondary",
-                                                CustomerStatus.Suspended => "warning",
-                                                CustomerStatus.Blacklisted => "danger",
-                                                _ => "secondary"
-                                            })">@GetStatusText(customer.Status)</span>
-                                        </td>
-                                        @if (ViewBag.ShowDeleted == true)
-                                        {
-                                            <td>
-                                                @if (customer.IsDeleted && customer.DeletedAt.HasValue)
+                                            <br>
+                                            <small>
+                                                <i class="fas fa-phone text-muted"></i> 
+                                                @if (!string.IsNullOrEmpty(customer.Phone))
                                                 {
-                                                    <span class="text-danger">
-                                                        <i class="fas fa-archive"></i> @customer.DeletedAt.Value.ToString("dd.MM.yyyy HH:mm")
-                                                    </span>
+                                                    @customer.Phone
                                                 }
                                                 else
                                                 {
                                                     <span class="text-muted">-</span>
                                                 }
-                                            </td>
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <span class="badge badge-@(customer.Segment switch {
+                                                CustomerSegment.VIP => "danger",
+                                                CustomerSegment.Premium => "warning",
+                                                CustomerSegment.Strategic => "purple",
+                                                _ => "secondary"
+                                            })">
+                                                <i class="fas fa-crown"></i> @GetSegmentText(customer.Segment)
+                                            </span>
+                                            <br>
+                                            <small>
+                                                <span class="text-muted">Od @customer.CreatedAt.ToString("MM/yyyy")</span>
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <span class="badge badge-info">
+                                                <i class="fas fa-layer-group"></i> @customer.ProjectsCount projektů
+                                            </span>
+                                            <br>
+                                            <small>
+                                                <span class="text-success">@customer.ActiveProjectsCount aktivních</span>
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="text-center">
+                                            <strong>@customer.TotalProjectsValue.ToString("C0")</strong>
+                                            @if (customer.ProjectsCount > 0)
+                                            {
+                                                <div class="progress progress-xs">
+                                                    <div class="progress-bar bg-success" style="width: 100%"></div>
+                                                </div>
+                                                <small class="text-muted">@customer.ActiveProjectsCount aktivních</small>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@customer.Id" 
+                                           class="btn btn-success btn-sm" title="Nový projekt">
+                                            <i class="fas fa-plus"></i>
+                                        </a>
+                                        <a asp-action="Edit" asp-route-id="@customer.Id" 
+                                           class="btn btn-primary btn-sm ml-1" title="Upravit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a asp-action="Details" asp-route-id="@customer.Id" 
+                                           class="btn btn-info btn-sm ml-1" title="Detail">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        @if (!customer.IsDeleted)
+                                        {
+                                            <button type="button" class="btn btn-warning btn-sm ml-1" 
+                                                    onclick="archiveCustomer('@customer.Id', '@customer.Name')" title="Archivovat">
+                                                <i class="fas fa-archive"></i>
+                                            </button>
                                         }
-                                        <td>
-                                            <span class="text-primary">@customer.ActiveProjectsCount</span> / @customer.ProjectsCount
-                                        </td>
-                                        <td>
-                                            <span class="text-warning">@customer.ActiveRequestsCount</span> / @customer.RequestsCount
-                                        </td>
-                                        <td>
-                                            <div>
-                                                <a asp-action="Details" asp-route-id="@customer.Id" class="btn btn-info btn-sm mr-1" title="Detail">
-                                                    <i class="fas fa-eye"></i>
-                                                </a>
-                                                @if (!customer.IsDeleted)
-                                                {
-                                                    <a asp-action="Edit" asp-route-id="@customer.Id" class="btn btn-warning btn-sm mr-1" title="Upravit">
-                                                        <i class="fas fa-edit"></i>
-                                                    </a>
-                                                    <a asp-controller="Projects" asp-action="Create" asp-route-customerId="@customer.Id" class="btn btn-success btn-sm mr-1" title="Nový projekt">
-                                                        <i class="fas fa-project-diagram"></i>
-                                                    </a>
-                                                    <a asp-controller="Requests" asp-action="New" asp-route-customerId="@customer.Id" class="btn btn-info btn-sm" title="Nový požadavek">
-                                                        <i class="fas fa-plus-circle"></i>
-                                                    </a>
-                                                }
-                                                else
-                                                {
-                                                    <button class="btn btn-success btn-sm restore-customer-btn mr-1" data-customer-id="@customer.Id" title="Aktivovat">
-                                                        <i class="fas fa-undo"></i> Aktivovat
-                                                    </button>
-                                                    <button class="btn btn-danger btn-sm permanent-delete-customer-btn" data-customer-id="@customer.Id" title="Trvale smazat">
-                                                        <i class="fas fa-trash-alt"></i> Smazat
-                                                    </button>
-                                                }
-                                            </div>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                                        <button type="button" class="btn btn-danger btn-sm ml-1" 
+                                                onclick="deleteCustomer('@customer.Id', '@customer.Name')" title="Smazat">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">Žádní zákazníci</h4>
+                        <p class="text-muted">Zatím nemáte vytvořené žádné zákazníky.</p>
+                        <a href="@Url.Action("Create")" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Vytvořit prvního zákazníka
+                        </a>
                     </div>
-                </div>
-
-                <!-- Statistiky -->
-                <div class="row">
-                    <div class="col-md-3 col-sm-6 col-12">
-                        <div class="info-box">
-                            <span class="info-box-icon bg-info"><i class="fas fa-users"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Celkem zákazníků</span>
-                                <span class="info-box-number">@Model.Count()</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-sm-6 col-12">
-                        <div class="info-box">
-                            <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Aktivní zákazníci</span>
-                                <span class="info-box-number">@Model.Count(c => c.Status == CustomerStatus.Active)</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-sm-6 col-12">
-                        <div class="info-box">
-                            <span class="info-box-icon bg-warning"><i class="fas fa-project-diagram"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Aktivní projekty</span>
-                                <span class="info-box-number">@Model.Sum(c => c.ActiveProjectsCount)</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-sm-6 col-12">
-                        <div class="info-box">
-                            <span class="info-box-icon bg-danger"><i class="fas fa-dollar-sign"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Celková hodnota</span>
-                                <span class="info-box-number">@Model.Sum(c => c.TotalProjectsValue).ToString("C0")</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-3 col-sm-6 col-12">
-                        <div class="info-box">
-                            <span class="info-box-icon bg-purple"><i class="fas fa-file-alt"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Celkem požadavků</span>
-                                <span class="info-box-number">@Model.Sum(c => c.RequestsCount)</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-sm-6 col-12">
-                        <div class="info-box">
-                            <span class="info-box-icon bg-orange"><i class="fas fa-clock"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Aktivní požadavky</span>
-                                <span class="info-box-number">@Model.Sum(c => c.ActiveRequestsCount)</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                }
             </div>
         </div>
     </div>
@@ -251,124 +281,125 @@
 
 @section Scripts {
     <script>
-        function searchCustomers() {
-            var query = $('#customerSearch').val();
-            $.get('@Url.Action("Search")', { query: query }, function(data) {
-                $('#customerTableBody').html(data);
+        function archiveCustomer(customerId, customerName) {
+            $.ajax({
+                url: '@Url.Action("Delete", "Customers")/' + customerId,
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success(`Zákazník "${customerName}" byl úspěšně archivován.`);
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        toastr.error(response.message || 'Nepodařilo se archivovat zákazníka');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při archivaci zákazníka';
+                    toastr.error(errorMessage);
+                }
             });
         }
-
-        $('#customerSearch').on('keypress', function(e) {
-            if (e.which === 13) {
-                searchCustomers();
-            }
-        });
-
-        // Obnovení zákazníka
-        $(document).on('click', '.restore-customer-btn', function() {
-            var customerId = $(this).data('customer-id');
-            
-            Swal.fire({
-                title: 'Aktivovat zákazníka?',
-                text: 'Zákazník bude obnoven ze stavu archivován.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Ano, aktivovat!',
-                cancelButtonText: 'Zrušit'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: '@Url.Action("Restore", "Customers")/' + customerId,
-                        type: 'POST',
-                        headers: {
-                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                Swal.fire(
-                                    'Aktivován!',
-                                    response.message,
-                                    'success'
-                                ).then(() => {
-                                    location.reload();
-                                });
-                            } else {
-                                Swal.fire(
-                                    'Chyba!',
-                                    response.message,
-                                    'error'
-                                );
+        
+        function deleteCustomer(customerId, customerName) {
+            // Directly delete the customer without confirmation
+            deleteCustomerPermanently(customerId, customerName);
+        }
+        
+        function deleteCustomerPermanently(customerId, customerName) {
+            $.ajax({
+                url: '@Url.Action("PermanentDelete", "Customers")/' + customerId,
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success(`Zákazník "${customerName}" byl trvale smazán.`);
+                        // Remove the row with animation
+                        const customerRow = $(`button[onclick="deleteCustomer('${customerId}', '${customerName}')"]`).closest('tr');
+                        customerRow.fadeOut(400, function() {
+                            customerRow.remove();
+                            // Update filter count if exists
+                            if ($('#filterInfo').length > 0) {
+                                filterCustomers();
                             }
-                        },
-                        error: function() {
-                            Swal.fire(
-                                'Chyba!',
-                                'Nastala chyba při aktivaci zákazníka.',
-                                'error'
-                            );
-                        }
-                    });
-                }
-            });
-        });
-
-        // Trvalé smazání zákazníka
-        $(document).on('click', '.permanent-delete-customer-btn', function() {
-            var customerId = $(this).data('customer-id');
-            
-            Swal.fire({
-                title: 'Trvale smazat zákazníka?',
-                text: 'POZOR! Tato akce je NEVRATNÁ. Zákazník bude trvale odstraněn ze systému.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Ano, trvale smazat!',
-                cancelButtonText: 'Zrušit',
-                input: 'text',
-                inputPlaceholder: 'Napište SMAZAT pro potvrzení',
-                inputValidator: (value) => {
-                    if (value !== 'SMAZAT') {
-                        return 'Musíte napsat SMAZAT pro potvrzení!'
+                        });
+                    } else {
+                        toastr.error(response.message || 'Nepodařilo se smazat zákazníka');
                     }
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: '@Url.Action("PermanentDelete", "Customers")/' + customerId,
-                        type: 'POST',
-                        headers: {
-                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                Swal.fire(
-                                    'Smazáno!',
-                                    response.message,
-                                    'success'
-                                ).then(() => {
-                                    location.reload();
-                                });
-                            } else {
-                                Swal.fire(
-                                    'Chyba!',
-                                    response.message,
-                                    'error'
-                                );
-                            }
-                        },
-                        error: function() {
-                            Swal.fire(
-                                'Chyba!',
-                                'Nastala chyba při mazání zákazníka.',
-                                'error'
-                            );
-                        }
-                    });
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při mazání zákazníka';
+                    toastr.error(errorMessage);
                 }
             });
+        }
+        
+        function filterCustomers() {
+            const searchTerm = $('#searchCustomers').val().toLowerCase();
+            const statusFilter = $('#statusFilter').val();
+            
+            $('#customersTable tbody tr').each(function() {
+                const row = $(this);
+                const status = row.attr('data-status');
+                const name = row.attr('data-name') || '';
+                const company = row.attr('data-company') || '';
+                const email = row.find('td:eq(1) a[href^="mailto:"]').text().toLowerCase();
+                
+                // Status filter
+                let statusMatch = true;
+                if (statusFilter === 'active') {
+                    statusMatch = status === 'Active';
+                } else if (statusFilter === 'archived') {
+                    statusMatch = status === 'Archived';
+                }
+                
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    name.includes(searchTerm) || 
+                    company.includes(searchTerm) ||
+                    email.includes(searchTerm);
+                
+                if (statusMatch && searchMatch) {
+                    row.show();
+                } else {
+                    row.hide();
+                }
+            });
+            
+            // Zobrazit počet filtrovaných zákazníků
+            const visibleCount = $('#customersTable tbody tr:visible').length;
+            const totalCount = $('#customersTable tbody tr').length;
+            
+            if (visibleCount < totalCount) {
+                if ($('#filterInfo').length === 0) {
+                    $('.card-header').append(`<span id="filterInfo" class="float-right text-muted"></span>`);
+                }
+                $('#filterInfo').text(`Zobrazeno ${visibleCount} z ${totalCount} zákazníků`);
+            } else {
+                $('#filterInfo').remove();
+            }
+        }
+        
+        function clearFilters() {
+            $('#searchCustomers').val('');
+            $('#statusFilter').val('all');
+            filterCustomers();
+        }
+        
+        // Real-time search při psaní
+        $('#searchCustomers').on('keyup', function() {
+            filterCustomers();
+        });
+        
+        $(document).ready(function() {
+            // Aplikovat výchozí filtr při načtení stránky
+            filterCustomers();
         });
     </script>
 }

@@ -380,37 +380,36 @@
         }
 
         function deleteRequest(requestId) {
-            Swal.fire({
-                title: 'Smazat požadavek?',
-                text: 'Tato akce je nevratná. Požadavek bude trvale odstraněn.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Ano, smazat!',
-                cancelButtonText: 'Zrušit'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: `/api/requestsapi/${requestId}`,
-                        method: 'DELETE',
-                        success: function() {
-                            Swal.fire(
-                                'Smazáno!',
-                                'Požadavek byl úspěšně smazán.',
-                                'success'
-                            );
-                            loadRequests();
-                            updateStats();
-                        },
-                        error: function() {
-                            Swal.fire(
-                                'Chyba!',
-                                'Nepodařilo se smazat požadavek.',
-                                'error'
-                            );
+            // Get request info from the row
+            const requestRow = $(`button[onclick="deleteRequest(${requestId})"]`).closest('tr');
+            const requestTitle = requestRow.find('td:first strong a').text();
+            
+            // Delete directly without confirmation
+            $.ajax({
+                url: `/api/requestsapi/${requestId}`,
+                method: 'DELETE',
+                success: function() {
+                    toastr.success(`Požadavek "${requestTitle}" byl úspěšně smazán.`);
+                    
+                    // Remove the row with animation
+                    requestRow.fadeOut(400, function() {
+                        requestRow.remove();
+                        updateStats();
+                        
+                        // Update filter count if exists
+                        if ($('#filterInfo').length > 0) {
+                            filterRequests();
+                        }
+                        
+                        // If no rows left, show empty message
+                        if ($('#requests-tbody tr').length === 0) {
+                            $('#requests-tbody').append('<tr><td colspan="7" class="text-center">Žádné požadavky nenalezeny</td></tr>');
                         }
                     });
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nepodařilo se smazat požadavek';
+                    toastr.error(`Chyba při mazání požadavku: ${errorMessage}`);
                 }
             });
         }

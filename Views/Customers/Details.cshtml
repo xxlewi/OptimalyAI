@@ -278,11 +278,14 @@
                             <a asp-controller="Requests" asp-action="New" asp-route-customerId="@Model.Id" class="btn btn-info btn-block">
                                 <i class="fas fa-plus"></i> Nový požadavek
                             </a>
-                            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning btn-block">
+                            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary btn-block">
                                 <i class="fas fa-edit"></i> Upravit zákazníka
                             </a>
-                            <button id="deleteCustomerBtn" class="btn btn-danger btn-block" data-customer-id="@Model.Id">
-                                <i class="fas fa-trash"></i> Archivovat zákazníka
+                            <button id="archiveCustomerBtn" class="btn btn-warning btn-block" data-customer-id="@Model.Id" data-customer-name="@Model.Name">
+                                <i class="fas fa-archive"></i> Archivovat zákazníka
+                            </button>
+                            <button id="deleteCustomerBtn" class="btn btn-danger btn-block" data-customer-id="@Model.Id" data-customer-name="@Model.Name">
+                                <i class="fas fa-trash"></i> Trvale smazat zákazníka
                             </button>
                         }
                         else
@@ -540,51 +543,60 @@
 @section Scripts {
     <script>
         $(document).ready(function() {
+            // Archivace zákazníka
+            $('#archiveCustomerBtn').click(function() {
+                var customerId = $(this).data('customer-id');
+                var customerName = $(this).data('customer-name');
+                
+                // Archivovat přímo bez potvrzení
+                $.ajax({
+                    url: '@Url.Action("Delete", "Customers")/' + customerId,
+                    type: 'POST',
+                    headers: {
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.success(`Zákazník "${customerName}" byl úspěšně archivován.`);
+                            setTimeout(() => {
+                                window.location.href = '@Url.Action("Index", "Customers")';
+                            }, 1000);
+                        } else {
+                            toastr.error(response.message || 'Nepodařilo se archivovat zákazníka');
+                        }
+                    },
+                    error: function(xhr) {
+                        const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při archivaci zákazníka';
+                        toastr.error(errorMessage);
+                    }
+                });
+            });
+            
+            // Trvalé smazání zákazníka
             $('#deleteCustomerBtn').click(function() {
                 var customerId = $(this).data('customer-id');
+                var customerName = $(this).data('customer-name');
                 
-                Swal.fire({
-                    title: 'Smazat zákazníka?',
-                    text: 'Tato akce je nevratná. Zákazník bude archivován.',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'Ano, smazat!',
-                    cancelButtonText: 'Zrušit'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $.ajax({
-                            url: '@Url.Action("Delete", "Customers")/' + customerId,
-                            type: 'POST',
-                            headers: {
-                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                            },
-                            success: function(response) {
-                                if (response.success) {
-                                    Swal.fire(
-                                        'Smazáno!',
-                                        response.message,
-                                        'success'
-                                    ).then(() => {
-                                        window.location.href = '@Url.Action("Index", "Customers")';
-                                    });
-                                } else {
-                                    Swal.fire(
-                                        'Chyba!',
-                                        response.message,
-                                        'error'
-                                    );
-                                }
-                            },
-                            error: function() {
-                                Swal.fire(
-                                    'Chyba!',
-                                    'Nastala chyba při mazání zákazníka.',
-                                    'error'
-                                );
-                            }
-                        });
+                // Smazat přímo bez potvrzení
+                $.ajax({
+                    url: '@Url.Action("PermanentDelete", "Customers")/' + customerId,
+                    type: 'POST',
+                    headers: {
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.success(`Zákazník "${customerName}" byl trvale smazán.`);
+                            setTimeout(() => {
+                                window.location.href = '@Url.Action("Index", "Customers")';
+                            }, 1000);
+                        } else {
+                            toastr.error(response.message || 'Nepodařilo se smazat zákazníka');
+                        }
+                    },
+                    error: function(xhr) {
+                        const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při mazání zákazníka';
+                        toastr.error(errorMessage);
                     }
                 });
             });
@@ -594,48 +606,26 @@
         $('#restoreCustomerBtn').click(function() {
             var customerId = $(this).data('customer-id');
             
-            Swal.fire({
-                title: 'Aktivovat zákazníka?',
-                text: 'Zákazník bude obnoven ze stavu archivován.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Ano, aktivovat!',
-                cancelButtonText: 'Zrušit'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: '@Url.Action("Restore", "Customers")/' + customerId,
-                        type: 'POST',
-                        headers: {
-                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                Swal.fire(
-                                    'Aktivován!',
-                                    response.message,
-                                    'success'
-                                ).then(() => {
-                                    location.reload();
-                                });
-                            } else {
-                                Swal.fire(
-                                    'Chyba!',
-                                    response.message,
-                                    'error'
-                                );
-                            }
-                        },
-                        error: function() {
-                            Swal.fire(
-                                'Chyba!',
-                                'Nastala chyba při aktivaci zákazníka.',
-                                'error'
-                            );
-                        }
-                    });
+            // Obnovit přímo bez potvrzení
+            $.ajax({
+                url: '@Url.Action("Restore", "Customers")/' + customerId,
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success(response.message || 'Zákazník byl úspěšně aktivován');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        toastr.error(response.message || 'Nepodařilo se aktivovat zákazníka');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při aktivaci zákazníka';
+                    toastr.error(errorMessage);
                 }
             });
         });
@@ -644,55 +634,26 @@
         $('#permanentDeleteCustomerBtn').click(function() {
             var customerId = $(this).data('customer-id');
             
-            Swal.fire({
-                title: 'Trvale smazat zákazníka?',
-                text: 'POZOR! Tato akce je NEVRATNÁ. Zákazník bude trvale odstraněn ze systému.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Ano, trvale smazat!',
-                cancelButtonText: 'Zrušit',
-                input: 'text',
-                inputPlaceholder: 'Napište SMAZAT pro potvrzení',
-                inputValidator: (value) => {
-                    if (value !== 'SMAZAT') {
-                        return 'Musíte napsat SMAZAT pro potvrzení!'
+            // Smazat přímo bez potvrzení
+            $.ajax({
+                url: '@Url.Action("PermanentDelete", "Customers")/' + customerId,
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success(response.message || 'Zákazník byl trvale smazán');
+                        setTimeout(() => {
+                            window.location.href = '@Url.Action("Index", "Customers")';
+                        }, 1000);
+                    } else {
+                        toastr.error(response.message || 'Nepodařilo se smazat zákazníka');
                     }
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: '@Url.Action("PermanentDelete", "Customers")/' + customerId,
-                        type: 'POST',
-                        headers: {
-                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                Swal.fire(
-                                    'Smazáno!',
-                                    response.message,
-                                    'success'
-                                ).then(() => {
-                                    window.location.href = '@Url.Action("Index", "Customers")';
-                                });
-                            } else {
-                                Swal.fire(
-                                    'Chyba!',
-                                    response.message,
-                                    'error'
-                                );
-                            }
-                        },
-                        error: function() {
-                            Swal.fire(
-                                'Chyba!',
-                                'Nastala chyba při mazání zákazníka.',
-                                'error'
-                            );
-                        }
-                    });
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při mazání zákazníka';
+                    toastr.error(errorMessage);
                 }
             });
         });
@@ -702,59 +663,32 @@
             var requestId = $(this).data('request-id');
             var requestTitle = $(this).data('request-title');
             
-            Swal.fire({
-                title: 'Konvertovat požadavek na projekt?',
-                text: `Požadavek "${requestTitle}" bude konvertován na nový projekt.`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Ano, konvertovat!',
-                cancelButtonText: 'Zrušit'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: '/api/customer-requests/' + requestId + '/convert-to-project',
-                        type: 'POST',
-                        headers: {
-                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                Swal.fire({
-                                    title: 'Úspěch!',
-                                    text: response.message,
-                                    icon: 'success',
-                                    showCancelButton: true,
-                                    confirmButtonText: 'Zobrazit projekt',
-                                    cancelButtonText: 'Zavřít'
-                                }).then((result) => {
-                                    if (result.isConfirmed) {
-                                        window.location.href = '/Projects/Details/' + response.data.id;
-                                    } else {
-                                        location.reload();
-                                    }
-                                });
+            // Konvertovat přímo bez potvrzení
+            $.ajax({
+                url: '/api/customer-requests/' + requestId + '/convert-to-project',
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success(response.message || `Požadavek "${requestTitle}" byl úspěšně konvertován na projekt`);
+                        
+                        // Po 2 sekundách přesměrovat na detail projektu
+                        setTimeout(() => {
+                            if (response.data && response.data.id) {
+                                window.location.href = '/Projects/Details/' + response.data.id;
                             } else {
-                                Swal.fire(
-                                    'Chyba!',
-                                    response.message || 'Nastala chyba při konverzi požadavku.',
-                                    'error'
-                                );
+                                location.reload();
                             }
-                        },
-                        error: function(xhr) {
-                            var errorMessage = 'Nastala chyba při konverzi požadavku.';
-                            if (xhr.responseJSON && xhr.responseJSON.message) {
-                                errorMessage = xhr.responseJSON.message;
-                            }
-                            Swal.fire(
-                                'Chyba!',
-                                errorMessage,
-                                'error'
-                            );
-                        }
-                    });
+                        }, 2000);
+                    } else {
+                        toastr.error(response.message || 'Nastala chyba při konverzi požadavku');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při konverzi požadavku';
+                    toastr.error(errorMessage);
                 }
             });
         });
