@@ -44,19 +44,27 @@
                             
                             <div class="form-group">
                                 <label>Zákazník</label>
-                                <div class="input-group">
-                                    <select class="form-control" id="customerId" name="customerId">
-                                        <option value="">-- Vyberte zákazníka --</option>
-                                    </select>
-                                    <div class="input-group-append">
-                                        <button type="button" class="btn btn-primary" id="newCustomerBtn" data-toggle="modal" data-target="#newCustomerModal">
-                                            <i class="fas fa-plus"></i> Nový
-                                        </button>
+                                <select class="form-control" id="customerId" name="customerId">
+                                    <option value="">-- Vyberte zákazníka --</option>
+                                    <option value="new">➕ Nový zákazník (rychlé vytvoření)</option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    Můžete vybrat existujícího zákazníka nebo vytvořit nového
+                                </small>
+                            </div>
+                            
+                            <!-- Quick customer creation -->
+                            <div id="quickCustomerSection" style="display: none;">
+                                <div class="card bg-warning">
+                                    <div class="card-body">
+                                        <div class="form-group mb-0">
+                                            <label>Jméno zákazníka <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="quickCustomerName" 
+                                                   placeholder="Jan Novák nebo Firma s.r.o.">
+                                            <small class="form-text text-muted">Zákazník bude automaticky vytvořen při uložení požadavku</small>
+                                        </div>
                                     </div>
                                 </div>
-                                <small class="form-text text-muted">
-                                    Můžete vybrat existujícího zákazníka nebo přidat později
-                                </small>
                             </div>
                             
                             <!-- Hidden fields with default values -->
@@ -79,45 +87,6 @@
     </div>
 </section>
 
-<!-- New Customer Modal -->
-<div class="modal fade" id="newCustomerModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Nový zákazník</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <form id="newCustomerForm">
-                    <div class="form-group">
-                        <label>Název zákazníka <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="customerName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" class="form-control" id="customerEmail">
-                    </div>
-                    <div class="form-group">
-                        <label>Telefon</label>
-                        <input type="tel" class="form-control" id="customerPhone">
-                    </div>
-                    <div class="form-group">
-                        <label>Název společnosti</label>
-                        <input type="text" class="form-control" id="customerCompany">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                <button type="button" class="btn btn-primary" id="saveCustomerBtn">
-                    <i class="fas fa-save"></i> Uložit
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 @section Scripts {
     <script>
@@ -147,58 +116,45 @@
                 $(this).removeClass('is-invalid');
             });
             
-            // Save new customer
-            $('#saveCustomerBtn').click(function() {
-                const customerData = {
-                    name: $('#customerName').val(),
-                    email: $('#customerEmail').val() || null,
-                    phone: $('#customerPhone').val() || null,
-                    companyName: $('#customerCompany').val() || null
-                };
+            // Handle customer selection change
+            $('#customerId').on('change', function() {
+                const selectedValue = $(this).val();
                 
-                if (!customerData.name) {
-                    Swal.fire('Chyba', 'Název zákazníka je povinný', 'error');
-                    return;
+                if (selectedValue === 'new') {
+                    $('#quickCustomerSection').slideDown();
+                    $('#quickCustomerName').focus();
+                } else {
+                    $('#quickCustomerSection').slideUp();
+                    $('#quickCustomerName').val('');
                 }
-                
-                $.ajax({
-                    url: '/Customers/CreateJson',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(customerData),
-                    success: function(response) {
-                        if (response.success && response.data) {
-                            $('#newCustomerModal').modal('hide');
-                            $('#newCustomerForm')[0].reset();
-                            
-                            // Reload customers and select the new one
-                            loadCustomers(response.data.id);
-                            
-                            Swal.fire('Úspěch', 'Zákazník byl vytvořen', 'success');
-                        }
-                    },
-                    error: function() {
-                        Swal.fire('Chyba', 'Nepodařilo se vytvořit zákazníka', 'error');
-                    }
-                });
             });
         });
         
         function loadCustomers(selectedId = null) {
             $.ajax({
-                url: '/Customers/GetJson',
+                url: '/api/customersapi',
                 method: 'GET',
                 success: function(response) {
                     const select = $('#customerId');
+                    const currentValue = select.val();
+                    
                     select.empty();
                     select.append('<option value="">-- Vyberte zákazníka --</option>');
+                    select.append('<option value="new">➕ Nový zákazník (rychlé vytvoření)</option>');
                     
                     if (response.data && response.data.length > 0) {
+                        select.append('<optgroup label="Existující zákazníci">');
                         response.data.forEach(customer => {
                             const selected = (selectedId && customer.id == selectedId) ? 'selected' : '';
                             const companyInfo = customer.companyName ? ` (${customer.companyName})` : '';
                             select.append(`<option value="${customer.id}" ${selected}>${customer.name}${companyInfo}</option>`);
                         });
+                        select.append('</optgroup>');
+                    }
+                    
+                    // Restore previous selection if it was "new"
+                    if (currentValue === 'new') {
+                        select.val('new');
                     }
                     
                     // Check if there's a pre-selected customer from URL
@@ -212,22 +168,60 @@
         }
         
         function createRequest() {
-            const selectedCustomer = $('#customerId option:selected');
-            const customerId = $('#customerId').val();
+            const selectedValue = $('#customerId').val();
+            const submitBtn = $('#newRequestForm button[type="submit"]');
+            submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Vytváření...');
             
+            // If new customer is selected, create customer first
+            if (selectedValue === 'new') {
+                const customerName = $('#quickCustomerName').val().trim();
+                
+                if (!customerName) {
+                    Swal.fire('Chyba', 'Název zákazníka je povinný', 'error');
+                    submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
+                    return;
+                }
+                
+                // Create customer first
+                $.ajax({
+                    url: '/api/customersapi',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        name: customerName,
+                        companyName: customerName
+                    }),
+                    success: function(customerResponse) {
+                        if (customerResponse.success && customerResponse.data) {
+                            // Now create request with the new customer
+                            submitRequestWithCustomer(customerResponse.data.id.toString(), customerResponse.data.name);
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Chyba', 'Nepodařilo se vytvořit zákazníka', 'error');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
+                    }
+                });
+            } else {
+                // Use existing customer or no customer
+                const selectedCustomer = $('#customerId option:selected');
+                const clientId = selectedValue || null;
+                const clientName = clientId && selectedValue !== '' ? selectedCustomer.text().split(' (')[0] : null;
+                submitRequestWithCustomer(clientId, clientName);
+            }
+        }
+        
+        function submitRequestWithCustomer(clientId, clientName) {
             const formData = {
                 requestType: $('#requestType').val(),
                 title: $('#title').val(),
                 description: $('#description').val(),
                 priority: parseInt($('#priority').val()),
-                status: 0, // Draft status
-                clientId: customerId || null,
-                clientName: customerId ? selectedCustomer.text().split(' (')[0] : null
+                clientId: clientId,
+                clientName: clientName
             };
             
-            // Disable submit button
             const submitBtn = $('#newRequestForm button[type="submit"]');
-            submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Vytváření...');
             
             $.ajax({
                 url: '/api/requestsapi',
@@ -236,23 +230,8 @@
                 data: JSON.stringify(formData),
                 success: function(response) {
                     if (response.success && response.data) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Požadavek vytvořen!',
-                            text: `Požadavek "${response.data.title}" byl úspěšně vytvořen`,
-                            showCancelButton: true,
-                            confirmButtonText: 'Zobrazit detail',
-                            cancelButtonText: 'Vytvořit další'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                window.location.href = `/Requests/${response.data.id}`;
-                            } else {
-                                // Reset form
-                                $('#newRequestForm')[0].reset();
-                                $('#title').focus();
-                                submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
-                            }
-                        });
+                        // Rovnou přesměrovat na detail
+                        window.location.href = `/Requests/${response.data.id}`;
                     }
                 },
                 error: function(xhr) {

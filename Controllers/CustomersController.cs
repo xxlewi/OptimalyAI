@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Customers;
 using OAI.Core.Entities.Customers;
 using OAI.ServiceLayer.Services.Customers;
+using OAI.ServiceLayer.Services.Business;
 using OptimalyAI.ViewModels;
 
 namespace OptimalyAI.Controllers
@@ -17,13 +18,16 @@ namespace OptimalyAI.Controllers
     public class CustomersController : Controller
     {
         private readonly ICustomerService _customerService;
+        private readonly IBusinessRequestService _businessRequestService;
         private readonly ILogger<CustomersController> _logger;
 
         public CustomersController(
             ICustomerService customerService,
+            IBusinessRequestService businessRequestService,
             ILogger<CustomersController> logger)
         {
             _customerService = customerService;
+            _businessRequestService = businessRequestService;
             _logger = logger;
         }
 
@@ -80,6 +84,9 @@ namespace OptimalyAI.Controllers
                 
                 _logger.LogInformation("Customer {Id} has {ProjectCount} projects", id, customer.RecentProjects?.Count ?? 0);
                 
+                // Načíst BusinessRequest požadavky pro tohoto zákazníka
+                var businessRequests = await _businessRequestService.GetRequestsByClientAsync(id.ToString());
+                
                 var viewModel = new CustomerDetailViewModel
                 {
                     Id = customer.Id,
@@ -118,7 +125,8 @@ namespace OptimalyAI.Controllers
                         ReceivedDate = r.ReceivedDate,
                         RequestedDeadline = r.RequestedDeadline,
                         ProjectId = r.ProjectId
-                    }).ToList() ?? new List<RequestViewModel>()
+                    }).ToList() ?? new List<RequestViewModel>(),
+                    BusinessRequests = businessRequests.OrderByDescending(r => r.CreatedAt).Take(10).ToList()
                 };
 
                 // Sestavení adres

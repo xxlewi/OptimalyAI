@@ -16,7 +16,11 @@ try
 
     // Add services to the container
     builder.Services.AddControllersWithViews()
-        .AddRazorRuntimeCompilation();
+        .AddRazorRuntimeCompilation()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        });
 
     // Add OptimalyAI services - automatická registrace všech služeb
     builder.Services.AddOptimalyAI(builder.Configuration);

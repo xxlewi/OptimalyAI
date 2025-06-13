@@ -3,6 +3,11 @@ using OptimalyAI.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OAI.Core.Interfaces;
+using OAI.Core.Entities.Projects;
+using System.Threading.Tasks;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace OptimalyAI.Controllers
 {
@@ -11,16 +16,25 @@ namespace OptimalyAI.Controllers
     /// </summary>
     public class WorkflowDesignerController : Controller
     {
-        // In-memory storage pro demo
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ILogger<WorkflowDesignerController> _logger;
+        
+        // In-memory storage pro rychlý přístup (cache)
         private static Dictionary<Guid, WorkflowGraphViewModel> _workflows = new();
         
+        public WorkflowDesignerController(IUnitOfWork unitOfWork, ILogger<WorkflowDesignerController> logger)
+        {
+            _unitOfWork = unitOfWork;
+            _logger = logger;
+        }
+        
         [HttpGet]
-        public IActionResult Index(Guid projectId)
+        public async Task<IActionResult> Index(Guid projectId)
         {
             // Získej nebo vytvoř workflow
             if (!_workflows.ContainsKey(projectId))
             {
-                _workflows[projectId] = CreateDefaultWorkflow(projectId);
+                _workflows[projectId] = await CreateDefaultWorkflowAsync(projectId);
             }
             
             var workflow = _workflows[projectId];
@@ -41,18 +55,43 @@ namespace OptimalyAI.Controllers
         }
         
         [HttpGet]
-        public IActionResult LoadWorkflow(Guid projectId)
+        public async Task<IActionResult> LoadWorkflow(Guid projectId)
         {
             WorkflowGraphViewModel workflow;
             
+            // Check in-memory cache first
             if (_workflows.ContainsKey(projectId))
             {
                 workflow = _workflows[projectId];
             }
             else
             {
-                // Create a basic workflow if none exists
-                workflow = CreateDefaultWorkflow(projectId);
+                // Try to load from database
+                var repository = _unitOfWork.GetGuidRepository<ProjectWorkflow>();
+                var projectWorkflows = await repository.GetAsync(w => w.ProjectId == projectId && w.IsActive);
+                var projectWorkflow = projectWorkflows.FirstOrDefault();
+                
+                if (projectWorkflow != null && !string.IsNullOrEmpty(projectWorkflow.StepsDefinition))
+                {
+                    try
+                    {
+                        // Parse the saved workflow definition
+                        var workflowData = JsonSerializer.Deserialize<dynamic>(projectWorkflow.StepsDefinition);
+                        workflow = await CreateWorkflowFromDatabaseAsync(projectId, workflowData);
+                    }
+                    catch
+                    {
+                        // If parsing fails, create default
+                        workflow = await CreateDefaultWorkflowAsync(projectId);
+                    }
+                }
+                else
+                {
+                    // Create a basic workflow if none exists
+                    workflow = await CreateDefaultWorkflowAsync(projectId);
+                }
+                
+                // Cache it
                 _workflows[projectId] = workflow;
             }
             
@@ -82,12 +121,17 @@ namespace OptimalyAI.Controllers
             });
         }
         
-        private WorkflowGraphViewModel CreateDefaultWorkflow(Guid projectId)
+        private async Task<WorkflowGraphViewModel> CreateDefaultWorkflowAsync(Guid projectId)
         {
+            // Get project name from database
+            var projectRepository = _unitOfWork.GetGuidRepository<Project>();
+            var project = await projectRepository.GetByIdAsync(projectId);
+            var projectName = project?.Name ?? "Nový projekt";
+            
             var workflow = new WorkflowGraphViewModel
             {
                 ProjectId = projectId,
-                ProjectName = "Nový projekt",
+                ProjectName = projectName,
                 Metadata = new WorkflowMetadata
                 {
                     Description = "Workflow pro zpracování požadavků",
@@ -96,6 +140,16 @@ namespace OptimalyAI.Controllers
             };
             
             // Prázdné workflow - uživatel si vytvoří vlastní uzly
+            
+            return workflow;
+        }
+        
+        private async Task<WorkflowGraphViewModel> CreateWorkflowFromDatabaseAsync(Guid projectId, dynamic workflowData)
+        {
+            var workflow = await CreateDefaultWorkflowAsync(projectId);
+            
+            // Workflow data is already loaded in LoadWorkflow as metadata.orchestratorData
+            workflow.Metadata.OrchestratorData = workflowData;
             
             return workflow;
         }
@@ -112,7 +166,7 @@ namespace OptimalyAI.Controllers
         }
         
         [HttpPost]
-        public IActionResult SaveWorkflow([FromBody] SaveWorkflowRequest request)
+        public async Task<IActionResult> SaveWorkflow([FromBody] SaveWorkflowRequest request)
         {
             if (request == null || request.ProjectId == Guid.Empty)
             {
@@ -121,6 +175,8 @@ namespace OptimalyAI.Controllers
             
             try
             {
+                _logger.LogInformation("SaveWorkflow called for project {ProjectId}", request.ProjectId);
+                
                 // Get existing workflow or create new one
                 WorkflowGraphViewModel workflow;
                 if (_workflows.ContainsKey(request.ProjectId))
@@ -129,14 +185,7 @@ namespace OptimalyAI.Controllers
                 }
                 else
                 {
-                    workflow = new WorkflowGraphViewModel
-                    {
-                        ProjectId = request.ProjectId,
-                        ProjectName = "Workflow " + request.ProjectId,
-                        Nodes = new List<WorkflowNode>(),
-                        Edges = new List<WorkflowEdge>(),
-                        Metadata = new WorkflowMetadata()
-                    };
+                    workflow = await CreateDefaultWorkflowAsync(request.ProjectId);
                 }
                 
                 // Update workflow data
@@ -148,16 +197,16 @@ namespace OptimalyAI.Controllers
                 if (request.WorkflowData != null)
                 {
                     var workflowDataJson = System.Text.Json.JsonSerializer.Serialize(request.WorkflowData);
-                    var orchestratorData = System.Text.Json.JsonSerializer.Deserialize<dynamic>(workflowDataJson);
                     
                     // Clear existing nodes and edges
                     workflow.Nodes.Clear();
                     workflow.Edges.Clear();
                     
-                    // Recreate nodes from orchestrator data
-                    if (orchestratorData != null)
+                    try
                     {
-                        var jsonElement = (System.Text.Json.JsonElement)orchestratorData;
+                        // Parse as JsonElement instead of dynamic
+                        using var doc = System.Text.Json.JsonDocument.Parse(workflowDataJson);
+                        var jsonElement = doc.RootElement;
                         
                         // Get node positions from metadata
                         var nodePositions = new Dictionary<string, NodePosition>();
@@ -263,15 +312,72 @@ namespace OptimalyAI.Controllers
                             }
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not parse workflow data for visualization");
+                    }
                 }
                 
-                // Store in memory for now (TODO: save to database)
+                // Store in memory cache
                 _workflows[request.ProjectId] = workflow;
                 
-                return Json(new { success = true, message = "Workflow uloženo" });
+                // Save to database
+                _logger.LogInformation("Saving workflow to database...");
+                var repository = _unitOfWork.GetGuidRepository<ProjectWorkflow>();
+                var projectWorkflows = await repository.GetAsync(w => w.ProjectId == request.ProjectId && w.IsActive);
+                var projectWorkflow = projectWorkflows.FirstOrDefault();
+                
+                if (projectWorkflow == null)
+                {
+                    _logger.LogInformation("Creating new workflow record...");
+                    // Create new workflow record
+                    projectWorkflow = new ProjectWorkflow
+                    {
+                        ProjectId = request.ProjectId,
+                        Name = workflow.ProjectName + " Workflow",
+                        Description = workflow.Metadata?.Description ?? "Visual workflow",
+                        WorkflowType = "Visual",
+                        IsActive = true,
+                        TriggerType = "Manual",
+                        Version = 1,
+                        CronExpression = "", // Required field
+                        StepsDefinition = "" // Initialize empty
+                    };
+                    await repository.AddAsync(projectWorkflow);
+                }
+                
+                // Update workflow definition
+                _logger.LogInformation("Updating workflow definition for ProjectWorkflow ID: {Id}", projectWorkflow.Id);
+                projectWorkflow.StepsDefinition = JsonSerializer.Serialize(request.WorkflowData);
+                projectWorkflow.LastExecutedAt = null; // Reset since workflow changed
+                projectWorkflow.Version++;
+                
+                // Ensure required fields are not null
+                if (string.IsNullOrEmpty(projectWorkflow.CronExpression))
+                {
+                    projectWorkflow.CronExpression = "";
+                }
+                
+                _logger.LogInformation("Workflow version updated to: {Version}", projectWorkflow.Version);
+                
+                _logger.LogInformation("Saving changes to database...");
+                var changesSaved = await _unitOfWork.SaveChangesAsync();
+                
+                _logger.LogInformation("Workflow saved successfully. Changes saved: {Changes}", changesSaved);
+                
+                // Verify it was saved
+                var savedWorkflow = await repository.GetByIdAsync(projectWorkflow.Id);
+                if (savedWorkflow != null)
+                {
+                    _logger.LogInformation("Workflow verified in database with ID: {Id}, Version: {Version}", 
+                        savedWorkflow.Id, savedWorkflow.Version);
+                }
+                
+                return Json(new { success = true, message = "Workflow uloženo", workflowId = projectWorkflow.Id });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error saving workflow");
                 return Json(new { success = false, message = ex.Message });
             }
         }
@@ -601,7 +707,7 @@ namespace OptimalyAI.Controllers
         }
         
         [HttpPost]
-        public IActionResult SaveOrchestratorSettings([FromBody] OrchestratorSettingsRequest request)
+        public async Task<IActionResult> SaveOrchestratorSettings([FromBody] OrchestratorSettingsRequest request)
         {
             if (request == null || request.ProjectId == Guid.Empty)
             {
@@ -613,7 +719,7 @@ namespace OptimalyAI.Controllers
                 // Get or create workflow
                 if (!_workflows.ContainsKey(request.ProjectId))
                 {
-                    _workflows[request.ProjectId] = CreateDefaultWorkflow(request.ProjectId);
+                    _workflows[request.ProjectId] = await CreateDefaultWorkflowAsync(request.ProjectId);
                 }
                 
                 var workflow = _workflows[request.ProjectId];

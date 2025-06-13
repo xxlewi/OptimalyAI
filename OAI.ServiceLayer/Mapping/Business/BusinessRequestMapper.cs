@@ -15,11 +15,13 @@ namespace OAI.ServiceLayer.Mapping.Business
     {
         private readonly IRequestExecutionMapper _executionMapper;
         private readonly IRequestFileMapper _fileMapper;
+        private readonly IRequestNoteMapper _noteMapper;
 
-        public BusinessRequestMapper(IRequestExecutionMapper executionMapper, IRequestFileMapper fileMapper)
+        public BusinessRequestMapper(IRequestExecutionMapper executionMapper, IRequestFileMapper fileMapper, IRequestNoteMapper noteMapper)
         {
             _executionMapper = executionMapper;
             _fileMapper = fileMapper;
+            _noteMapper = noteMapper;
         }
 
         public override BusinessRequestDto ToDto(BusinessRequest entity)
@@ -45,7 +47,8 @@ namespace OAI.ServiceLayer.Mapping.Business
                 WorkflowTemplateId = entity.WorkflowTemplateId,
                 WorkflowTemplateName = entity.WorkflowTemplate?.Name,
                 Executions = entity.Executions?.Select(_executionMapper.ToDto).ToList(),
-                Files = entity.Files?.Select(_fileMapper.ToDto).ToList()
+                Files = entity.Files?.Select(_fileMapper.ToDto).ToList(),
+                Notes = entity.Notes?.Select(_noteMapper.ToDto).ToList()
             };
         }
 
@@ -88,7 +91,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Deadline = dto.Deadline,
                 EstimatedCost = dto.EstimatedCost,
                 WorkflowTemplateId = dto.WorkflowTemplateId,
-                Status = RequestStatus.Draft
+                Status = RequestStatus.New
             };
         }
 

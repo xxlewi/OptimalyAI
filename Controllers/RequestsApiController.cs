@@ -60,14 +60,10 @@ namespace OptimalyAI.Controllers
             var counts = new
             {
                 total = allRequests.Count(),
-                draft = allRequests.Count(r => r.Status == RequestStatus.Draft),
-                submitted = allRequests.Count(r => r.Status == RequestStatus.Submitted),
-                queued = allRequests.Count(r => r.Status == RequestStatus.Queued),
-                processing = allRequests.Count(r => r.Status == RequestStatus.Processing),
-                review = allRequests.Count(r => r.Status == RequestStatus.Review),
-                completed = allRequests.Count(r => r.Status == RequestStatus.Completed),
-                failed = allRequests.Count(r => r.Status == RequestStatus.Failed),
-                cancelled = allRequests.Count(r => r.Status == RequestStatus.Cancelled)
+                @new = allRequests.Count(r => r.Status == RequestStatus.New),
+                inprogress = allRequests.Count(r => r.Status == RequestStatus.InProgress),
+                onhold = allRequests.Count(r => r.Status == RequestStatus.OnHold),
+                completed = allRequests.Count(r => r.Status == RequestStatus.Completed)
             };
 
             return Ok(counts, "Request counts retrieved successfully");
@@ -130,39 +126,7 @@ namespace OptimalyAI.Controllers
             return Ok(request, "Business request updated successfully");
         }
 
-        /// <summary>
-        /// Submit business request for processing
-        /// </summary>
-        [HttpPost("{id}/submit")]
-        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(404)]
-        public async Task<IActionResult> Submit(int id)
-        {
-            var request = await _requestService.SubmitRequestAsync(id);
-            
-            // Notify monitoring hub
-            await _monitoringHub.Clients.All.SendAsync("RequestSubmitted", request);
-            
-            return Ok(request, "Business request submitted successfully");
-        }
 
-        /// <summary>
-        /// Cancel business request
-        /// </summary>
-        [HttpPost("{id}/cancel")]
-        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(404)]
-        public async Task<IActionResult> Cancel(int id, [FromBody] CancelRequestDto dto)
-        {
-            var request = await _requestService.CancelRequestAsync(id, dto.Reason);
-            
-            // Notify monitoring hub
-            await _monitoringHub.Clients.All.SendAsync("RequestCancelled", request);
-            
-            return Ok(request, "Business request cancelled successfully");
-        }
 
         /// <summary>
         /// Delete business request
@@ -178,6 +142,45 @@ namespace OptimalyAI.Controllers
             await _monitoringHub.Clients.All.SendAsync("RequestDeleted", id);
             
             return NoContent();
+        }
+
+        /// <summary>
+        /// Change status of business request
+        /// </summary>
+        [HttpPost("{id}/status")]
+        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> ChangeStatus(int id, [FromBody] ChangeStatusDto dto)
+        {
+            var request = await _requestService.ChangeStatusAsync(id, dto.Status);
+            
+            // Notify monitoring hub
+            await _monitoringHub.Clients.All.SendAsync("RequestUpdated", request);
+            
+            return Ok(request, "Status changed successfully");
+        }
+
+        /// <summary>
+        /// Add note to business request
+        /// </summary>
+        [HttpPost("{id}/notes")]
+        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> AddNote(int id, [FromBody] AddNoteDto dto)
+        {
+            if (dto == null)
+            {
+                return BadRequest("DTO is null");
+            }
+            
+            var request = await _requestService.AddNoteAsync(id, dto.Content, dto.Author, dto.Type, dto.IsInternal);
+            
+            // Notify monitoring hub
+            await _monitoringHub.Clients.All.SendAsync("RequestUpdated", request);
+            
+            return Ok(request, "Note added successfully");
         }
 
         /// <summary>

@@ -22,6 +22,7 @@ namespace OAI.Core.DTOs.Business
         public string WorkflowTemplateName { get; set; }
         public List<RequestExecutionDto> Executions { get; set; }
         public List<RequestFileDto> Files { get; set; }
+        public List<RequestNoteDto> Notes { get; set; }
     }
 
     public class CreateBusinessRequestDto : CreateDtoBase
@@ -59,5 +60,26 @@ namespace OAI.Core.DTOs.Business
         public decimal? EstimatedCost { get; set; }
         public string? ClientId { get; set; }
         public string? ClientName { get; set; }
+    }
+
+    public class ChangeStatusDto
+    {
+        [Required]
+        public RequestStatus Status { get; set; }
+    }
+
+    public class AddNoteDto
+    {
+        [Required]
+        [MaxLength(2000)]
+        public string Content { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string Author { get; set; }
+
+        public NoteType Type { get; set; } = NoteType.Note;
+
+        public bool IsInternal { get; set; } = false;
     }
 }

@@ -84,7 +84,7 @@ namespace OptimalyAI.Controllers
         public async Task<IActionResult> Queue()
         {
             ViewBag.Title = "Příchozí fronta";
-            var requests = await _requestService.GetRequestsByStatusAsync(RequestStatus.Queued);
+            var requests = await _requestService.GetRequestsByStatusAsync(RequestStatus.New);
             return View(requests);
         }
 
@@ -106,14 +106,6 @@ namespace OptimalyAI.Controllers
             return View(requests);
         }
 
-        // GET: /Requests/Failed
-        [HttpGet("Failed")]
-        public async Task<IActionResult> Failed()
-        {
-            ViewBag.Title = "Selhané požadavky";
-            var requests = await _requestService.GetRequestsByStatusAsync(RequestStatus.Failed);
-            return View(requests);
-        }
 
         // GET: /Requests/{id}
         [HttpGet("{id:int}")]
@@ -165,10 +157,10 @@ namespace OptimalyAI.Controllers
                 return NotFound();
             }
 
-            // Only allow editing drafts
-            if (request.Status != RequestStatus.Draft)
+            // Allow editing only New requests or OnHold requests
+            if (request.Status != RequestStatus.New && request.Status != RequestStatus.OnHold)
             {
-                TempData["Error"] = "Lze upravovat pouze požadavky ve stavu Koncept";
+                TempData["Error"] = "Lze upravovat pouze nové požadavky nebo požadavky odložené";
                 return RedirectToAction(nameof(Details), new { id });
             }
 

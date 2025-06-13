@@ -25,7 +25,7 @@ namespace OAI.Core.Entities.Business
         [MaxLength(200)]
         public string? ClientName { get; set; }
 
-        public RequestStatus Status { get; set; } = RequestStatus.Draft;
+        public RequestStatus Status { get; set; } = RequestStatus.New;
 
         public RequestPriority Priority { get; set; } = RequestPriority.Normal;
 
@@ -41,20 +41,17 @@ namespace OAI.Core.Entities.Business
 
         public virtual ICollection<RequestExecution> Executions { get; set; } = new List<RequestExecution>();
         public virtual ICollection<RequestFile> Files { get; set; } = new List<RequestFile>();
+        public virtual ICollection<RequestNote> Notes { get; set; } = new List<RequestNote>();
 
         public string? Metadata { get; set; } // JSON for additional data
     }
 
     public enum RequestStatus
     {
-        Draft,
-        Submitted,
-        Queued,
-        Processing,
-        Review,
-        Completed,
-        Failed,
-        Cancelled
+        New,        // Nový
+        InProgress, // V Procesu
+        OnHold,     // Odloženo
+        Completed   // Ukončeno
     }
 
     public enum RequestPriority

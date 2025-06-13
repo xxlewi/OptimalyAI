@@ -159,7 +159,7 @@
                         <li class="nav-header">POŽADAVKY</li>
                         <li class="nav-item">
                             <a asp-controller="Requests" asp-action="New" class="nav-link">
-                                <i class="nav-icon fas fa-plus-circle"></i>
+                                <i class="nav-icon fas fa-plus-circle text-success"></i>
                                 <p>Nový požadavek</p>
                             </a>
                         </li>
@@ -173,47 +173,38 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="Queue" class="nav-link">
-                                <i class="nav-icon fas fa-inbox"></i>
+                            <a href="/Requests?status=New" class="nav-link">
+                                <i class="nav-icon fas fa-plus-circle text-info"></i>
                                 <p>
-                                    Koncepty
-                                    <span class="badge badge-secondary right request-count-draft">0</span>
+                                    Nové
+                                    <span class="badge badge-info right request-count-new">0</span>
                                 </p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="Submitted" class="nav-link">
-                                <i class="nav-icon fas fa-paper-plane"></i>
+                            <a href="/Requests?status=InProgress" class="nav-link">
+                                <i class="nav-icon fas fa-cog text-primary"></i>
                                 <p>
-                                    Odeslané
-                                    <span class="badge badge-warning right request-count-submitted">0</span>
+                                    V Procesu
+                                    <span class="badge badge-primary right request-count-inprogress">0</span>
                                 </p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="Active" class="nav-link">
-                                <i class="nav-icon fas fa-spinner fa-spin"></i>
+                            <a href="/Requests?status=OnHold" class="nav-link">
+                                <i class="nav-icon fas fa-pause-circle text-warning"></i>
                                 <p>
-                                    Aktivní zpracování
-                                    <span class="badge badge-primary right request-count-processing">0</span>
+                                    Odložené
+                                    <span class="badge badge-warning right request-count-onhold">0</span>
                                 </p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="Completed" class="nav-link">
-                                <i class="nav-icon fas fa-check-circle"></i>
+                            <a href="/Requests?status=Completed" class="nav-link">
+                                <i class="nav-icon fas fa-check-circle text-success"></i>
                                 <p>
-                                    Dokončené
+                                    Ukončené
                                     <span class="badge badge-success right request-count-completed">0</span>
-                                </p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="Failed" class="nav-link">
-                                <i class="nav-icon fas fa-times-circle"></i>
-                                <p>
-                                    Selhané
-                                    <span class="badge badge-danger right request-count-failed">0</span>
                                 </p>
                             </a>
                         </li>
@@ -223,23 +214,6 @@
                             <a asp-controller="Projects" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-project-diagram"></i>
                                 <p>Seznam projektů</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="ProjectWorkflows" asp-action="Templates" class="nav-link">
-                                <i class="nav-icon fas fa-layer-group"></i>
-                                <p>Workflow šablony</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-header">PROTOTYPE</li>
-                        <li class="nav-item">
-                            <a asp-controller="WorkflowPrototype" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-flask text-warning"></i>
-                                <p>
-                                    Workflow Prototype
-                                    <span class="badge badge-warning ml-auto">DEMO</span>
-                                </p>
                             </a>
                         </li>
                         
@@ -585,17 +559,10 @@
                     if (response.success && response.data) {
                         const counts = response.data;
                         $('.request-count-total').text(counts.total || 0);
-                        $('.request-count-draft').text(counts.draft || 0);
-                        $('.request-count-submitted').text(counts.submitted || 0);
-                        $('.request-count-processing').text(counts.processing || 0);
+                        $('.request-count-new').text(counts.new || 0);
+                        $('.request-count-inprogress').text(counts.inprogress || 0);
+                        $('.request-count-onhold').text(counts.onhold || 0);
                         $('.request-count-completed').text(counts.completed || 0);
-                        $('.request-count-failed').text(counts.failed || 0);
-                        
-                        // Update badge colors based on counts
-                        if (counts.draft > 0) $('.request-count-draft').removeClass('badge-secondary').addClass('badge-info');
-                        if (counts.submitted > 0) $('.request-count-submitted').removeClass('badge-warning').addClass('badge-warning');
-                        if (counts.processing > 0) $('.request-count-processing').removeClass('badge-primary').addClass('badge-primary');
-                        if (counts.failed > 0) $('.request-count-failed').removeClass('badge-danger').addClass('badge-danger');
                     }
                 }
             });

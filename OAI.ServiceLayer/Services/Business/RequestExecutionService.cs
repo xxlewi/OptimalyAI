@@ -108,7 +108,7 @@ namespace OAI.ServiceLayer.Services.Business
             }
 
             // Update business request status
-            request.Status = RequestStatus.Processing;
+            request.Status = RequestStatus.InProgress;
             await _requestService.UpdateAsync(request);
 
             await _unitOfWork.SaveChangesAsync();
@@ -235,7 +235,7 @@ namespace OAI.ServiceLayer.Services.Business
                 execution.BusinessRequest.Status = status switch
                 {
                     ExecutionStatus.Completed => RequestStatus.Completed,
-                    ExecutionStatus.Failed => RequestStatus.Failed,
+                    ExecutionStatus.Failed => RequestStatus.OnHold, // Map failed to OnHold since Failed status doesn't exist
                     _ => execution.BusinessRequest.Status
                 };
 

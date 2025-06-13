@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using OAI.Core.Entities.Customers;
+using OAI.Core.DTOs.Business;
 using System.Collections.Generic;
 
 namespace OptimalyAI.ViewModels
@@ -150,6 +151,7 @@ namespace OptimalyAI.ViewModels
         // Související data
         public List<ContactViewModel> Contacts { get; set; } = new();
         public List<RequestViewModel> RecentRequests { get; set; } = new();
+        public List<BusinessRequestDto> BusinessRequests { get; set; } = new();
         public List<OAI.Core.DTOs.ProjectDto> RecentProjects { get; set; } = new();
     }
 

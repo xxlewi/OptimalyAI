@@ -22,8 +22,8 @@ namespace OAI.ServiceLayer.Services.Business
         Task<IEnumerable<BusinessRequestDto>> GetRequestsByStatusAsync(RequestStatus status);
         Task<IEnumerable<BusinessRequestDto>> GetRequestsByClientAsync(string clientId);
         Task<string> GenerateRequestNumberAsync();
-        Task<BusinessRequestDto> SubmitRequestAsync(int id);
-        Task<BusinessRequestDto> CancelRequestAsync(int id, string reason);
+        Task<BusinessRequestDto> ChangeStatusAsync(int id, RequestStatus newStatus);
+        Task<BusinessRequestDto> AddNoteAsync(int id, string content, string author, NoteType type = NoteType.Note, bool isInternal = false);
     }
 
     public class BusinessRequestService : BaseService<BusinessRequest>, IBusinessRequestService
@@ -31,7 +31,6 @@ namespace OAI.ServiceLayer.Services.Business
         private readonly IBusinessRequestMapper _mapper;
         private readonly ILogger<BusinessRequestService> _logger;
         private readonly IWorkflowTemplateService _workflowService;
-        private static int _requestCounter = 0;
 
         public BusinessRequestService(
             IRepository<BusinessRequest> repository,
@@ -61,7 +60,7 @@ namespace OAI.ServiceLayer.Services.Business
 
             var entity = ((BusinessRequestMapper)_mapper).MapCreateDtoToEntity(dto);
             entity.RequestNumber = await GenerateRequestNumberAsync();
-            entity.Status = RequestStatus.Draft;
+            entity.Status = RequestStatus.New;
             
             // Set default values for optional fields
             if (string.IsNullOrEmpty(entity.RequestType))
@@ -120,6 +119,7 @@ namespace OAI.ServiceLayer.Services.Business
                 include: q => q.Include(br => br.Executions)
                     .ThenInclude(re => re.StepExecutions)
                     .Include(br => br.Files)
+                    .Include(br => br.Notes)
                     .Include(br => br.WorkflowTemplate));
 
             if (entity == null)
@@ -153,10 +153,50 @@ namespace OAI.ServiceLayer.Services.Business
 
         public async Task<string> GenerateRequestNumberAsync()
         {
-            // Pro In-Memory databázi generujeme číslo v kódu
             var year = DateTime.Now.Year;
-            var number = System.Threading.Interlocked.Increment(ref _requestCounter);
-            return $"REQ-{year}-{number:D4}";
+            var prefix = $"REQ-{year}-";
+            
+            // Pokusíme se najít unikátní číslo s retry logikou
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                // Najdeme nejvyšší existující číslo pro tento rok
+                var maxNumberQuery = await _repository.GetAsync(
+                    filter: br => br.RequestNumber.StartsWith(prefix));
+                
+                int nextNumber = 1;
+                if (maxNumberQuery.Any())
+                {
+                    var maxNumber = maxNumberQuery
+                        .Select(br => br.RequestNumber)
+                        .Where(rn => rn.Length == prefix.Length + 4) // REQ-2024-XXXX format
+                        .Select(rn => {
+                            var numberPart = rn.Substring(prefix.Length);
+                            return int.TryParse(numberPart, out int num) ? num : 0;
+                        })
+                        .DefaultIfEmpty(0)
+                        .Max();
+                    
+                    nextNumber = maxNumber + 1;
+                }
+                
+                var candidateNumber = $"{prefix}{nextNumber:D4}";
+                
+                // Zkontrolujeme, jestli už neexistuje
+                var exists = await _repository.GetAsync(
+                    filter: br => br.RequestNumber == candidateNumber);
+                
+                if (!exists.Any())
+                {
+                    return candidateNumber;
+                }
+                
+                // Pokud existuje, zkusíme znovu
+                await Task.Delay(10); // Krátké zpoždění
+            }
+            
+            // Fallback - použijeme timestamp
+            var timestamp = DateTime.Now.ToString("HHmmss");
+            return $"{prefix}T{timestamp}";
         }
 
         public async Task<BusinessRequestDto> SubmitRequestAsync(int id)
@@ -167,22 +207,40 @@ namespace OAI.ServiceLayer.Services.Business
                 throw new NotFoundException("BusinessRequest", id);
             }
 
-            if (entity.Status != RequestStatus.Draft)
+            if (entity.Status != RequestStatus.New)
             {
-                throw new BusinessException("Only draft requests can be submitted");
+                throw new BusinessException("Only new requests can be submitted");
             }
 
-            entity.Status = RequestStatus.Queued;
+            entity.Status = RequestStatus.InProgress;
             var updated = await UpdateAsync(entity);
 
             _logger.LogInformation("Business request {RequestNumber} submitted for processing", updated.RequestNumber);
             return _mapper.ToDto(updated);
         }
 
-        public async Task<BusinessRequestDto> CancelRequestAsync(int id, string reason)
+        public async Task<BusinessRequestDto> ChangeStatusAsync(int id, RequestStatus newStatus)
         {
-            if (string.IsNullOrWhiteSpace(reason))
-                throw new ArgumentException("Cancellation reason is required", nameof(reason));
+            var entity = await GetByIdAsync(id);
+            if (entity == null)
+            {
+                throw new NotFoundException("BusinessRequest", id);
+            }
+
+            var oldStatus = entity.Status;
+            entity.Status = newStatus;
+            
+            var updated = await UpdateAsync(entity);
+            _logger.LogInformation("Business request {RequestNumber} status changed from {OldStatus} to {NewStatus}", 
+                updated.RequestNumber, oldStatus, newStatus);
+
+            return _mapper.ToDto(updated);
+        }
+
+        public async Task<BusinessRequestDto> AddNoteAsync(int id, string content, string author, NoteType type = NoteType.Note, bool isInternal = false)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+                throw new ArgumentException("Note content is required", nameof(content));
 
             var entity = await GetByIdAsync(id);
             if (entity == null)
@@ -190,35 +248,28 @@ namespace OAI.ServiceLayer.Services.Business
                 throw new NotFoundException("BusinessRequest", id);
             }
 
-            if (entity.Status == RequestStatus.Completed || entity.Status == RequestStatus.Cancelled)
+            var note = new RequestNote
             {
-                throw new BusinessException("Cannot cancel completed or already cancelled request");
-            }
+                BusinessRequestId = id,
+                Content = content,
+                Author = author,
+                Type = type,
+                IsInternal = isInternal
+            };
 
-            entity.Status = RequestStatus.Cancelled;
-            entity.Metadata = System.Text.Json.JsonSerializer.Serialize(new { CancellationReason = reason });
-            
+            entity.Notes.Add(note);
             var updated = await UpdateAsync(entity);
-            _logger.LogInformation("Business request {RequestNumber} cancelled", updated.RequestNumber);
+
+            _logger.LogInformation("Added note to business request {RequestNumber} by {Author}", 
+                updated.RequestNumber, author);
 
             return _mapper.ToDto(updated);
         }
 
         private bool IsValidStatusTransition(RequestStatus current, RequestStatus target)
         {
-            return (current, target) switch
-            {
-                (RequestStatus.Draft, RequestStatus.Queued) => true,
-                (RequestStatus.Draft, RequestStatus.Cancelled) => true,
-                (RequestStatus.Queued, RequestStatus.Processing) => true,
-                (RequestStatus.Queued, RequestStatus.Cancelled) => true,
-                (RequestStatus.Processing, RequestStatus.Completed) => true,
-                (RequestStatus.Processing, RequestStatus.Failed) => true,
-                (RequestStatus.Processing, RequestStatus.Cancelled) => true,
-                (RequestStatus.Failed, RequestStatus.Queued) => true, // Retry
-                (RequestStatus.Failed, RequestStatus.Cancelled) => true,
-                _ => false
-            };
+            // S novými jednoduchem statusy jsou všechny přechody povolené
+            return true;
         }
     }
 }

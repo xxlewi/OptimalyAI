@@ -1,4 +1,5 @@
 @model OAI.Core.DTOs.Business.BusinessRequestDto
+@using OAI.Core.Entities.Business
 @{
     ViewData["Title"] = $"Požadavek {Model.RequestNumber}";
 }
@@ -26,44 +27,58 @@
 <div class="content">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-lg-8">
+            <div class="col-lg-12">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Detaily požadavku</h3>
                         <div class="card-tools">
-                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Draft)
-                            {
-                                <a href="/Requests/@Model.Id/Edit" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-edit"></i> Upravit
-                                </a>
-                                <button type="button" class="btn btn-sm btn-success" onclick="submitRequest(@Model.Id)">
-                                    <i class="fas fa-paper-plane"></i> Odeslat ke zpracování
-                                </button>
-                                <button type="button" class="btn btn-sm btn-danger" onclick="deleteRequest(@Model.Id)">
-                                    <i class="fas fa-trash"></i> Smazat
-                                </button>
-                            }
-                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Submitted)
-                            {
-                                <button type="button" class="btn btn-sm btn-success" onclick="startExecution(@Model.Id)">
-                                    <i class="fas fa-play"></i> Spustit zpracování
-                                </button>
-                                <button type="button" class="btn btn-sm btn-warning" onclick="returnToDraft(@Model.Id)">
-                                    <i class="fas fa-undo"></i> Vrátit k úpravám
-                                </button>
-                            }
-                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Processing)
-                            {
-                                <a href="/Requests/@Model.Id/Progress" class="btn btn-sm btn-info">
-                                    <i class="fas fa-chart-line"></i> Zobrazit průběh
-                                </a>
-                            }
-                            @if (Model.Status == OAI.Core.Entities.Business.RequestStatus.Completed)
-                            {
-                                <a href="/Requests/@Model.Id/Results" class="btn btn-sm btn-success">
-                                    <i class="fas fa-check-circle"></i> Zobrazit výsledky
-                                </a>
-                            }
+                            <!-- Status změna -->
+                            <div class="form-group d-inline-block mr-2 mb-0">
+                                <label class="sr-only">Status:</label>
+                                @{
+                                    var currentStatus = Model.Status.ToString();
+                                }
+                                <select class="form-control form-control-sm" id="statusSelect" onchange="changeStatusDirect(@Model.Id, this.value)">
+                                    @if (currentStatus == "New")
+                                    {
+                                        <option value="New" selected>🆕 Nový</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="New">🆕 Nový</option>
+                                    }
+                                    
+                                    @if (currentStatus == "InProgress")
+                                    {
+                                        <option value="InProgress" selected>⚙️ V Procesu</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="InProgress">⚙️ V Procesu</option>
+                                    }
+                                    
+                                    @if (currentStatus == "OnHold")
+                                    {
+                                        <option value="OnHold" selected>⏸️ Odloženo</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="OnHold">⏸️ Odloženo</option>
+                                    }
+                                    
+                                    @if (currentStatus == "Completed")
+                                    {
+                                        <option value="Completed" selected>✅ Ukončeno</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Completed">✅ Ukončeno</option>
+                                    }
+                                </select>
+                            </div>
+                            <a href="/Requests/@Model.Id/Edit" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-edit"></i> Upravit
+                            </a>
                         </div>
                     </div>
                     <div class="card-body">
@@ -81,7 +96,22 @@
                             <dd class="col-sm-9">@Model.Description</dd>
                             
                             <dt class="col-sm-3">Klient:</dt>
-                            <dd class="col-sm-9">@Model.ClientName (@Model.ClientId)</dd>
+                            <dd class="col-sm-9">
+                                @if (!string.IsNullOrEmpty(Model.ClientId) && !string.IsNullOrEmpty(Model.ClientName))
+                                {
+                                    <a href="/Customers/Details/@Model.ClientId" class="text-primary">
+                                        <i class="fas fa-user"></i> @Model.ClientName
+                                    </a>
+                                }
+                                else if (!string.IsNullOrEmpty(Model.ClientName))
+                                {
+                                    <span>@Model.ClientName</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Není přiřazen</span>
+                                }
+                            </dd>
                             
                             <dt class="col-sm-3">Priorita:</dt>
                             <dd class="col-sm-9">
@@ -108,6 +138,83 @@
                             <dt class="col-sm-3">Naposledy upraveno:</dt>
                             <dd class="col-sm-9">@(Model.UpdatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "Neznámý")</dd>
                         </dl>
+                    </div>
+                </div>
+
+                <!-- Poznámky a vstupy -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Poznámky a vstupy</h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Formulář pro přidání poznámky -->
+                        <form id="addNoteForm" class="mb-4">
+                            <div class="form-group">
+                                <label>Typ poznámky:</label>
+                                <select class="form-control" id="noteType" name="noteType">
+                                    <option value="Note">Poznámka</option>
+                                    <option value="Progress">Pokrok</option>
+                                    <option value="Issue">Problém</option>
+                                    <option value="Solution">Řešení</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Obsah:</label>
+                                <textarea class="form-control" id="noteContent" name="content" rows="3" 
+                                          placeholder="Napište poznámku nebo popis toho, co se udělalo..." required></textarea>
+                            </div>
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="isInternal">
+                                    <label class="form-check-label" for="isInternal">
+                                        Interní poznámka
+                                    </label>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Přidat poznámku
+                            </button>
+                        </form>
+
+                        <!-- Seznam existujících poznámek -->
+                        <div id="notesList">
+                            @if (Model.Notes != null && Model.Notes.Any())
+                            {
+                                <div class="timeline">
+                                    @foreach (var note in Model.Notes.OrderByDescending(n => n.CreatedAt))
+                                    {
+                                        <div class="time-label">
+                                            <span class="bg-@GetNoteTypeColor(note.Type)">
+                                                @(note.CreatedAt.ToString("dd.MM.yyyy"))
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <i class="fas fa-@GetNoteTypeIcon(note.Type) bg-@GetNoteTypeColor(note.Type)"></i>
+                                            <div class="timeline-item">
+                                                <span class="time">
+                                                    <i class="fas fa-clock"></i> @(note.CreatedAt.ToString("HH:mm"))
+                                                    @if (note.IsInternal)
+                                                    {
+                                                        <span class="badge badge-warning ml-2">Interní</span>
+                                                    }
+                                                </span>
+                                                <h3 class="timeline-header">
+                                                    @GetNoteTypeText(note.Type)
+                                                    <span class="text-muted">- @note.Author</span>
+                                                </h3>
+                                                <div class="timeline-body">
+                                                    @Html.Raw(note.Content.Replace("\n", "<br>"))
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted">Zatím nejsou k tomuto požadavku přidány žádné poznámky.</p>
+                            }
+                        </div>
                     </div>
                 </div>
 
@@ -146,69 +253,125 @@
                 }
             </div>
 
-            <div class="col-lg-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Historie zpracování</h3>
-                    </div>
-                    <div class="card-body">
-                        @if (Model.Executions != null && Model.Executions.Any())
-                        {
-                            <div class="timeline">
-                                @foreach (var execution in Model.Executions.OrderByDescending(e => e.StartedAt))
-                                {
-                                    <div class="time-label">
-                                        <span class="bg-@GetExecutionStatusColor(execution.Status)">
-                                            @(execution.StartedAt.ToString("dd.MM.yyyy"))
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <i class="fas fa-@GetExecutionStatusIcon(execution.Status) bg-@GetExecutionStatusColor(execution.Status)"></i>
-                                        <div class="timeline-item">
-                                            <span class="time">
-                                                <i class="fas fa-clock"></i> @(execution.StartedAt.ToString("HH:mm"))
-                                            </span>
-                                            <h3 class="timeline-header">
-                                                Zpracování #@execution.Id
-                                                <span class="badge badge-@GetExecutionStatusColor(execution.Status)">
-                                                    @GetExecutionStatusText(execution.Status)
-                                                </span>
-                                            </h3>
-                                            <div class="timeline-body">
-                                                <p>Spustil: @execution.ExecutedBy</p>
-                                                @if (execution.CompletedAt.HasValue)
-                                                {
-                                                    <p>Dokončeno: @(execution.CompletedAt.Value.ToString("dd.MM.yyyy HH:mm"))</p>
-                                                    <p>Doba trvání: @FormatDuration(execution.StartedAt, execution.CompletedAt.Value)</p>
-                                                }
-                                                @if (!string.IsNullOrEmpty(execution.Errors))
-                                                {
-                                                    <div class="alert alert-danger">
-                                                        @execution.Errors
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    </div>
-                                }
-                                <div>
-                                    <i class="fas fa-clock bg-gray"></i>
-                                </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <p class="text-muted">Zatím nebylo spuštěno žádné zpracování.</p>
-                        }
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
 
 @section Scripts {
     <script>
+        $(document).ready(function() {
+            // Handle add note form
+            $('#addNoteForm').submit(function(e) {
+                e.preventDefault();
+                addNote();
+            });
+        });
+
+        function changeStatusDirect(requestId, newStatus) {
+            $.ajax({
+                url: `/api/requestsapi/${requestId}/status`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ status: newStatus }),
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success(`Status změněn na: ${getStatusText(newStatus)}`);
+                        // Update badge in header
+                        updateStatusBadge(newStatus);
+                    } else {
+                        toastr.error(response.message || 'Nepodařilo se změnit status');
+                        // Revert select to original value
+                        $('#statusSelect').val('@(Model.Status.ToString())');
+                    }
+                },
+                error: function() {
+                    toastr.error('Nepodařilo se komunikovat se serverem');
+                    // Revert select to original value
+                    $('#statusSelect').val('@(Model.Status.ToString())');
+                }
+            });
+        }
+
+        function updateStatusBadge(status) {
+            const statusBadge = $('h1.m-0 .badge');
+            const statusClass = {
+                'New': 'badge-info',
+                'InProgress': 'badge-primary', 
+                'OnHold': 'badge-warning',
+                'Completed': 'badge-success'
+            };
+            
+            statusBadge.removeClass('badge-info badge-primary badge-warning badge-success')
+                      .addClass(statusClass[status])
+                      .text(getStatusText(status));
+        }
+
+        function addNote() {
+            const content = $('#noteContent').val().trim();
+            const type = $('#noteType').val();
+            const isInternal = $('#isInternal').is(':checked');
+
+            if (!content) {
+                toastr.error('Obsah poznámky je povinný');
+                return;
+            }
+
+            const requestId = @Model.Id;
+            const author = 'Uživatel'; // TODO: Get from current user
+
+            $.ajax({
+                url: `/api/requestsapi/${requestId}/notes`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    Content: content,
+                    Author: author,
+                    Type: type,
+                    IsInternal: isInternal
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success('Poznámka byla přidána');
+                        // Clear form
+                        $('#noteContent').val('');
+                        $('#noteType').val('Note');
+                        $('#isInternal').prop('checked', false);
+                        // Reload page after short delay
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        toastr.error(response.message || 'Nepodařilo se přidat poznámku');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.log('Error details:', xhr.responseText);
+                    var errorMessage = 'Nepodařilo se komunikovat se serverem';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response.message) {
+                                errorMessage = response.message;
+                            }
+                        } catch (e) {
+                            console.log('Failed to parse error response');
+                        }
+                    }
+                    toastr.error(errorMessage);
+                }
+            });
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                'New': 'Nový',
+                'InProgress': 'V Procesu',
+                'OnHold': 'Odloženo',
+                'Completed': 'Ukončeno'
+            };
+            return statusMap[status] || status;
+        }
+
         function submitRequest(requestId) {
             Swal.fire({
                 title: 'Odeslat požadavek?',
@@ -325,27 +488,19 @@
 @functions {
     string GetStatusText(OAI.Core.Entities.Business.RequestStatus status) => status switch
     {
-        OAI.Core.Entities.Business.RequestStatus.Draft => "Koncept",
-        OAI.Core.Entities.Business.RequestStatus.Submitted => "Odesláno",
-        OAI.Core.Entities.Business.RequestStatus.Queued => "Ve frontě",
-        OAI.Core.Entities.Business.RequestStatus.Processing => "Zpracovává se",
-        OAI.Core.Entities.Business.RequestStatus.Review => "K revizi",
-        OAI.Core.Entities.Business.RequestStatus.Completed => "Dokončeno",
-        OAI.Core.Entities.Business.RequestStatus.Failed => "Selhalo",
-        OAI.Core.Entities.Business.RequestStatus.Cancelled => "Zrušeno",
+        OAI.Core.Entities.Business.RequestStatus.New => "Nový",
+        OAI.Core.Entities.Business.RequestStatus.InProgress => "V Procesu",
+        OAI.Core.Entities.Business.RequestStatus.OnHold => "Odloženo",
+        OAI.Core.Entities.Business.RequestStatus.Completed => "Ukončeno",
         _ => status.ToString()
     };
 
     string GetStatusBadgeClass(OAI.Core.Entities.Business.RequestStatus status) => status switch
     {
-        OAI.Core.Entities.Business.RequestStatus.Draft => "secondary",
-        OAI.Core.Entities.Business.RequestStatus.Submitted => "info",
-        OAI.Core.Entities.Business.RequestStatus.Queued => "warning",
-        OAI.Core.Entities.Business.RequestStatus.Processing => "primary",
-        OAI.Core.Entities.Business.RequestStatus.Review => "warning",
+        OAI.Core.Entities.Business.RequestStatus.New => "info",
+        OAI.Core.Entities.Business.RequestStatus.InProgress => "primary", 
+        OAI.Core.Entities.Business.RequestStatus.OnHold => "warning",
         OAI.Core.Entities.Business.RequestStatus.Completed => "success",
-        OAI.Core.Entities.Business.RequestStatus.Failed => "danger",
-        OAI.Core.Entities.Business.RequestStatus.Cancelled => "dark",
         _ => "secondary"
     };
 
@@ -434,4 +589,31 @@
             return $"{duration.TotalHours:0.#} hodin";
         return $"{duration.TotalDays:0.#} dní";
     }
+
+    string GetNoteTypeText(NoteType type) => type switch
+    {
+        NoteType.Note => "Poznámka",
+        NoteType.Progress => "Pokrok",
+        NoteType.Issue => "Problém", 
+        NoteType.Solution => "Řešení",
+        _ => type.ToString()
+    };
+
+    string GetNoteTypeColor(NoteType type) => type switch
+    {
+        NoteType.Note => "info",
+        NoteType.Progress => "success",
+        NoteType.Issue => "danger",
+        NoteType.Solution => "primary",
+        _ => "secondary"
+    };
+
+    string GetNoteTypeIcon(NoteType type) => type switch
+    {
+        NoteType.Note => "comment",
+        NoteType.Progress => "arrow-up",
+        NoteType.Issue => "exclamation-triangle",
+        NoteType.Solution => "check-circle",
+        _ => "circle"
+    };
 }

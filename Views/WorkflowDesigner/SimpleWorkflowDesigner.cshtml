@@ -328,6 +328,24 @@
         transform: translateX(-50%) scale(1.2);
     }
     
+    /* Magnetic effect styles */
+    .connection-dot.magnetic-hover {
+        background: #28a745;
+        transform: scale(1.5);
+        box-shadow: 0 0 10px rgba(40, 167, 69, 0.8);
+        animation: pulse 0.5s ease-in-out infinite;
+    }
+    
+    .connection-dot.input.magnetic-hover {
+        transform: translateX(-50%) scale(1.5);
+    }
+    
+    @@keyframes pulse {
+        0% { transform: translateX(-50%) scale(1.5); }
+        50% { transform: translateX(-50%) scale(1.8); }
+        100% { transform: translateX(-50%) scale(1.5); }
+    }
+    
     .toolbar {
         background: white;
         padding: 15px;
@@ -672,6 +690,28 @@
                 deselectAll();
             }
         });
+        
+        // Connection events - use delegated events for dynamic nodes
+        $('#workflow-canvas').on('mousedown', '.connection-dot.output', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            const nodeEl = $(this).closest('.workflow-node');
+            const nodeId = nodeEl.attr('id');
+            const branch = $(this).attr('data-branch');
+            startConnection(nodeId, branch);
+            return false;
+        });
+        
+        $('#workflow-canvas').on('mouseup', '.connection-dot.input', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            const nodeEl = $(this).closest('.workflow-node');
+            const nodeId = nodeEl.attr('id');
+            if (isConnecting && connectionStart && connectionStart.nodeId !== nodeId) {
+                endConnection(nodeId);
+            }
+            return false;
+        });
     }
     
     // Initialize keyboard shortcuts
@@ -848,23 +888,7 @@
         // Make draggable
         makeDraggable(nodeEl, node);
         
-        // Connection events - musíme použít delegated events
-        nodeEl.on('mousedown', '.connection-dot.output', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            const branch = $(this).attr('data-branch');
-            startConnection(node.id, branch);
-            return false;
-        });
-        
-        nodeEl.on('mouseup', '.connection-dot.input', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            if (isConnecting && connectionStart && connectionStart.nodeId !== node.id) {
-                endConnection(node.id);
-            }
-            return false;
-        });
+        // Connection events are now handled globally in initializeCanvas()
         
         $('#workflow-canvas').append(nodeEl);
     }
@@ -956,11 +980,50 @@
         const startX = outputDotRect.left - canvasRect.left + (outputDotRect.width / 2);
         const startY = outputDotRect.top - canvasRect.top + (outputDotRect.height / 2);
         
-        // Mouse move to update temp line
+        // Mouse move to update temp line with magnetic effect
         $(document).on('mousemove.connection', function(e) {
             const rect = $('#workflow-canvas')[0].getBoundingClientRect();
-            const x = e.clientX - rect.left + $('#workflow-canvas').scrollLeft();
-            const y = e.clientY - rect.top + $('#workflow-canvas').scrollTop();
+            let x = e.clientX - rect.left + $('#workflow-canvas').scrollLeft();
+            let y = e.clientY - rect.top + $('#workflow-canvas').scrollTop();
+            
+            // Magnetic effect - find nearby input dots
+            const magnetRadius = 30; // pixels
+            let magnetized = false;
+            
+            $('.connection-dot.input').each(function() {
+                const inputNodeId = $(this).closest('.workflow-node').attr('id');
+                
+                // Skip if it's the same node we're dragging from
+                if (inputNodeId === connectionStart.nodeId) return;
+                
+                const inputRect = this.getBoundingClientRect();
+                const inputX = inputRect.left - rect.left + $('#workflow-canvas').scrollLeft() + (inputRect.width / 2);
+                const inputY = inputRect.top - rect.top + $('#workflow-canvas').scrollTop() + (inputRect.height / 2);
+                
+                // Calculate distance
+                const distance = Math.sqrt(Math.pow(x - inputX, 2) + Math.pow(y - inputY, 2));
+                
+                if (distance < magnetRadius) {
+                    // Snap to the input dot
+                    x = inputX;
+                    y = inputY;
+                    magnetized = true;
+                    
+                    // Add visual feedback
+                    $(this).addClass('magnetic-hover');
+                    
+                    // Store the magnetized target
+                    tempLine.setAttribute('data-magnetic-target', inputNodeId);
+                    return false; // Break the loop
+                } else {
+                    $(this).removeClass('magnetic-hover');
+                }
+            });
+            
+            if (!magnetized) {
+                tempLine.removeAttribute('data-magnetic-target');
+                $('.connection-dot.input').removeClass('magnetic-hover');
+            }
             
             tempLine.setAttribute('x1', startX);
             tempLine.setAttribute('y1', startY);
@@ -968,10 +1031,16 @@
             tempLine.setAttribute('y2', y);
         });
         
-        // Global mouseup to cancel connection
+        // Global mouseup to end or cancel connection
         $(document).on('mouseup.connection', function(e) {
-            // If not on a valid input dot, cancel
-            if (!($(e.target).hasClass('connection-dot') && $(e.target).hasClass('input'))) {
+            // Check if we're magnetized to a target
+            const magneticTarget = tempLine.getAttribute('data-magnetic-target');
+            
+            if (magneticTarget) {
+                // Complete the connection to the magnetized target
+                endConnection(magneticTarget);
+            } else if (!($(e.target).hasClass('connection-dot') && $(e.target).hasClass('input'))) {
+                // If not on a valid input dot and not magnetized, cancel
                 console.log('Connection cancelled');
                 
                 // Clean up
@@ -980,6 +1049,7 @@
                 connectionStart = null;
                 $('#workflow-canvas').css('cursor', 'default');
                 $(document).off('.connection');
+                $('.connection-dot.input').removeClass('magnetic-hover');
             }
         });
     }
@@ -1041,6 +1111,7 @@
         connectionStart = null;
         $('#workflow-canvas').css('cursor', 'default');
         $(document).off('.connection');
+        $('.connection-dot.input').removeClass('magnetic-hover');
     }
     
     function cancelConnection() {
@@ -1050,6 +1121,7 @@
         connectionStart = null;
         $('#workflow-canvas').css('cursor', 'default');
         $(document).off('.connection');
+        $('.connection-dot.input').removeClass('magnetic-hover');
     }
     
     // Update SVG connections
