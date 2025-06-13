@@ -144,6 +144,127 @@ namespace OptimalyAI.Controllers
                 workflow.Metadata.Description = "Visual workflow";
                 workflow.LastModified = DateTime.Now;
                 
+                // Parse WorkflowData to update nodes and edges
+                if (request.WorkflowData != null)
+                {
+                    var workflowDataJson = System.Text.Json.JsonSerializer.Serialize(request.WorkflowData);
+                    var orchestratorData = System.Text.Json.JsonSerializer.Deserialize<dynamic>(workflowDataJson);
+                    
+                    // Clear existing nodes and edges
+                    workflow.Nodes.Clear();
+                    workflow.Edges.Clear();
+                    
+                    // Recreate nodes from orchestrator data
+                    if (orchestratorData != null)
+                    {
+                        var jsonElement = (System.Text.Json.JsonElement)orchestratorData;
+                        
+                        // Get node positions from metadata
+                        var nodePositions = new Dictionary<string, NodePosition>();
+                        if (jsonElement.TryGetProperty("metadata", out var metadata) && 
+                            metadata.TryGetProperty("nodePositions", out var positions))
+                        {
+                            foreach (var pos in positions.EnumerateObject())
+                            {
+                                if (pos.Value.TryGetProperty("x", out var x) && 
+                                    pos.Value.TryGetProperty("y", out var y))
+                                {
+                                    nodePositions[pos.Name] = new NodePosition 
+                                    { 
+                                        X = x.GetDouble(), 
+                                        Y = y.GetDouble() 
+                                    };
+                                }
+                            }
+                        }
+                        
+                        // Create nodes from steps
+                        if (jsonElement.TryGetProperty("steps", out var steps))
+                        {
+                            foreach (var step in steps.EnumerateArray())
+                            {
+                                if (step.TryGetProperty("id", out var id) &&
+                                    step.TryGetProperty("name", out var name) &&
+                                    step.TryGetProperty("type", out var type))
+                                {
+                                    var nodeId = id.GetString();
+                                    var node = new WorkflowNode
+                                    {
+                                        Id = nodeId,
+                                        Name = name.GetString(),
+                                        Type = MapStepTypeToNodeType(type.GetString()),
+                                        Position = nodePositions.ContainsKey(nodeId) ? nodePositions[nodeId] : new NodePosition { X = 100, Y = 100 }
+                                    };
+                                    
+                                    // Add tools if present
+                                    if (step.TryGetProperty("tools", out var tools))
+                                    {
+                                        node.Tools = new List<string>();
+                                        foreach (var tool in tools.EnumerateArray())
+                                        {
+                                            node.Tools.Add(tool.GetString());
+                                        }
+                                    }
+                                    
+                                    workflow.Nodes.Add(node);
+                                }
+                            }
+                        }
+                        
+                        // Create edges from step connections
+                        if (jsonElement.TryGetProperty("steps", out var stepsForEdges))
+                        {
+                            foreach (var step in stepsForEdges.EnumerateArray())
+                            {
+                                if (step.TryGetProperty("id", out var fromId))
+                                {
+                                    var fromIdStr = fromId.GetString();
+                                    
+                                    // Regular next connection
+                                    if (step.TryGetProperty("next", out var next))
+                                    {
+                                        workflow.Edges.Add(new WorkflowEdge
+                                        {
+                                            Id = Guid.NewGuid().ToString(),
+                                            SourceId = fromIdStr,
+                                            TargetId = next.GetString()
+                                        });
+                                    }
+                                    
+                                    // Decision branches
+                                    if (step.TryGetProperty("branches", out var branches))
+                                    {
+                                        if (branches.TryGetProperty("true", out var trueBranch))
+                                        {
+                                            foreach (var target in trueBranch.EnumerateArray())
+                                            {
+                                                workflow.Edges.Add(new WorkflowEdge
+                                                {
+                                                    Id = Guid.NewGuid().ToString(),
+                                                    SourceId = fromIdStr,
+                                                    TargetId = target.GetString()
+                                                });
+                                            }
+                                        }
+                                        if (branches.TryGetProperty("false", out var falseBranch))
+                                        {
+                                            foreach (var target in falseBranch.EnumerateArray())
+                                            {
+                                                workflow.Edges.Add(new WorkflowEdge
+                                                {
+                                                    Id = Guid.NewGuid().ToString(),
+                                                    SourceId = fromIdStr,
+                                                    TargetId = target.GetString()
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 // Store in memory for now (TODO: save to database)
                 _workflows[request.ProjectId] = workflow;
                 
@@ -407,6 +528,18 @@ namespace OptimalyAI.Controllers
             {
                 return Json(new { success = false, message = ex.Message });
             }
+        }
+        
+        private NodeType MapStepTypeToNodeType(string stepType)
+        {
+            return stepType switch
+            {
+                "process" => NodeType.Task,
+                "ai-tool" => NodeType.Task,
+                "decision" => NodeType.Condition,
+                "parallel-gateway" => NodeType.Parallel,
+                _ => NodeType.Task
+            };
         }
         
         // Helper metoda pro detekci cyklů

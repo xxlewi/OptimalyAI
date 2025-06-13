@@ -1903,18 +1903,47 @@ Obrázek</textarea>
             type: 'GET',
             data: { projectId: currentProjectId },
             success: function(response) {
-                if (response.success && response.orchestratorData) {
-                    // Load saved workflow
-                    loadFromOrchestratorFormat(response.orchestratorData);
+                if (response.success && response.workflow) {
+                    // Check if we have orchestrator data in metadata
+                    if (response.workflow.metadata && response.workflow.metadata.orchestratorData) {
+                        // Load from orchestrator format
+                        loadFromOrchestratorFormat(response.workflow.metadata.orchestratorData);
+                    } else if (response.workflow.nodes && response.workflow.nodes.length > 0) {
+                        // Load nodes directly from workflow
+                        response.workflow.nodes.forEach(node => {
+                            const nodeData = {
+                                id: node.id,
+                                type: node.type.toLowerCase(),
+                                name: node.name,
+                                x: node.position.x,
+                                y: node.position.y,
+                                tools: node.tools || [],
+                                description: ''
+                            };
+                            nodes[node.id] = nodeData;
+                            renderNode(nodeData);
+                        });
+                        
+                        // Load edges
+                        if (response.workflow.edges) {
+                            response.workflow.edges.forEach(edge => {
+                                connections.push({
+                                    from: edge.source,
+                                    to: edge.target
+                                });
+                            });
+                            updateConnections();
+                        }
+                    }
                     console.log('Loaded nodes:', nodes);
                     console.log('Loaded connections:', connections);
                 } else {
-                    // Create new workflow with start/end
+                    // Create empty workflow
                     loadInitialWorkflow();
                 }
             },
             error: function() {
-                // Create new workflow on error
+                // Create empty workflow on error
                 loadInitialWorkflow();
             }
         });
