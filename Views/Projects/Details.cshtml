@@ -131,7 +131,7 @@
                             
                             <dt class="col-sm-5">Zákazník:</dt>
                             <dd class="col-sm-7">
-                                @if (Model.CustomerId.HasValue)
+                                @if (Model.CustomerId.HasValue && Model.CustomerId.Value != Guid.Empty)
                                 {
                                     <a href="@Url.Action("Details", "Customers", new { id = Model.CustomerId.Value })" class="text-primary">
                                         <i class="fas fa-user"></i> @Model.CustomerName
@@ -139,7 +139,10 @@
                                 }
                                 else
                                 {
-                                    <span>@Model.CustomerName</span>
+                                    <span>
+                                        <i class="fas fa-user text-muted"></i> @Model.CustomerName
+                                    </span>
+                                    <!-- Debug: CustomerId = @(Model.CustomerId?.ToString() ?? "null") -->
                                 }
                                 @if (!string.IsNullOrEmpty(Model.CustomerEmail))
                                 {

@@ -394,47 +394,55 @@
             if (projectName && projectName.trim()) {
                 const projectData = {
                     name: projectName.trim(),
-                    description: `Projekt vytvořený z požadavku ${@Model.RequestNumber}: @Model.Title`,
+                    description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize($"Projekt vytvořený z požadavku {Model.RequestNumber}: {Model.Title}")),
                     customerId: '@Model.ClientId',
-                    customerName: '@Model.ClientName',
+                    customerName: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ClientName ?? "")),
                     status: 'Draft',
-                    priority: 'Medium'
+                    priority: 'Medium',
+                    workflowType: 'Sequential' // Default workflow type
                 };
                 
                 $.ajax({
-                    url: '/api/projectsapi',
+                    url: '/api/projects',
                     method: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify(projectData),
-                    success: function(projectResponse) {
-                        if (projectResponse.success && projectResponse.data) {
+                    success: function(response) {
+                        console.log('Project created:', response);
+                        if (response && response.success && response.data && response.data.id) {
                             // Now link the request to the project
                             $.ajax({
-                                url: `/api/requestsapi/@Model.Id`,
+                                url: '/api/requestsapi/@Model.Id',
                                 method: 'PUT',
                                 contentType: 'application/json',
                                 data: JSON.stringify({
-                                    title: '@Model.Title',
-                                    description: '@Model.Description',
+                                    title: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Title)),
+                                    description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Description)),
                                     requestType: '@Model.RequestType',
                                     priority: '@Model.Priority.ToString()',
-                                    deadline: '@(Model.Deadline?.ToString("yyyy-MM-ddTHH:mm") ?? "")',
+                                    deadline: @(Model.Deadline.HasValue ? $"'{Model.Deadline.Value.ToString("yyyy-MM-ddTHH:mm")}'" : "null"),
                                     estimatedCost: @(Model.EstimatedCost ?? 0),
-                                    projectId: projectResponse.data.id,
+                                    projectId: response.data.id,
                                     clientId: '@Model.ClientId',
-                                    clientName: '@Model.ClientName'
+                                    clientName: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ClientName ?? ""))
                                 }),
-                                success: function() {
+                                success: function(updateResponse) {
+                                    console.log('Request updated:', updateResponse);
                                     toastr.success('Projekt byl vytvořen a požadavek k němu přiřazen');
                                     setTimeout(() => location.reload(), 1000);
                                 },
-                                error: function() {
+                                error: function(xhr, status, error) {
+                                    console.error('Failed to update request:', xhr.responseText);
                                     toastr.error('Projekt byl vytvořen, ale nepodařilo se propojit s požadavkem');
                                 }
                             });
+                        } else {
+                            console.error('Invalid project response:', response);
+                            toastr.error('Projekt byl vytvořen, ale odpověď serveru je neplatná');
                         }
                     },
-                    error: function() {
+                    error: function(xhr, status, error) {
+                        console.error('Failed to create project:', xhr.responseText);
                         toastr.error('Nepodařilo se vytvořit projekt');
                     }
                 });

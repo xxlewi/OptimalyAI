@@ -136,6 +136,38 @@ namespace OptimalyAI.Controllers
         }
 
         /// <summary>
+        /// Debug endpoint pro kontrolu dat projektu
+        /// </summary>
+        [HttpGet("api/{id}/debug")]
+        public async Task<IActionResult> DebugProject(Guid id)
+        {
+            try
+            {
+                var project = await _projectService.GetByIdAsync(id);
+                if (project == null)
+                {
+                    return NotFound(new { message = "Project not found" });
+                }
+                
+                return Json(new {
+                    projectId = project.Id,
+                    projectName = project.Name,
+                    customerId = project.CustomerId,
+                    customerIdHasValue = project.CustomerId.HasValue,
+                    customerName = project.CustomerName,
+                    customerEmail = project.CustomerEmail,
+                    status = project.Status,
+                    createdAt = project.CreatedAt,
+                    updatedAt = project.UpdatedAt
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message, stackTrace = ex.StackTrace });
+            }
+        }
+
+        /// <summary>
         /// Detail projektu
         /// </summary>
         [HttpGet("{id}")]
@@ -147,6 +179,21 @@ namespace OptimalyAI.Controllers
                 if (project == null)
                 {
                     return NotFound();
+                }
+                
+                // Debug logging for customer data
+                _logger.LogInformation("Loading project details for ID: {ProjectId}", id);
+                _logger.LogInformation("Project Name: {Name}, CustomerId: {CustomerId}, CustomerName: {CustomerName}", 
+                    project.Name, project.CustomerId, project.CustomerName);
+                
+                // Additional debug info
+                if (project.CustomerId.HasValue)
+                {
+                    _logger.LogInformation("Customer link should be displayed for CustomerId: {CustomerId}", project.CustomerId.Value);
+                }
+                else
+                {
+                    _logger.LogWarning("CustomerId is null for project {ProjectId}", id);
                 }
                 
                 var executions = await _projectService.GetProjectExecutionsAsync(id, 10);

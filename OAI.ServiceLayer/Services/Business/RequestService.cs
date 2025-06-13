@@ -95,6 +95,7 @@ namespace OAI.ServiceLayer.Services.Business
                 {
                     Name = dto.ProjectName,
                     Description = $"Projekt vytvořený z požadavku: {dto.Title}",
+                    CustomerId = !string.IsNullOrWhiteSpace(dto.ClientId) ? Guid.Parse(dto.ClientId) : null,
                     CustomerName = dto.ClientName ?? "Interní projekt",
                     Priority = "Normal",
                     WorkflowType = dto.RequestType ?? "custom"
