@@ -766,60 +766,58 @@
             `);
             container.append(svg);
             
-            // Simple layout algorithm
-            const nodeWidth = 180;
-            const nodeHeight = 80;
-            const horizontalSpacing = 250;
-            const verticalSpacing = 120;
-            const startX = 50;
-            const startY = 50;
-            
-            // Create start node
-            const startNode = $(`
-                <div class="workflow-node start" style="left: ${startX}px; top: ${startY + nodeHeight}px;">
-                    <i class="fas fa-play-circle fa-2x text-success"></i>
-                    <div class="mt-2">Start</div>
-                </div>
-            `);
-            container.append(startNode);
-            
-            // Create stage nodes
-            let x = startX + horizontalSpacing;
-            let y = startY;
-            
-            if (workflow.stages && workflow.stages.length > 0) {
-                workflow.stages.forEach((stage, index) => {
-                    const node = $(`
-                        <div class="workflow-node" data-stage-id="${stage.id}" style="left: ${x}px; top: ${y}px;">
-                            <div class="font-weight-bold">${stage.name}</div>
-                            <small class="text-muted">${stage.tools ? stage.tools.length : 0} tools</small>
+            // Render nodes from workflow data
+            if (workflow.nodes && workflow.nodes.length > 0) {
+                workflow.nodes.forEach(node => {
+                    const nodeEl = $(`
+                        <div class="workflow-node" data-node-id="${node.id}" style="left: ${node.position.x}px; top: ${node.position.y}px;">
+                            <div class="font-weight-bold">${node.name}</div>
+                            <small class="text-muted">${node.type}</small>
+                            ${node.tools && node.tools.length > 0 ? `<br><small>${node.tools.join(', ')}</small>` : ''}
                         </div>
                     `);
-                    container.append(node);
                     
-                    // Position for next node
-                    if ((index + 1) % 3 === 0) {
-                        x = startX + horizontalSpacing;
-                        y += verticalSpacing;
-                    } else {
-                        x += horizontalSpacing;
+                    // Add special classes based on type
+                    if (node.type === 'Start') {
+                        nodeEl.addClass('start');
+                    } else if (node.type === 'End') {
+                        nodeEl.addClass('end');
                     }
+                    
+                    container.append(nodeEl);
                 });
+                
+                // Draw connections
+                if (workflow.edges && workflow.edges.length > 0) {
+                    setTimeout(() => {
+                        workflow.edges.forEach(edge => {
+                            const fromNode = $(`[data-node-id="${edge.source}"]`);
+                            const toNode = $(`[data-node-id="${edge.target}"]`);
+                            
+                            if (fromNode.length && toNode.length) {
+                                const x1 = fromNode.position().left + fromNode.width();
+                                const y1 = fromNode.position().top + fromNode.height() / 2;
+                                const x2 = toNode.position().left;
+                                const y2 = toNode.position().top + toNode.height() / 2;
+                                
+                                const path = `<path class="workflow-connection" d="M ${x1} ${y1} L ${x2} ${y2}"/>`;
+                                svg.append(path);
+                            }
+                        });
+                    }, 100);
+                }
+            } else {
+                // Fallback if no nodes - show empty state
+                container.html(`
+                    <div class="text-center py-5">
+                        <i class="fas fa-project-diagram fa-3x text-muted mb-3"></i>
+                        <p>Workflow není definováno</p>
+                        <a href="/WorkflowDesigner?projectId=${projectId}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Vytvořit workflow
+                        </a>
+                    </div>
+                `);
             }
-            
-            // Create end node
-            const endNode = $(`
-                <div class="workflow-node end" style="left: ${x}px; top: ${y}px;">
-                    <i class="fas fa-flag-checkered fa-2x text-danger"></i>
-                    <div class="mt-2">End</div>
-                </div>
-            `);
-            container.append(endNode);
-            
-            // Draw connections (simplified)
-            setTimeout(() => {
-                drawConnections();
-            }, 100);
         }
         
         function drawConnections() {

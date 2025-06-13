@@ -43,39 +43,42 @@ namespace OptimalyAI.Controllers
         [HttpGet]
         public IActionResult LoadWorkflow(Guid projectId)
         {
+            WorkflowGraphViewModel workflow;
+            
             if (_workflows.ContainsKey(projectId))
             {
-                var workflow = _workflows[projectId];
-                
-                // If OrchestratorData exists, ensure it has the current settings
-                if (workflow.Metadata?.OrchestratorData != null)
-                {
-                    // Return the orchestrator data as-is with settings
-                    return Json(new { 
-                        success = true, 
-                        orchestratorData = workflow.Metadata.OrchestratorData 
-                    });
-                }
-                
-                // Return empty workflow structure with settings
-                return Json(new { 
-                    success = true, 
-                    orchestratorData = new
-                    {
-                        steps = new List<object>(),
-                        metadata = new
-                        {
-                            settings = workflow.Metadata?.Settings,
-                            nodePositions = new Dictionary<string, object>()
-                        }
-                    }
-                });
+                workflow = _workflows[projectId];
+            }
+            else
+            {
+                // Create a basic workflow if none exists
+                workflow = CreateDefaultWorkflow(projectId);
+                _workflows[projectId] = workflow;
             }
             
-            // No workflow exists at all
+            // Return the workflow data for visualization
             return Json(new { 
-                success = true,
-                orchestratorData = (object)null
+                success = true, 
+                workflow = new
+                {
+                    projectId = workflow.ProjectId,
+                    projectName = workflow.ProjectName,
+                    nodes = workflow.Nodes.Select(n => new
+                    {
+                        id = n.Id,
+                        name = n.Name,
+                        type = n.Type.ToString(),
+                        position = n.Position,
+                        tools = n.Tools
+                    }),
+                    edges = workflow.Edges.Select(e => new
+                    {
+                        id = e.Id,
+                        source = e.SourceId,
+                        target = e.TargetId
+                    }),
+                    metadata = workflow.Metadata
+                }
             });
         }
         
