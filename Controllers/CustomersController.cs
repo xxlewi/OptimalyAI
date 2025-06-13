@@ -100,14 +100,14 @@ namespace OptimalyAI.Controllers
                     LastContactDate = customer.LastContactDate,
                     TotalProjectsValue = customer.TotalProjectsValue,
                     ProjectsCount = customer.ProjectsCount,
-                    ActiveProjectsCount = 0,
+                    ActiveProjectsCount = customer.ProjectsCount > 0 ? customer.RecentProjects?.Count(p => p.Status == "Active") ?? 0 : 0,
                     AverageProjectSuccessRate = customer.AverageProjectSuccessRate,
                     CreditLimit = customer.CreditLimit,
                     CurrentDebt = customer.CurrentDebt,
                     PaymentTermDays = customer.PaymentTermDays,
                     IsDeleted = customer.IsDeleted,
                     DeletedAt = customer.DeletedAt,
-                    RecentProjects = new List<OAI.Core.DTOs.ProjectDto>(),
+                    RecentProjects = customer.RecentProjects ?? new List<OAI.Core.DTOs.ProjectDto>(),
                     RecentRequests = customer.RecentRequests?.Select(r => new RequestViewModel
                     {
                         Id = r.Id,

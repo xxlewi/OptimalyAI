@@ -202,8 +202,33 @@ namespace OAI.ServiceLayer.Services.Customers
             }
 
             // Přidat nedávné projekty
-            // Simplified - no project mapping for now  
-            dto.RecentProjects = new List<OAI.Core.DTOs.ProjectDto>();
+            if (customer.Projects != null && customer.Projects.Any())
+            {
+                dto.RecentProjects = customer.Projects
+                    .OrderByDescending(p => p.CreatedAt)
+                    .Take(5)
+                    .Select(p => new OAI.Core.DTOs.ProjectDto
+                    {
+                        Id = p.Id,
+                        Name = p.Name,
+                        Description = p.Description ?? string.Empty,
+                        Status = p.Status.ToString(),
+                        CustomerId = p.CustomerId,
+                        CustomerName = p.CustomerName ?? string.Empty,
+                        CustomerEmail = p.CustomerEmail ?? string.Empty,
+                        Priority = p.Priority.ToString(),
+                        TriggerType = p.TriggerType ?? "Manual",
+                        CronExpression = p.Schedule ?? string.Empty,
+                        LastRun = p.Executions?.OrderByDescending(e => e.StartedAt).FirstOrDefault()?.StartedAt,
+                        CreatedAt = p.CreatedAt,
+                        UpdatedAt = p.UpdatedAt
+                    })
+                    .ToList();
+            }
+            else
+            {
+                dto.RecentProjects = new List<OAI.Core.DTOs.ProjectDto>();
+            }
 
             return dto;
         }

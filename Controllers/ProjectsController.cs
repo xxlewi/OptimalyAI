@@ -209,8 +209,8 @@ namespace OptimalyAI.Controllers
                     createDto.CustomerName = "Interní projekt";
                     createDto.CustomerEmail = "";
                 }
-                // Handle new customer creation
-                else if (createDto.CustomerId == null && !string.IsNullOrEmpty(createDto.CustomerName))
+                // Handle new customer creation - only if NOT internal project
+                else if (createDto.CustomerId == null && !string.IsNullOrEmpty(createDto.CustomerName) && createDto.CustomerName != "Interní projekt")
                 {
                     // Create new customer first
                     var newCustomer = await _customerService.CreateAsync(new CreateCustomerDto

@@ -602,6 +602,7 @@ namespace OAI.ServiceLayer.Services.Projects
                 Name = complexDto.Name,
                 Description = complexDto.Description ?? string.Empty,
                 Status = complexDto.Status.ToString(),
+                CustomerId = complexDto.CustomerId,
                 CustomerName = complexDto.CustomerName ?? string.Empty,
                 CustomerEmail = complexDto.CustomerEmail ?? string.Empty,
                 TriggerType = complexDto.TriggerType ?? "Manual",

@@ -3,6 +3,7 @@ using OAI.Core.DTOs.Customers;
 using OAI.Core.Entities.Customers;
 using OAI.Core.Interfaces;
 using OAI.Core.Mapping;
+using OAI.ServiceLayer.Services.Projects;
 using static OAI.Core.Entities.Customers.CustomerRequest;
 
 namespace OAI.ServiceLayer.Mapping.Customers
@@ -69,7 +70,20 @@ namespace OAI.ServiceLayer.Mapping.Customers
                 CurrentDebt = entity.CurrentDebt,
                 PaymentTermDays = entity.PaymentTermDays,
                 IsDeleted = entity.IsDeleted,
-                DeletedAt = entity.DeletedAt
+                DeletedAt = entity.DeletedAt,
+                // Map projects if loaded
+                RecentProjects = entity.Projects?.Take(10).Select(p => new OAI.Core.DTOs.ProjectDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Description = p.Description ?? string.Empty,
+                    Status = p.Status.ToString(),
+                    CustomerId = p.CustomerId,
+                    CustomerName = p.CustomerName ?? string.Empty,
+                    Priority = p.Priority.ToString(),
+                    CreatedAt = p.CreatedAt,
+                    UpdatedAt = p.UpdatedAt
+                }).OrderByDescending(p => p.CreatedAt).ToList() ?? new List<OAI.Core.DTOs.ProjectDto>()
             };
         }
 
