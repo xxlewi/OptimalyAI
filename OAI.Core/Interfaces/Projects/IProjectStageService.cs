@@ -37,6 +37,11 @@ namespace OAI.Core.Interfaces.Projects
         Task<bool> DeleteStageAsync(Guid stageId, CancellationToken cancellationToken = default);
         
         /// <summary>
+        /// Delete all stages for a project
+        /// </summary>
+        Task<bool> DeleteAllProjectStagesAsync(Guid projectId, CancellationToken cancellationToken = default);
+        
+        /// <summary>
         /// Reorder stages
         /// </summary>
         Task<bool> ReorderStagesAsync(Guid projectId, IEnumerable<Guid> orderedStageIds, CancellationToken cancellationToken = default);

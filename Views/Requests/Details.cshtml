@@ -117,7 +117,7 @@
                             <dd class="col-sm-9">
                                 @if (Model.ProjectId.HasValue && !string.IsNullOrEmpty(Model.ProjectName))
                                 {
-                                    <a href="/Projects/Details/@Model.ProjectId" class="text-primary">
+                                    <a href="/Projects/@Model.ProjectId" class="text-primary">
                                         <i class="fas fa-project-diagram"></i> @Model.ProjectName
                                     </a>
                                 }

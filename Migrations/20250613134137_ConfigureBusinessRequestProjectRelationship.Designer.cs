@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OptimalyAI.Infrastructure;
@@ -11,9 +12,11 @@ using OptimalyAI.Infrastructure;
 namespace OptimalyAI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250613134137_ConfigureBusinessRequestProjectRelationship")]
+    partial class ConfigureBusinessRequestProjectRelationship
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -67,6 +70,9 @@ namespace OptimalyAI.Migrations
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ProjectId1")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("RequestNumber")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -96,6 +102,8 @@ namespace OptimalyAI.Migrations
                         .HasDatabaseName("IX_BusinessRequest_CreatedAt");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("ProjectId1");
 
                     b.HasIndex("RequestNumber")
                         .IsUnique();
@@ -1928,9 +1936,13 @@ namespace OptimalyAI.Migrations
             modelBuilder.Entity("OAI.Core.Entities.Business.BusinessRequest", b =>
                 {
                     b.HasOne("OAI.Core.Entities.Projects.Project", "Project")
-                        .WithMany("BusinessRequests")
+                        .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OAI.Core.Entities.Projects.Project", null)
+                        .WithMany("BusinessRequests")
+                        .HasForeignKey("ProjectId1");
 
                     b.HasOne("OAI.Core.Entities.Business.WorkflowTemplate", "WorkflowTemplate")
                         .WithMany("BusinessRequests")

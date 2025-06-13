@@ -73,6 +73,13 @@ public class AppDbContext : DbContext
             .Property(br => br.RequestNumber)
             .HasMaxLength(50)
             .IsRequired();
+
+        // Configure BusinessRequest -> Project relationship
+        modelBuilder.Entity<BusinessRequest>()
+            .HasOne(br => br.Project)
+            .WithMany(p => p.BusinessRequests)
+            .HasForeignKey(br => br.ProjectId)
+            .OnDelete(DeleteBehavior.SetNull); // Když se smaže projekt, nastaví se ProjectId na NULL
             
         // Sequence will be created only for PostgreSQL during migration
             

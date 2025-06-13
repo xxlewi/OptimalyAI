@@ -529,10 +529,62 @@ namespace OAI.ServiceLayer.Services.Projects
             if (project == null)
                 return false;
 
-            await _projectRepository.DeleteAsync(project.Id);
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                _logger.LogInformation("Zahajuji kaskádové mazání projektu {ProjectId}", projectId);
 
-            return true;
+                // Mazání souvisejících záznamů v správném pořadí (od potomků k rodičům)
+                
+                // 1. Smazání souborů projektu
+                var files = await _fileRepository.GetAsync(f => f.ProjectId == projectId);
+                foreach (var file in files)
+                {
+                    await _fileRepository.DeleteAsync(file.Id);
+                }
+                _logger.LogInformation("Smazáno {Count} souborů projektu", files.Count());
+
+                // 2. Smazání metrik projektu
+                var metrics = await _metricRepository.GetAsync(m => m.ProjectId == projectId);
+                foreach (var metric in metrics)
+                {
+                    await _metricRepository.DeleteAsync(metric.Id);
+                }
+                _logger.LogInformation("Smazáno {Count} metrik projektu", metrics.Count());
+
+                // 3. Smazání spuštění projektu
+                var executions = await _executionRepository.GetAsync(e => e.ProjectId == projectId);
+                foreach (var execution in executions)
+                {
+                    await _executionRepository.DeleteAsync(execution.Id);
+                }
+                _logger.LogInformation("Smazáno {Count} spuštění projektu", executions.Count());
+
+                // 4. Smazání historie projektu
+                var history = await _historyRepository.GetAsync(h => h.ProjectId == projectId);
+                foreach (var historyRecord in history)
+                {
+                    await _historyRepository.DeleteAsync(historyRecord.Id);
+                }
+                _logger.LogInformation("Smazáno {Count} záznamů historie projektu", history.Count());
+
+                // 5. Smazání etap projektu
+                await _stageService.DeleteAllProjectStagesAsync(projectId);
+                _logger.LogInformation("Smazány etapy projektu");
+
+                // 6. Nakonec smazání samotného projektu
+                await _projectRepository.DeleteAsync(project.Id);
+                
+                // Uložení všech změn
+                await _unitOfWork.SaveChangesAsync();
+                
+                _logger.LogInformation("Projekt {ProjectId} byl úspěšně smazán", projectId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting project {ProjectId}", projectId);
+                throw new BusinessException($"Chyba při mazání projektu: {ex.Message}");
+            }
         }
 
         // Private helper methods

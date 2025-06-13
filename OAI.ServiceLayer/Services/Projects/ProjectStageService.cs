@@ -129,6 +129,43 @@ namespace OAI.ServiceLayer.Services.Projects
             return true;
         }
 
+        public async Task<bool> DeleteAllProjectStagesAsync(Guid projectId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Get all stages for the project
+                var stages = await _stageRepository.GetAsync(
+                    filter: s => s.ProjectId == projectId,
+                    include: query => query.Include(s => s.StageTools)
+                );
+
+                var stageList = stages.ToList();
+                
+                // Delete stage tools first
+                foreach (var stage in stageList)
+                {
+                    foreach (var stageTool in stage.StageTools)
+                    {
+                        await _stageToolRepository.DeleteAsync(stageTool.Id);
+                    }
+                }
+
+                // Delete stages
+                foreach (var stage in stageList)
+                {
+                    await _stageRepository.DeleteAsync(stage.Id);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting all stages for project {ProjectId}", projectId);
+                throw;
+            }
+        }
+
         public async Task<bool> ReorderStagesAsync(Guid projectId, IEnumerable<Guid> orderedStageIds, CancellationToken cancellationToken = default)
         {
             var stageIds = orderedStageIds.ToList();

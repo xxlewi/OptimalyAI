@@ -248,24 +248,22 @@
                                         </div>
                                     </td>
                                     <td class="text-center align-middle">
-                                        <div class="btn-group">
-                                            <button type="button" class="btn btn-success btn-sm" 
-                                                    onclick="executeWorkflow('@project.Id')" title="Spustit workflow">
-                                                <i class="fas fa-play"></i>
-                                            </button>
-                                            <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" 
-                                               class="btn btn-primary btn-sm" title="Upravit workflow">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <a href="@Url.Action("Details", new { id = project.Id })" 
-                                               class="btn btn-info btn-sm" title="Detail projektu">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <button type="button" class="btn btn-danger btn-sm" 
-                                                    onclick="deleteProject('@project.Id')" title="Smazat projekt">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
+                                        <button type="button" class="btn btn-success btn-sm" 
+                                                onclick="executeWorkflow('@project.Id')" title="Spustit workflow">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = project.Id })" 
+                                           class="btn btn-primary btn-sm ml-1" title="Upravit workflow">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="@Url.Action("Details", new { id = project.Id })" 
+                                           class="btn btn-info btn-sm ml-1" title="Detail projektu">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-danger btn-sm ml-1" 
+                                                onclick="deleteProject('@project.Id')" title="Smazat projekt">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
                                     </td>
                                 </tr>
                             }
@@ -288,42 +286,9 @@
     </div>
 </section>
 
-<!-- Delete Project Modal -->
-<div class="modal fade" id="deleteProjectModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Smazat projekt</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Jak chcete naložit s projektem <strong id="projectNameToDelete"></strong>?</p>
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="radio" name="deleteOption" id="archiveOption" value="archive" checked>
-                    <label class="form-check-label" for="archiveOption">
-                        <i class="fas fa-archive text-warning"></i> Archivovat projekt (bude možné jej později obnovit)
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="deleteOption" id="deleteOption" value="delete">
-                    <label class="form-check-label" for="deleteOption">
-                        <i class="fas fa-trash text-danger"></i> Trvale smazat projekt (nelze vrátit zpět)
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Potvrdit</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 @section Scripts {
     <script>
-        let projectToDelete = null;
         
         function executeWorkflow(projectId) {
             window.location.href = '/Projects/' + projectId;
@@ -333,48 +298,78 @@
             const projectRow = $(`button[onclick="deleteProject('${projectId}')"]`).closest('tr');
             const projectName = projectRow.find('td:first strong a').text();
             
-            projectToDelete = { id: projectId, name: projectName };
-            $('#projectNameToDelete').text(projectName);
-            $('#deleteProjectModal').modal('show');
+            Swal.fire({
+                title: 'Smazat projekt?',
+                text: `Co chcete udělat s projektem "${projectName}"?`,
+                icon: 'warning',
+                showCancelButton: true,
+                showDenyButton: true,
+                confirmButtonColor: '#ffc107',
+                denyButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-archive"></i> Archivovat',
+                denyButtonText: '<i class="fas fa-trash"></i> Trvale smazat',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Archive project
+                    archiveProject(projectId, projectName);
+                } else if (result.isDenied) {
+                    // Delete permanently without additional confirmation
+                    deleteProjectPermanently(projectId, projectName);
+                }
+            });
         }
         
-        $('#confirmDeleteBtn').click(async function() {
-            if (!projectToDelete) return;
-            
-            const deleteOption = $('input[name="deleteOption"]:checked').val();
-            const isArchive = deleteOption === 'archive';
-            
-            try {
-                const response = await fetch(`/Projects/api/${projectToDelete.id}/${isArchive ? 'archive' : 'delete'}`, {
-                    method: isArchive ? 'PUT' : 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (response.ok) {
-                    $('#deleteProjectModal').modal('hide');
-                    
-                    if (isArchive) {
-                        toastr.success(`Projekt "${projectToDelete.name}" byl archivován`);
-                    } else {
-                        toastr.success(`Projekt "${projectToDelete.name}" byl trvale smazán`);
-                    }
-                    
-                    // Reload stránky pro zobrazení aktuálních dat z databáze
-                    setTimeout(() => {
+        function archiveProject(projectId, projectName) {
+            $.ajax({
+                url: `/Projects/api/${projectId}/archive`,
+                type: 'PUT',
+                success: function(response) {
+                    Swal.fire(
+                        'Archivováno!',
+                        `Projekt "${projectName}" byl úspěšně archivován.`,
+                        'success'
+                    ).then(() => {
                         window.location.reload();
-                    }, 1000);
-                } else {
-                    const error = await response.text();
-                    toastr.error(`Chyba při ${isArchive ? 'archivaci' : 'mazání'} projektu: ${error}`);
+                    });
+                },
+                error: function(xhr) {
+                    console.error('Archive error:', xhr);
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nepodařilo se archivovat projekt';
+                    Swal.fire(
+                        'Chyba!',
+                        `Chyba při archivaci projektu: ${errorMessage}`,
+                        'error'
+                    );
                 }
-            } catch (error) {
-                toastr.error(`Chyba při ${isArchive ? 'archivaci' : 'mazání'} projektu: ${error.message}`);
-            }
-            
-            projectToDelete = null;
-        });
+            });
+        }
+        
+        function deleteProjectPermanently(projectId, projectName) {
+            $.ajax({
+                url: `/Projects/api/${projectId}/delete`,
+                type: 'DELETE',
+                success: function(response) {
+                    Swal.fire(
+                        'Smazáno!',
+                        `Projekt "${projectName}" byl trvale smazán.`,
+                        'success'
+                    ).then(() => {
+                        window.location.reload();
+                    });
+                },
+                error: function(xhr) {
+                    console.error('Delete error:', xhr);
+                    const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nepodařilo se smazat projekt';
+                    Swal.fire(
+                        'Chyba!',
+                        `Chyba při mazání projektu: ${errorMessage}`,
+                        'error'
+                    );
+                }
+            });
+        }
         
         function filterProjects() {
             const searchTerm = $('#searchProjects').val().toLowerCase();

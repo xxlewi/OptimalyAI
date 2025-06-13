@@ -27,7 +27,10 @@
                         })"></i> @Model.Status
                     </span>
                 </h1>
-                <p class="text-muted">@Model.Description</p>
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <p class="text-muted lead">@Model.Description</p>
+                }
             </div>
             <div class="col-sm-4 text-right">
                 <a href="@Url.Action("Index")" class="btn btn-default">
@@ -40,6 +43,20 @@
                     <button class="btn btn-success" onclick="showRunModal('production')">
                         <i class="fas fa-play"></i> Production run
                     </button>
+                </div>
+                <div class="btn-group ml-2">
+                    <button type="button" class="btn btn-danger dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-trash"></i> Smazat
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right">
+                        <a class="dropdown-item" href="#" onclick="archiveProject('@Model.Id')">
+                            <i class="fas fa-archive text-warning"></i> Archivovat projekt
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" href="#" onclick="deleteProject('@Model.Id')">
+                            <i class="fas fa-trash-alt"></i> Trvale smazat
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -135,6 +152,14 @@
                             <dd class="col-sm-7">
                                 <span class="badge badge-info">@Model.StageCount</span>
                             </dd>
+                            
+                            @if (!string.IsNullOrEmpty(Model.Description))
+                            {
+                                <dt class="col-sm-12 mt-3">Popis projektu:</dt>
+                                <dd class="col-sm-12">
+                                    <p class="text-muted mb-0">@Model.Description</p>
+                                </dd>
+                            }
                         </dl>
                     </div>
                 </div>
@@ -1240,6 +1265,85 @@
                 'Urgent': { class: 'badge-danger', text: 'Urgentní' }
             };
             return badges[priority] || { class: 'badge-secondary', text: priority };
+        }
+        
+        function archiveProject(projectId) {
+            Swal.fire({
+                title: 'Archivovat projekt?',
+                text: 'Projekt bude přesunut do archivu. Můžete ho později obnovit.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ffc107',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ano, archivovat!',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/api/projects/' + projectId + '/archive',
+                        type: 'PUT',
+                        success: function(response) {
+                            Swal.fire(
+                                'Archivováno!',
+                                'Projekt byl úspěšně archivován.',
+                                'success'
+                            ).then(() => {
+                                window.location.href = '/Projects';
+                            });
+                        },
+                        error: function() {
+                            Swal.fire(
+                                'Chyba!',
+                                'Nepodařilo se archivovat projekt.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+        
+        function deleteProject(projectId) {
+            Swal.fire({
+                title: 'Trvale smazat projekt?',
+                text: 'POZOR! Tato akce je nevratná. Projekt bude trvale odstraněn včetně všech dat.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ano, trvale smazat!',
+                cancelButtonText: 'Zrušit',
+                input: 'text',
+                inputPlaceholder: 'Napište SMAZAT pro potvrzení',
+                inputValidator: (value) => {
+                    if (value !== 'SMAZAT') {
+                        return 'Musíte napsat SMAZAT pro potvrzení!'
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/api/projects/' + projectId + '/delete',
+                        type: 'DELETE',
+                        success: function(response) {
+                            Swal.fire(
+                                'Smazáno!',
+                                'Projekt byl trvale smazán.',
+                                'success'
+                            ).then(() => {
+                                window.location.href = '/Projects';
+                            });
+                        },
+                        error: function() {
+                            Swal.fire(
+                                'Chyba!',
+                                'Nepodařilo se smazat projekt.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
         }
     </script>
 }
