@@ -130,6 +130,7 @@
                             <tr>
                                 <th>Požadavek</th>
                                 <th>Klient</th>
+                                <th>Projekt</th>
                                 <th>Priorita</th>
                                 <th>Vytvořeno</th>
                                 <th>Deadline</th>
@@ -138,7 +139,7 @@
                         </thead>
                         <tbody id="requests-tbody">
                             <tr>
-                                <td colspan="6" class="text-center">
+                                <td colspan="7" class="text-center">
                                     <i class="fas fa-spinner fa-spin"></i> Načítání...
                                 </td>
                             </tr>
@@ -174,8 +175,13 @@
         
         // Load requests
         function loadRequests() {
+            let url = '/api/requestsapi';
+            if (currentFilter) {
+                url += '?status=' + encodeURIComponent(currentFilter);
+            }
+            
             $.ajax({
-                url: '/api/requestsapi' + (currentFilter ? '?status=' + currentFilter : ''),
+                url: url,
                 method: 'GET',
                 success: function(response) {
                     const tbody = $('#requests-tbody');
@@ -257,6 +263,17 @@
                         </div>
                     </td>
                     <td>
+                        <div>
+                            ${request.projectId && request.projectName ? `
+                                <a href="/Projects/Details/${request.projectId}" class="text-primary">
+                                    <i class="fas fa-project-diagram"></i> ${request.projectName}
+                                </a>
+                            ` : `
+                                <span class="text-muted">Není přiřazen</span>
+                            `}
+                        </div>
+                    </td>
+                    <td>
                         <span class="badge ${priorityBadge[request.priority]}">${priorityText[request.priority] || request.priority}</span>
                     </td>
                     <td>
@@ -315,19 +332,20 @@
             const searchTerm = $('#searchRequests').val().toLowerCase();
             const statusFilter = $('#statusFilter').val();
             
+            // If status filter is set, update currentFilter and reload from server
+            if (statusFilter !== currentFilter) {
+                currentFilter = statusFilter;
+                loadRequests();
+                return;
+            }
+            
+            // Otherwise just filter visible rows
             $('#requestsTable tbody tr').each(function() {
                 const row = $(this);
-                const status = row.attr('data-status');
                 const title = row.attr('data-title') || '';
                 const client = row.attr('data-client') || '';
                 const number = row.attr('data-number') || '';
                 const description = row.find('td:first small').text().toLowerCase();
-                
-                // Status filter
-                let statusMatch = true;
-                if (statusFilter) {
-                    statusMatch = status === statusFilter;
-                }
                 
                 // Search filter
                 const searchMatch = !searchTerm || 
@@ -336,7 +354,7 @@
                     client.includes(searchTerm) ||
                     number.toLowerCase().includes(searchTerm);
                 
-                if (statusMatch && searchMatch) {
+                if (searchMatch) {
                     row.show();
                 } else {
                     row.hide();
@@ -421,6 +439,14 @@
             $('#searchRequests').on('keyup', function() {
                 filterRequests();
             });
+            
+            // Check URL for status filter
+            const urlParams = new URLSearchParams(window.location.search);
+            const statusFromUrl = urlParams.get('status');
+            if (statusFromUrl) {
+                $('#statusFilter').val(statusFromUrl);
+                currentFilter = statusFromUrl;
+            }
             
             // Apply default filter on page load
             filterRequests();

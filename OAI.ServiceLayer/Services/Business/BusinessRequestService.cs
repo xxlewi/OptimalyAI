@@ -47,7 +47,8 @@ namespace OAI.ServiceLayer.Services.Business
 
         public new async Task<IEnumerable<BusinessRequestDto>> GetAllAsync()
         {
-            var entities = await base.GetAllAsync();
+            var entities = await _repository.GetAsync(
+                include: q => q.Include(br => br.Project));
             return entities.Select(_mapper.ToDto);
         }
 
@@ -120,7 +121,8 @@ namespace OAI.ServiceLayer.Services.Business
                     .ThenInclude(re => re.StepExecutions)
                     .Include(br => br.Files)
                     .Include(br => br.Notes)
-                    .Include(br => br.WorkflowTemplate));
+                    .Include(br => br.WorkflowTemplate)
+                    .Include(br => br.Project));
 
             if (entity == null)
             {

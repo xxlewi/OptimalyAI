@@ -1,0 +1,530 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+@{
+    Layout = null; // Žádný layout - jen čistý diagram
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Diagram</title>
+    
+    <!-- Essential CSS -->
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Source Sans Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: #f8f9fa;
+        }
+        
+        .diagram-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            overflow: auto;
+            background: white;
+        }
+        
+        #workflow-canvas {
+            width: 2000px;
+            height: 1500px;
+            position: relative;
+            background-image: 
+                linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .workflow-node {
+            position: absolute !important;
+            background: #ffffff !important;
+            border: 3px solid #007bff !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+            min-width: 180px !important;
+            cursor: default !important;
+            user-select: none !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            z-index: 10 !important;
+            color: #333 !important;
+        }
+        
+        .workflow-node.condition {
+            width: 140px;
+            height: 140px;
+            border: none !important;
+            background: transparent !important;
+            padding: 0;
+            min-width: unset;
+            box-shadow: none !important;
+        }
+        
+        .workflow-node.condition::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: rotate(45deg);
+            border: 3px solid #ffc107;
+            background: #fff8e1;
+            border-radius: 15px;
+            z-index: 1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .workflow-node.condition .node-content-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 2;
+        }
+        
+        .workflow-node.condition .node-header {
+            margin-bottom: 5px;
+            text-align: center;
+            font-size: 14px;
+            position: relative;
+        }
+        
+        .workflow-node.parallel {
+            width: 140px;
+            height: 140px;
+            border: none !important;
+            background: transparent !important;
+            padding: 0;
+            min-width: unset;
+            box-shadow: none !important;
+        }
+        
+        .workflow-node.parallel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: rotate(45deg);
+            border: 3px solid #6f42c1;
+            background: #f3e5f5;
+            border-radius: 15px;
+            z-index: 1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .workflow-node.parallel::after {
+            content: '+';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            color: #6f42c1;
+            z-index: 2;
+        }
+        
+        .workflow-node.parallel .node-content-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 3;
+        }
+        
+        .node-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .node-tools {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        
+        .tool-badge {
+            background: #e9ecef;
+            color: #495057;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        
+        .badge-purple {
+            background: #6f42c1;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        
+        #workflow-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* Connection dots */
+        .connection-dot {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #007bff;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: default;
+            z-index: 10;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .connection-dot.input {
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .connection-dot.output {
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="diagram-container">
+        <div id="workflow-canvas">
+            <!-- SVG pro connections -->
+            <svg id="workflow-svg" width="100%" height="100%">
+                <defs>
+                    <marker id="arrowhead-diagram" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d"/>
+                    </marker>
+                </defs>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Essential JS -->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    
+    <script>
+        // Globální proměnné
+        var currentProjectId = '@ViewBag.ProjectId';
+        var nodes = {};
+        var connections = [];
+        var isReadOnly = true;
+        
+        $(document).ready(function() {
+            loadWorkflowFromServer();
+        });
+        
+        function loadWorkflowFromServer() {
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: currentProjectId },
+                success: function(response) {
+                    if (response.success && response.workflow) {
+                        // Check if we have orchestrator data in metadata
+                        if (response.workflow.metadata && response.workflow.metadata.orchestratorData) {
+                            // Load from orchestrator format
+                            loadFromOrchestratorFormat(response.workflow.metadata.orchestratorData);
+                        } else if (response.workflow.nodes && response.workflow.nodes.length > 0) {
+                            // Load nodes directly from workflow
+                            response.workflow.nodes.forEach(node => {
+                                const nodeData = {
+                                    id: node.id,
+                                    type: node.type.toLowerCase(),
+                                    name: node.name,
+                                    x: node.position.x,
+                                    y: node.position.y,
+                                    tools: node.tools || [],
+                                    description: ''
+                                };
+                                nodes[node.id] = nodeData;
+                                console.log('Processing node from server:', node);
+                                console.log('Converted nodeData:', nodeData);
+                                renderNode(nodeData);
+                            });
+                            
+                            // Load edges
+                            if (response.workflow.edges) {
+                                response.workflow.edges.forEach(edge => {
+                                    connections.push({
+                                        from: edge.source,
+                                        to: edge.target
+                                    });
+                                });
+                                updateConnections();
+                            }
+                        }
+                        console.log('Loaded nodes:', nodes);
+                        console.log('Loaded connections:', connections);
+                    }
+                },
+                error: function() {
+                    console.log('Error loading workflow');
+                }
+            });
+        }
+        
+        function loadFromOrchestratorFormat(data) {
+            if (!data || !data.steps) return;
+            
+            // Clear existing
+            Object.keys(nodes).forEach(nodeId => {
+                $(`#${nodeId}`).remove();
+            });
+            nodes = {};
+            connections = [];
+            
+            // Get node positions from metadata if available
+            const positions = data.metadata?.nodePositions || {};
+            
+            // Create nodes from steps
+            data.steps.forEach((step, index) => {
+                const pos = positions[step.id] || {
+                    x: 200 + (index % 3) * 250,
+                    y: 200 + Math.floor(index / 3) * 150
+                };
+                
+                // Map step type back to node type
+                let nodeType = 'task';
+                if (step.type === 'decision') nodeType = 'condition';
+                else if (step.type === 'parallel-gateway') nodeType = 'parallel';
+                else if (step.type === 'ai-tool') nodeType = 'ai-tool';
+                
+                // Create the node
+                const nodeId = step.id;
+                nodes[nodeId] = {
+                    id: nodeId,
+                    type: nodeType,
+                    name: step.name,
+                    x: pos.x,
+                    y: pos.y,
+                    tools: step.tools || [],
+                    description: step.description || '',
+                    condition: step.condition,
+                    useReAct: step.useReAct,
+                    orchestrator: step.orchestrator,
+                    systemPrompt: step.systemPrompt,
+                    model: step.model,
+                    temperature: step.temperature
+                };
+                renderNode(nodes[nodeId]);
+            });
+            
+            // Recreate connections based on next/branches
+            data.steps.forEach(step => {
+                if (step.type === 'decision' && step.branches) {
+                    // Decision node connections
+                    if (step.branches.true && step.branches.true.length > 0) {
+                        connections.push({
+                            from: step.id,
+                            to: step.branches.true[0],
+                            branch: 'true'
+                        });
+                    }
+                    if (step.branches.false && step.branches.false.length > 0) {
+                        connections.push({
+                            from: step.id,
+                            to: step.branches.false[0],
+                            branch: 'false'
+                        });
+                    }
+                } else if (step.type === 'parallel-gateway' && step.branches) {
+                    // Parallel gateway connections
+                    step.branches.forEach(targetId => {
+                        connections.push({
+                            from: step.id,
+                            to: targetId
+                        });
+                    });
+                } else if (step.next) {
+                    // Regular step connection
+                    connections.push({
+                        from: step.id,
+                        to: step.next
+                    });
+                }
+            });
+            
+            updateConnections();
+        }
+        
+        function renderNode(node) {
+            console.log('Rendering node:', node);
+            console.log('Canvas exists:', $('#workflow-canvas').length);
+            
+            const nodeEl = $('<div>')
+                .addClass('workflow-node')
+                .addClass(node.type)
+                .attr('id', node.id)
+                .css({
+                    left: node.x + 'px',
+                    top: node.y + 'px'
+                });
+            
+            console.log('Node element created:', nodeEl[0]);
+            
+            // Create wrapper for diamond-shaped nodes (condition and parallel)
+            let contentWrapper;
+            if (node.type === 'condition' || node.type === 'parallel') {
+                contentWrapper = $('<div>').addClass('node-content-wrapper');
+                nodeEl.append(contentWrapper);
+            } else {
+                contentWrapper = nodeEl;
+            }
+            
+            // Header
+            const header = $('<div>').addClass('node-header');
+            header.append($('<span>').html(`<i class="${getNodeIcon(node.type)}"></i> ${node.name}`));
+            
+            contentWrapper.append(header);
+            
+            // Description
+            if (node.description) {
+                const descDiv = $('<div>')
+                    .css({
+                        fontSize: '12px',
+                        color: '#666',
+                        marginTop: '5px',
+                        fontStyle: 'italic'
+                    })
+                    .text(node.description);
+                contentWrapper.append(descDiv);
+            }
+            
+            // Tools
+            if (node.tools && node.tools.length > 0) {
+                const toolsDiv = $('<div>').addClass('node-tools');
+                node.tools.forEach(tool => {
+                    toolsDiv.append($('<span>').addClass('tool-badge').text(tool.replace(/_/g, ' ')));
+                });
+                contentWrapper.append(toolsDiv);
+            }
+            
+            // ReAct badge
+            if (node.useReAct) {
+                const reactBadge = $('<span>')
+                    .addClass('badge badge-purple')
+                    .html('<i class="fas fa-brain"></i> ReAct')
+                    .css({
+                        position: 'absolute',
+                        top: '5px',
+                        right: '25px',
+                        fontSize: '11px'
+                    });
+                nodeEl.append(reactBadge);
+            }
+            
+            // Add connection dots
+            if (node.type !== 'condition' && node.type !== 'parallel') {
+                // Input dot
+                const inputDot = $('<div>')
+                    .addClass('connection-dot input')
+                    .attr('data-node-id', node.id)
+                    .attr('data-type', 'input');
+                nodeEl.append(inputDot);
+                
+                // Output dot
+                const outputDot = $('<div>')
+                    .addClass('connection-dot output')
+                    .attr('data-node-id', node.id)
+                    .attr('data-type', 'output');
+                nodeEl.append(outputDot);
+            }
+            
+            $('#workflow-canvas').append(nodeEl);
+            console.log('Node appended');
+        }
+        
+        function getNodeIcon(type) {
+            const icons = {
+                'task': 'fas fa-tasks',
+                'condition': 'fas fa-question-circle',
+                'parallel': 'fas fa-code-branch',
+                'ai-tool': 'fas fa-robot'
+            };
+            return icons[type] || 'fas fa-circle';
+        }
+        
+        function updateConnections() {
+            console.log('UpdateConnections called with:', connections);
+            const svg = $('#workflow-svg');
+            svg.find('path, line').remove();
+            
+            connections.forEach(conn => {
+                const fromNode = $(`#${conn.from}`);
+                const toNode = $(`#${conn.to}`);
+                
+                console.log(`Drawing connection ${conn.from} -> ${conn.to}: fromNode=${fromNode.length}, toNode=${toNode.length}`);
+                
+                if (fromNode.length && toNode.length) {
+                    drawConnection(fromNode, toNode, conn.branch);
+                }
+            });
+        }
+        
+        function drawConnection(fromNode, toNode, branch) {
+            const fromRect = fromNode[0].getBoundingClientRect();
+            const toRect = toNode[0].getBoundingClientRect();
+            const containerRect = $('#workflow-canvas')[0].getBoundingClientRect();
+            
+            let x1, y1, x2, y2;
+            
+            if (branch === 'true') {
+                x1 = fromRect.right - containerRect.left;
+                y1 = fromRect.top - containerRect.top + fromRect.height * 0.3;
+            } else if (branch === 'false') {
+                x1 = fromRect.right - containerRect.left;
+                y1 = fromRect.top - containerRect.top + fromRect.height * 0.7;
+            } else {
+                x1 = fromRect.right - containerRect.left;
+                y1 = fromRect.top - containerRect.top + fromRect.height / 2;
+            }
+            
+            x2 = toRect.left - containerRect.left;
+            y2 = toRect.top - containerRect.top + toRect.height / 2;
+            
+            const svg = document.getElementById('workflow-svg');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            
+            const midX = (x1 + x2) / 2;
+            path.setAttribute('d', `M ${x1} ${y1} Q ${midX} ${y1} ${midX} ${(y1 + y2) / 2} Q ${midX} ${y2} ${x2} ${y2}`);
+            path.setAttribute('stroke', branch === 'true' ? '#28a745' : branch === 'false' ? '#dc3545' : '#6c757d');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('fill', 'none');
+            path.setAttribute('marker-end', 'url(#arrowhead-diagram)');
+            
+            svg.appendChild(path);
+        }
+    </script>
+</body>
+</html>

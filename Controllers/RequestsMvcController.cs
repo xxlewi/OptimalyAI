@@ -157,12 +157,7 @@ namespace OptimalyAI.Controllers
                 return NotFound();
             }
 
-            // Allow editing only New requests or OnHold requests
-            if (request.Status != RequestStatus.New && request.Status != RequestStatus.OnHold)
-            {
-                TempData["Error"] = "Lze upravovat pouze nové požadavky nebo požadavky odložené";
-                return RedirectToAction(nameof(Details), new { id });
-            }
+            // Allow editing all requests in simplified system
 
             ViewBag.Title = $"Upravit požadavek {request.RequestNumber}";
             return View(request);

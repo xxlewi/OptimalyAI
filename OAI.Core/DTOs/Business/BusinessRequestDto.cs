@@ -18,6 +18,8 @@ namespace OAI.Core.DTOs.Business
         public DateTime? Deadline { get; set; }
         public decimal? EstimatedCost { get; set; }
         public decimal? ActualCost { get; set; }
+        public Guid? ProjectId { get; set; }
+        public string ProjectName { get; set; }
         public int? WorkflowTemplateId { get; set; }
         public string WorkflowTemplateName { get; set; }
         public List<RequestExecutionDto> Executions { get; set; }
@@ -46,6 +48,7 @@ namespace OAI.Core.DTOs.Business
         public RequestPriority Priority { get; set; } = RequestPriority.Normal;
         public DateTime? Deadline { get; set; }
         public decimal? EstimatedCost { get; set; }
+        public Guid? ProjectId { get; set; }
         public int? WorkflowTemplateId { get; set; }
     }
 
@@ -58,6 +61,7 @@ namespace OAI.Core.DTOs.Business
         public RequestPriority? Priority { get; set; }
         public DateTime? Deadline { get; set; }
         public decimal? EstimatedCost { get; set; }
+        public Guid? ProjectId { get; set; }
         public string? ClientId { get; set; }
         public string? ClientName { get; set; }
     }

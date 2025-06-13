@@ -250,6 +250,25 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Related Requests -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-clipboard-list"></i> Související požadavky</h3>
+                        <div class="card-tools">
+                            <a href="/Requests/New?projectId=@Model.Id" class="btn btn-sm btn-primary">
+                                <i class="fas fa-plus"></i> Nový požadavek
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                        <div id="relatedRequests">
+                            <div class="text-center py-3">
+                                <i class="fas fa-spinner fa-spin"></i> Načítám požadavky...
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Right column - Workflow -->
@@ -273,17 +292,12 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <!-- IDENTICKÁ struktura jako WorkflowDesigner -->
-                        <div style="height: 400px; border: 1px solid #ddd; border-radius: 4px; background: #f8f9fa; overflow: auto; position: relative;">
-                            <div id="workflowDiagram-canvas" style="width: 2000px; height: 400px; position: relative; background-image: linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px); background-size: 20px 20px;">
+                        <!-- Clean workflow diagram component -->
+                        <div id="workflowDiagramContainer" style="height: 400px; border: 1px solid #ddd; border-radius: 4px; background: #f8f9fa; overflow: hidden;">
+                            <div class="text-center py-5">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Načítám workflow diagram...</p>
                             </div>
-                            <svg id="workflowDiagram-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
-                                <defs>
-                                    <marker id="arrowhead-detail" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
-                                        <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d"/>
-                                    </marker>
-                                </defs>
-                            </svg>
                         </div>
                     </div>
                 </div>
@@ -608,187 +622,9 @@
 </div>
 
 @section Scripts {
-    <script src="~/js/workflow-viewer.js"></script>
+    <script src="~/js/workflow-diagram-viewer.js"></script>
     <style>
-        /* CLEAN CSS - no red! */
-        .workflow-node {
-            position: absolute !important;
-            background: #ffffff !important;
-            border: 2px solid #007bff !important;
-            border-radius: 8px !important;
-            padding: 15px !important;
-            min-width: 180px !important;
-            cursor: pointer !important;
-            user-select: none !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-            z-index: 5 !important;
-            color: #333 !important;
-        }
-        
-        .workflow-node.condition {
-            width: 140px;
-            height: 140px;
-            border: none !important;
-            background: transparent !important;
-            padding: 0;
-            min-width: unset;
-            box-shadow: none !important;
-        }
-        
-        .workflow-node.condition::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transform: rotate(45deg);
-            border: 3px solid #ffc107;
-            background: #fff8e1;
-            border-radius: 15px;
-            z-index: 1;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .workflow-node.condition .node-content-wrapper {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            z-index: 2;
-        }
-        
-        .workflow-node.condition .node-header {
-            margin-bottom: 5px;
-            text-align: center;
-            font-size: 14px;
-            position: relative;
-        }
-        
-        .workflow-node.parallel {
-            width: 140px;
-            height: 140px;
-            border: none !important;
-            background: transparent !important;
-            padding: 0;
-            min-width: unset;
-            box-shadow: none !important;
-        }
-        
-        .workflow-node.parallel::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transform: rotate(45deg);
-            border: 3px solid #6f42c1;
-            background: #f3e5f5;
-            border-radius: 15px;
-            z-index: 1;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .workflow-node.parallel::after {
-            content: '+';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 48px;
-            font-weight: bold;
-            color: #6f42c1;
-            z-index: 2;
-        }
-        
-        .workflow-node.parallel .node-content-wrapper {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            z-index: 3;
-        }
-        
-        .node-header {
-            font-weight: bold;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .node-tools {
-            margin-top: 8px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-        
-        .tool-badge {
-            background: #e9ecef;
-            color: #495057;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            white-space: nowrap;
-        }
-        
-        .badge-purple {
-            background: #6f42c1;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-        }
-    </style>
-        .workflow-diagram-container {
-            position: relative;
-            overflow: auto;
-        }
-        
-        .workflow-node {
-            position: absolute;
-            background: white;
-            border: 2px solid #007bff;
-            border-radius: 8px;
-            padding: 15px;
-            min-width: 150px;
-            text-align: center;
-            cursor: move;
-            transition: all 0.3s;
-        }
-        
-        .workflow-node:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-        
-        .workflow-node.start {
-            border-color: #28a745;
-            background: #28a74510;
-        }
-        
-        .workflow-node.end {
-            border-color: #dc3545;
-            background: #dc354510;
-        }
-        
-        .workflow-connection {
-            stroke: #6c757d;
-            stroke-width: 2;
-            fill: none;
-            marker-end: url(#arrowhead);
-        }
-        
+        /* Styly pro ostatní části stránky */
         .description-block {
             text-align: center;
             padding: 10px 0;
@@ -860,510 +696,17 @@
         let workflowData = null;
         let workflowViewer = null;
         
-        // COPIED DIRECTLY FROM WORKFLOW DESIGNER
-        let nodes = {};
-        let connections = [];
-        let selectedNode = null;
-        let nodeIdCounter = 1;
-        let isConnecting = false;
-        let connectionStart = null;
-        const currentProjectId = projectId;
-        
         $(document).ready(function() {
-            // IDENTICAL initialization as WorkflowDesigner
-            initializeCanvas();
-            loadWorkflowFromServer();
+            // Initialize workflow diagram viewer
+            const diagramViewer = new WorkflowDiagramViewer('workflowDiagramContainer', projectId);
             
-            loadWorkflowSteps();
+            // Load other components
+            loadWorkflowSteps(projectId);
             loadOrchestratorSettings();
             loadExecutionHistory();
+            loadRelatedRequests();
         });
         
-        // COPIED DIRECTLY FROM WORKFLOW DESIGNER
-        function initializeCanvas() {
-            $('#workflowDiagram-canvas').on('click', function(e) {
-                if (e.target === this) {
-                    deselectAll();
-                }
-            });
-        }
-        
-        function deselectAll() {
-            selectedNode = null;
-            $('.workflow-node').removeClass('selected');
-        }
-        
-        // COPIED DIRECTLY FROM WORKFLOW DESIGNER  
-        function loadWorkflowFromServer() {
-            $.ajax({
-                url: '/WorkflowDesigner/LoadWorkflow',
-                type: 'GET',
-                data: { projectId: currentProjectId },
-                success: function(response) {
-                    if (response.success && response.workflow) {
-                        // Check if we have orchestrator data in metadata
-                        if (response.workflow.metadata && response.workflow.metadata.orchestratorData) {
-                            // Load from orchestrator format
-                            loadFromOrchestratorFormat(response.workflow.metadata.orchestratorData);
-                        } else if (response.workflow.nodes && response.workflow.nodes.length > 0) {
-                            // Load nodes directly from workflow
-                            response.workflow.nodes.forEach(node => {
-                                const nodeData = {
-                                    id: node.id,
-                                    type: node.type.toLowerCase(),
-                                    name: node.name,
-                                    x: node.position.x,
-                                    y: node.position.y,
-                                    tools: node.tools || [],
-                                    description: ''
-                                };
-                                nodes[node.id] = nodeData;
-                                renderNode(nodeData);
-                            });
-                            
-                            // Load edges
-                            if (response.workflow.edges) {
-                                response.workflow.edges.forEach(edge => {
-                                    connections.push({
-                                        from: edge.source,
-                                        to: edge.target
-                                    });
-                                });
-                                updateConnections();
-                            }
-                        }
-                        console.log('Loaded nodes:', nodes);
-                        console.log('Loaded connections:', connections);
-                    }
-                },
-                error: function() {
-                    // Create empty workflow on error
-                }
-            });
-        }
-        
-        // COPIED EXACTLY FROM WORKFLOW DESIGNER
-        function loadFromOrchestratorFormat(data) {
-            if (!data || !data.steps) return;
-            
-            // Clear existing
-            Object.keys(nodes).forEach(nodeId => {
-                $(`#${nodeId}`).remove();
-            });
-            nodes = {};
-            connections = [];
-            
-            // Get node positions from metadata if available
-            const positions = data.metadata?.nodePositions || {};
-            
-            // Create nodes from steps
-            data.steps.forEach((step, index) => {
-                const pos = positions[step.id] || {
-                    x: 1000,
-                    y: 300 + (index * 150)
-                };
-                
-                // Map step type back to node type
-                let nodeType = 'task';
-                if (step.type === 'decision') nodeType = 'condition';
-                else if (step.type === 'parallel-gateway') nodeType = 'parallel';
-                else if (step.type === 'ai-tool') nodeType = 'ai-tool';
-                
-                // Create the node
-                const nodeId = step.id;
-                nodes[nodeId] = {
-                    id: nodeId,
-                    type: nodeType,
-                    name: step.name,
-                    x: pos.x,
-                    y: pos.y,
-                    tools: step.tools || [],
-                    description: step.description || '',
-                    condition: step.condition,
-                    useReAct: step.useReAct,
-                    orchestrator: step.orchestrator,
-                    systemPrompt: step.systemPrompt,
-                    model: step.model,
-                    temperature: step.temperature
-                };
-                renderNode(nodes[nodeId]);
-            });
-            
-            // Recreate connections based on next/branches
-            data.steps.forEach(step => {
-                if (step.type === 'decision' && step.branches) {
-                    // Decision node connections
-                    if (step.branches.true && step.branches.true.length > 0) {
-                        connections.push({
-                            from: step.id,
-                            to: step.branches.true[0],
-                            branch: 'true'
-                        });
-                    }
-                    if (step.branches.false && step.branches.false.length > 0) {
-                        connections.push({
-                            from: step.id,
-                            to: step.branches.false[0],
-                            branch: 'false'
-                        });
-                    }
-                } else if (step.type === 'parallel-gateway' && step.branches) {
-                    // Parallel gateway connections
-                    step.branches.forEach(targetId => {
-                        connections.push({
-                            from: step.id,
-                            to: targetId
-                        });
-                    });
-                } else if (step.next) {
-                    // Regular step connection
-                    connections.push({
-                        from: step.id,
-                        to: step.next
-                    });
-                }
-            });
-            
-            updateConnections();
-        }
-        
-        // COPIED EXACTLY FROM WORKFLOW DESIGNER
-        function renderNode(node) {
-            console.log('Rendering node in detail view:', node);
-            
-            const nodeEl = $('<div>')
-                .addClass('workflow-node')
-                .addClass(node.type)
-                .attr('id', node.id)
-                .css({
-                    left: node.x + 'px',
-                    top: node.y + 'px'
-                });
-            
-            console.log('Created node element:', nodeEl[0]);
-            
-            // Create wrapper for diamond-shaped nodes (condition and parallel)
-            let contentWrapper;
-            if (node.type === 'condition' || node.type === 'parallel') {
-                contentWrapper = $('<div>').addClass('node-content-wrapper');
-                nodeEl.append(contentWrapper);
-            } else {
-                contentWrapper = nodeEl;
-            }
-            
-            // Header
-            const header = $('<div>').addClass('node-header');
-            header.append($('<span>').html(`<i class="${getNodeIcon(node.type)}"></i> ${node.name}`));
-            
-            contentWrapper.append(header);
-            
-            // Description
-            if (node.description) {
-                const descDiv = $('<div>')
-                    .css({
-                        fontSize: '12px',
-                        color: '#666',
-                        marginTop: '5px',
-                        fontStyle: 'italic'
-                    })
-                    .text(node.description);
-                contentWrapper.append(descDiv);
-            }
-            
-            // Tools
-            if (node.tools && node.tools.length > 0) {
-                const toolsDiv = $('<div>').addClass('node-tools');
-                node.tools.forEach(tool => {
-                    toolsDiv.append($('<span>').addClass('tool-badge').text(tool.replace(/_/g, ' ')));
-                });
-                contentWrapper.append(toolsDiv);
-            }
-            
-            // ReAct badge
-            if (node.useReAct) {
-                const reactBadge = $('<span>')
-                    .addClass('badge badge-purple')
-                    .html('<i class="fas fa-brain"></i> ReAct')
-                    .css({
-                        position: 'absolute',
-                        top: '5px',
-                        right: '25px',
-                        fontSize: '11px'
-                    });
-                nodeEl.append(reactBadge);
-            }
-            
-            console.log('Appending node to canvas:', $('#workflowDiagram-canvas').length);
-            $('#workflowDiagram-canvas').append(nodeEl);
-            console.log('Node appended, canvas children count:', $('#workflowDiagram-canvas').children().length);
-        }
-        
-        // COPIED EXACTLY FROM WORKFLOW DESIGNER
-        function getNodeIcon(type) {
-            const icons = {
-                'task': 'fas fa-tasks',
-                'condition': 'fas fa-question-circle',
-                'parallel': 'fas fa-code-branch',
-                'ai-tool': 'fas fa-robot'
-            };
-            return icons[type] || 'fas fa-circle';
-        }
-        
-        // COPIED EXACTLY FROM WORKFLOW DESIGNER
-        function updateConnections() {
-            console.log('UpdateConnections called with:', connections);
-            const svg = $('#workflowDiagram-svg');
-            svg.find('path, line').remove();
-            
-            connections.forEach(conn => {
-                const fromNode = $(`#${conn.from}`);
-                const toNode = $(`#${conn.to}`);
-                
-                console.log(`Drawing connection ${conn.from} -> ${conn.to}: fromNode=${fromNode.length}, toNode=${toNode.length}`);
-                
-                if (fromNode.length && toNode.length) {
-                    drawConnection(fromNode, toNode, conn.branch);
-                }
-            });
-        }
-        
-        // COPIED EXACTLY FROM WORKFLOW DESIGNER  
-        function drawConnection(fromNode, toNode, branch) {
-            const fromRect = fromNode[0].getBoundingClientRect();
-            const toRect = toNode[0].getBoundingClientRect();
-            const containerRect = $('#workflowDiagram-canvas').parent()[0].getBoundingClientRect();
-            
-            let x1, y1, x2, y2;
-            
-            if (branch === 'true') {
-                x1 = fromRect.right - containerRect.left;
-                y1 = fromRect.top - containerRect.top + fromRect.height * 0.3;
-            } else if (branch === 'false') {
-                x1 = fromRect.right - containerRect.left;
-                y1 = fromRect.top - containerRect.top + fromRect.height * 0.7;
-            } else {
-                x1 = fromRect.right - containerRect.left;
-                y1 = fromRect.top - containerRect.top + fromRect.height / 2;
-            }
-            
-            x2 = toRect.left - containerRect.left;
-            y2 = toRect.top - containerRect.top + toRect.height / 2;
-            
-            const svg = document.getElementById('workflowDiagram-svg');
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            
-            const midX = (x1 + x2) / 2;
-            path.setAttribute('d', `M ${x1} ${y1} Q ${midX} ${y1} ${midX} ${(y1 + y2) / 2} Q ${midX} ${y2} ${x2} ${y2}`);
-            path.setAttribute('stroke', branch === 'true' ? '#28a745' : branch === 'false' ? '#dc3545' : '#6c757d');
-            path.setAttribute('stroke-width', '2');
-            path.setAttribute('fill', 'none');
-            path.setAttribute('marker-end', 'url(#arrowhead-detail)');
-            
-            svg.appendChild(path);
-        }
-        
-        function loadWorkflowDiagram() {
-            $.ajax({
-                url: '/WorkflowDesigner/LoadWorkflow',
-                type: 'GET',
-                data: { projectId: projectId },
-                success: function(response) {
-                    if (response.success && response.workflow) {
-                        workflowData = response.workflow;
-                        workflowRenderer.renderWorkflow(response.workflow);
-                        renderWorkflowSteps(response.workflow);
-                    } else {
-                        $('#workflowDiagram').html(`
-                            <div class="text-center py-5">
-                                <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
-                                <p>Workflow diagram not available</p>
-                                <a href="/WorkflowDesigner?projectId=${projectId}" class="btn btn-primary">
-                                    <i class="fas fa-plus"></i> Create Workflow
-                                </a>
-                            </div>
-                        `);
-                        $('#workflowSteps').html(`
-                            <div class="text-center py-3">
-                                <i class="fas fa-exclamation-triangle text-warning"></i>
-                                <p class="text-muted">Workflow steps not available</p>
-                            </div>
-                        `);
-                    }
-                },
-                error: function() {
-                    $('#workflowDiagram').html(`
-                        <div class="text-center py-5">
-                            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
-                            <p>Error loading workflow diagram</p>
-                        </div>
-                    `);
-                }
-            });
-        }
-        
-        function renderWorkflowDiagram(workflow) {
-            // Replaced by WorkflowRenderer component
-            console.log('Rendering workflow diagram:', workflow);
-            const container = $('#workflowDiagram');
-            container.empty();
-            
-            // Create SVG for connections directly with DOM
-            const svgNamespace = "http://www.w3.org/2000/svg";
-            const svg = document.createElementNS(svgNamespace, "svg");
-            svg.setAttribute("width", "100%");
-            svg.setAttribute("height", "500px");
-            svg.setAttribute("style", "position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0;");
-            
-            // Create defs for arrow marker
-            const defs = document.createElementNS(svgNamespace, "defs");
-            const marker = document.createElementNS(svgNamespace, "marker");
-            marker.setAttribute("id", "arrowhead");
-            marker.setAttribute("markerWidth", "10");
-            marker.setAttribute("markerHeight", "7");
-            marker.setAttribute("refX", "9");
-            marker.setAttribute("refY", "3.5");
-            marker.setAttribute("orient", "auto");
-            
-            const polygon = document.createElementNS(svgNamespace, "polygon");
-            polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
-            polygon.setAttribute("fill", "#6c757d");
-            
-            marker.appendChild(polygon);
-            defs.appendChild(marker);
-            svg.appendChild(defs);
-            
-            container.append(svg);
-            
-            // Check if we have orchestratorData format
-            if (workflow.metadata && workflow.metadata.orchestratorData && workflow.metadata.orchestratorData.steps) {
-                // New format - convert orchestratorData to nodes
-                const orchestratorData = workflow.metadata.orchestratorData;
-                const nodes = [];
-                const edges = [];
-                
-                // Convert steps to nodes
-                orchestratorData.steps.forEach(step => {
-                    const position = orchestratorData.metadata?.nodePositions?.[step.id] || { x: 100, y: 100 };
-                    nodes.push({
-                        id: step.id,
-                        name: step.name,
-                        type: step.type,
-                        position: position,
-                        tools: step.tools || []
-                    });
-                    
-                    // Create edges from step connections
-                    if (step.next) {
-                        edges.push({
-                            source: step.id,
-                            target: step.next
-                        });
-                    }
-                    if (step.branches) {
-                        // For condition nodes
-                        if (step.branches.true && step.branches.true.length > 0) {
-                            edges.push({
-                                source: step.id,
-                                target: step.branches.true[0],
-                                branch: 'true'
-                            });
-                        }
-                        if (step.branches.false && step.branches.false.length > 0) {
-                            edges.push({
-                                source: step.id,
-                                target: step.branches.false[0],
-                                branch: 'false'
-                            });
-                        }
-                        // For parallel nodes
-                        if (Array.isArray(step.branches)) {
-                            step.branches.forEach(targetId => {
-                                edges.push({
-                                    source: step.id,
-                                    target: targetId
-                                });
-                            });
-                        }
-                    }
-                });
-                
-                // Use converted nodes and edges
-                workflow.nodes = nodes;
-                workflow.edges = edges;
-            }
-            
-            // Render nodes from workflow data
-            if (workflow.nodes && workflow.nodes.length > 0) {
-                workflow.nodes.forEach(node => {
-                    const nodeEl = $(`
-                        <div class="workflow-node" data-node-id="${node.id}" style="left: ${node.position.x}px; top: ${node.position.y}px;">
-                            <div class="font-weight-bold">${node.name}</div>
-                            <small class="text-muted">${node.type}</small>
-                            ${node.tools && node.tools.length > 0 ? `<br><small>${node.tools.join(', ')}</small>` : ''}
-                        </div>
-                    `);
-                    
-                    // Add special classes based on type
-                    if (node.type === 'Condition') {
-                        nodeEl.addClass('condition');
-                    } else if (node.type === 'Parallel') {
-                        nodeEl.addClass('parallel');
-                    }
-                    
-                    container.append(nodeEl);
-                });
-                
-                // Draw connections
-                if (workflow.edges && workflow.edges.length > 0) {
-                    console.log('Drawing connections:', workflow.edges);
-                    setTimeout(() => {
-                        workflow.edges.forEach(edge => {
-                            console.log('Processing edge:', edge);
-                            const fromNode = $(`[data-node-id="${edge.source}"]`);
-                            const toNode = $(`[data-node-id="${edge.target}"]`);
-                            
-                            console.log('From node:', fromNode.length, 'To node:', toNode.length);
-                            
-                            if (fromNode.length && toNode.length) {
-                                // Use direct CSS position values
-                                const fromLeft = parseInt(fromNode.css('left')) || 0;
-                                const fromTop = parseInt(fromNode.css('top')) || 0;
-                                const toLeft = parseInt(toNode.css('left')) || 0;
-                                const toTop = parseInt(toNode.css('top')) || 0;
-                                
-                                const x1 = fromLeft + fromNode.outerWidth();
-                                const y1 = fromTop + fromNode.outerHeight() / 2;
-                                const x2 = toLeft;
-                                const y2 = toTop + toNode.outerHeight() / 2;
-                                
-                                console.log(`Drawing line from (${x1}, ${y1}) to (${x2}, ${y2})`);
-                                
-                                // Create path element properly
-                                const path = document.createElementNS(svgNamespace, "path");
-                                path.setAttribute("d", `M ${x1} ${y1} L ${x2} ${y2}`);
-                                path.setAttribute("stroke", "#6c757d");
-                                path.setAttribute("stroke-width", "2");
-                                path.setAttribute("fill", "none");
-                                path.setAttribute("marker-end", "url(#arrowhead)");
-                                svg.appendChild(path);
-                                
-                            }
-                        });
-                    }, 200);
-                }
-            } else {
-                // Fallback if no nodes - show empty state
-                container.html(`
-                    <div class="text-center py-5">
-                        <i class="fas fa-project-diagram fa-3x text-muted mb-3"></i>
-                        <p>Workflow není definováno</p>
-                        <a href="/WorkflowDesigner?projectId=${projectId}" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Vytvořit workflow
-                        </a>
-                    </div>
-                `);
-            }
-        }
         
         function renderWorkflowSteps(workflow) {
             const container = $('#workflowSteps');
@@ -1470,9 +813,25 @@
             }
         }
         
-        function loadWorkflowSteps() {
-            // This function is now called from loadWorkflowDiagram
-            // No separate API call needed since steps are in workflow data
+        function loadWorkflowSteps(projectId) {
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: projectId },
+                success: function(response) {
+                    if (response.success && response.workflow) {
+                        renderWorkflowSteps(response.workflow);
+                    }
+                },
+                error: function() {
+                    $('#workflowSteps').html(`
+                        <div class="text-center py-3">
+                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                            <p class="text-muted">Unable to load workflow steps</p>
+                        </div>
+                    `);
+                }
+            });
         }
         
         // Old renderWorkflowSteps function removed - using the new one defined earlier
@@ -1789,6 +1148,93 @@
         
         function viewExecution(executionId) {
             window.location.href = `/Projects/Execution/${executionId}`;
+        }
+        
+        function loadRelatedRequests() {
+            $.ajax({
+                url: '/api/requestsapi',
+                type: 'GET',
+                success: function(response) {
+                    const requests = response.data || [];
+                    const relatedRequests = requests.filter(r => r.projectId === projectId);
+                    renderRelatedRequests(relatedRequests);
+                },
+                error: function() {
+                    $('#relatedRequests').html(`
+                        <div class="text-center py-3 text-muted">
+                            <i class="fas fa-exclamation-triangle"></i> Nepodařilo se načíst požadavky
+                        </div>
+                    `);
+                }
+            });
+        }
+        
+        function renderRelatedRequests(requests) {
+            const container = $('#relatedRequests');
+            container.empty();
+            
+            if (requests.length === 0) {
+                container.html(`
+                    <div class="text-center py-3 text-muted">
+                        <i class="fas fa-clipboard-list fa-2x mb-2"></i>
+                        <p class="mb-0">Žádné požadavky nejsou přiřazeny k tomuto projektu</p>
+                        <a href="/Requests/New?projectId=@Model.Id" class="btn btn-sm btn-primary mt-2">
+                            <i class="fas fa-plus"></i> Vytvořit první požadavek
+                        </a>
+                    </div>
+                `);
+                return;
+            }
+            
+            const requestsHtml = requests.map(request => {
+                const statusBadge = getRequestStatusBadge(request.status);
+                const priorityBadge = getRequestPriorityBadge(request.priority);
+                
+                return `
+                    <div class="d-flex align-items-center justify-content-between p-2 border-bottom">
+                        <div>
+                            <a href="/Requests/${request.id}" class="font-weight-bold">
+                                ${request.requestNumber}
+                            </a>
+                            <span class="text-muted ml-2">${request.title}</span>
+                            <div class="mt-1">
+                                <span class="badge ${statusBadge.class}">${statusBadge.text}</span>
+                                <span class="badge ${priorityBadge.class} ml-1">${priorityBadge.text}</span>
+                                <small class="text-muted ml-2">
+                                    <i class="fas fa-clock"></i> ${new Date(request.createdAt).toLocaleDateString('cs-CZ')}
+                                </small>
+                            </div>
+                        </div>
+                        <div>
+                            <a href="/Requests/${request.id}" class="btn btn-sm btn-default">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.html(requestsHtml);
+        }
+        
+        function getRequestStatusBadge(status) {
+            const badges = {
+                'New': { class: 'badge-info', text: '🆕 Nový' },
+                'InProgress': { class: 'badge-primary', text: '⚙️ V Procesu' },
+                'OnHold': { class: 'badge-warning', text: '⏸️ Odloženo' },
+                'Completed': { class: 'badge-success', text: '✅ Ukončeno' }
+            };
+            return badges[status] || { class: 'badge-secondary', text: status };
+        }
+        
+        function getRequestPriorityBadge(priority) {
+            const badges = {
+                'Low': { class: 'badge-secondary', text: 'Nízká' },
+                'Normal': { class: 'badge-info', text: 'Normální' },
+                'High': { class: 'badge-warning', text: 'Vysoká' },
+                'Urgent': { class: 'badge-danger', text: 'Urgentní' }
+            };
+            return badges[priority] || { class: 'badge-secondary', text: priority };
         }
     </script>
 }

@@ -35,6 +35,10 @@ namespace OAI.Core.Entities.Business
 
         public decimal? ActualCost { get; set; }
 
+        // Project relationship
+        public Guid? ProjectId { get; set; }
+        public virtual Projects.Project? Project { get; set; }
+
         // Relationships
         public int? WorkflowTemplateId { get; set; }
         public virtual WorkflowTemplate WorkflowTemplate { get; set; }

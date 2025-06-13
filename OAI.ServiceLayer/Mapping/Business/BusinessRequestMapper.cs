@@ -44,6 +44,8 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Deadline = entity.Deadline,
                 EstimatedCost = entity.EstimatedCost,
                 ActualCost = entity.ActualCost,
+                ProjectId = entity.ProjectId,
+                ProjectName = entity.Project?.Name,
                 WorkflowTemplateId = entity.WorkflowTemplateId,
                 WorkflowTemplateName = entity.WorkflowTemplate?.Name,
                 Executions = entity.Executions?.Select(_executionMapper.ToDto).ToList(),
@@ -72,6 +74,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Deadline = dto.Deadline,
                 EstimatedCost = dto.EstimatedCost,
                 ActualCost = dto.ActualCost,
+                ProjectId = dto.ProjectId,
                 WorkflowTemplateId = dto.WorkflowTemplateId
             };
         }
@@ -90,6 +93,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Priority = dto.Priority,
                 Deadline = dto.Deadline,
                 EstimatedCost = dto.EstimatedCost,
+                ProjectId = dto.ProjectId,
                 WorkflowTemplateId = dto.WorkflowTemplateId,
                 Status = RequestStatus.New
             };
@@ -127,6 +131,11 @@ namespace OAI.ServiceLayer.Mapping.Business
 
             if (!string.IsNullOrEmpty(dto.ClientName))
                 entity.ClientName = dto.ClientName;
+
+            if (dto.ProjectId.HasValue)
+                entity.ProjectId = dto.ProjectId;
+            else if (dto.ProjectId == null)
+                entity.ProjectId = null;
 
             entity.UpdatedAt = DateTime.UtcNow;
         }

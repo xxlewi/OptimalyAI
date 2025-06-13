@@ -112,6 +112,23 @@
                                     <span class="text-muted">Není přiřazen</span>
                                 }
                             </dd>
+
+                            <dt class="col-sm-3">Projekt:</dt>
+                            <dd class="col-sm-9">
+                                @if (Model.ProjectId.HasValue && !string.IsNullOrEmpty(Model.ProjectName))
+                                {
+                                    <a href="/Projects/Details/@Model.ProjectId" class="text-primary">
+                                        <i class="fas fa-project-diagram"></i> @Model.ProjectName
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Není přiřazen k projektu</span>
+                                    <a href="#" class="btn btn-sm btn-outline-primary ml-2" onclick="createProjectFromRequest()">
+                                        <i class="fas fa-plus"></i> Vytvořit projekt
+                                    </a>
+                                }
+                            </dd>
                             
                             <dt class="col-sm-3">Priorita:</dt>
                             <dd class="col-sm-9">
@@ -370,6 +387,58 @@
                 'Completed': 'Ukončeno'
             };
             return statusMap[status] || status;
+        }
+
+        function createProjectFromRequest() {
+            const projectName = prompt('Název nového projektu:', '@Model.Title - Projekt');
+            if (projectName && projectName.trim()) {
+                const projectData = {
+                    name: projectName.trim(),
+                    description: `Projekt vytvořený z požadavku ${@Model.RequestNumber}: @Model.Title`,
+                    customerId: '@Model.ClientId',
+                    customerName: '@Model.ClientName',
+                    status: 'Draft',
+                    priority: 'Medium'
+                };
+                
+                $.ajax({
+                    url: '/api/projectsapi',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(projectData),
+                    success: function(projectResponse) {
+                        if (projectResponse.success && projectResponse.data) {
+                            // Now link the request to the project
+                            $.ajax({
+                                url: `/api/requestsapi/@Model.Id`,
+                                method: 'PUT',
+                                contentType: 'application/json',
+                                data: JSON.stringify({
+                                    title: '@Model.Title',
+                                    description: '@Model.Description',
+                                    requestType: '@Model.RequestType',
+                                    priority: '@Model.Priority.ToString()',
+                                    deadline: '@(Model.Deadline?.ToString("yyyy-MM-ddTHH:mm") ?? "")',
+                                    estimatedCost: @(Model.EstimatedCost ?? 0),
+                                    projectId: projectResponse.data.id,
+                                    clientId: '@Model.ClientId',
+                                    clientName: '@Model.ClientName'
+                                }),
+                                success: function() {
+                                    toastr.success('Projekt byl vytvořen a požadavek k němu přiřazen');
+                                    setTimeout(() => location.reload(), 1000);
+                                },
+                                error: function() {
+                                    toastr.error('Projekt byl vytvořen, ale nepodařilo se propojit s požadavkem');
+                                }
+                            });
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Nepodařilo se vytvořit projekt');
+                    }
+                });
+            }
         }
 
         function submitRequest(requestId) {

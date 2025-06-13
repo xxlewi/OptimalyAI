@@ -61,8 +61,8 @@ public static class SecurityConfiguration
             // X-Content-Type-Options
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
             
-            // X-Frame-Options
-            context.Response.Headers["X-Frame-Options"] = "DENY";
+            // X-Frame-Options - Allow same origin for iframe embedding
+            context.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
             
             // X-XSS-Protection
             context.Response.Headers["X-XSS-Protection"] = "1; mode=block";

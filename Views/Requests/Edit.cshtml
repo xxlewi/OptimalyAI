@@ -10,6 +10,7 @@
             <div class="col-sm-6">
                 <h1>
                     <i class="fas fa-edit"></i> Upravit požadavek
+                    <span class="badge badge-@GetStatusBadgeClass(Model.Status)">@GetStatusText(Model.Status)</span>
                 </h1>
             </div>
             <div class="col-sm-6">
@@ -29,7 +30,7 @@
     <div class="container-fluid">
         <form id="editRequestForm">
             <div class="row">
-                <div class="col-md-12">
+                <div class="col-md-8">
                     <div class="card">
                         <div class="card-header">
                             <h3 class="card-title">Základní údaje</h3>
@@ -50,45 +51,26 @@
                                     <div class="form-group">
                                         <label>Typ požadavku</label>
                                         <select class="form-control" id="requestType" name="requestType">
-                                            @if (Model.RequestType == "Analysis")
-                                            {
-                                                <option value="Analysis" selected>Analýza</option>
+                                            @{
+                                                var requestTypes = new Dictionary<string, string>
+                                                {
+                                                    {"ProductPhoto", "Produktové foto"},
+                                                    {"DocumentAnalysis", "Analýza dokumentu"},
+                                                    {"WebScraping", "Web scraping"},
+                                                    {"DataProcessing", "Zpracování dat"},
+                                                    {"Custom", "Vlastní"}
+                                                };
                                             }
-                                            else
+                                            @foreach (var type in requestTypes)
                                             {
-                                                <option value="Analysis">Analýza</option>
-                                            }
-                                            @if (Model.RequestType == "ProductPhoto")
-                                            {
-                                                <option value="ProductPhoto" selected>Produktové fotografie</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="ProductPhoto">Produktové fotografie</option>
-                                            }
-                                            @if (Model.RequestType == "ContentGeneration")
-                                            {
-                                                <option value="ContentGeneration" selected>Generování obsahu</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="ContentGeneration">Generování obsahu</option>
-                                            }
-                                            @if (Model.RequestType == "DataProcessing")
-                                            {
-                                                <option value="DataProcessing" selected>Zpracování dat</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="DataProcessing">Zpracování dat</option>
-                                            }
-                                            @if (Model.RequestType == "Other")
-                                            {
-                                                <option value="Other" selected>Jiné</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="Other">Jiné</option>
+                                                if (Model.RequestType == type.Key)
+                                                {
+                                                    <option value="@type.Key" selected>@type.Value</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@type.Key">@type.Value</option>
+                                                }
                                             }
                                         </select>
                                     </div>
@@ -97,84 +79,112 @@
                                     <div class="form-group">
                                         <label>Priorita</label>
                                         <select class="form-control" id="priority" name="priority">
-                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.Low)
-                                            {
-                                                <option value="0" selected>Nízká</option>
+                                            @{
+                                                var priorities = new Dictionary<string, string>
+                                                {
+                                                    {"Low", "Nízká"},
+                                                    {"Normal", "Normální"},
+                                                    {"High", "Vysoká"},
+                                                    {"Urgent", "Urgentní"}
+                                                };
                                             }
-                                            else
+                                            @foreach (var priority in priorities)
                                             {
-                                                <option value="0">Nízká</option>
-                                            }
-                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.Normal)
-                                            {
-                                                <option value="1" selected>Normální</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="1">Normální</option>
-                                            }
-                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.High)
-                                            {
-                                                <option value="2" selected>Vysoká</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="2">Vysoká</option>
-                                            }
-                                            @if (Model.Priority == OAI.Core.Entities.Business.RequestPriority.Urgent)
-                                            {
-                                                <option value="3" selected>Urgentní</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="3">Urgentní</option>
+                                                if (Model.Priority.ToString() == priority.Key)
+                                                {
+                                                    <option value="@priority.Key" selected>@priority.Value</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@priority.Key">@priority.Value</option>
+                                                }
                                             }
                                         </select>
                                     </div>
                                 </div>
                             </div>
                             
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="form-group">
-                                        <label>Zákazník</label>
-                                        <div class="input-group">
-                                            <select class="form-control" id="customerId" name="customerId">
-                                                <option value="">-- Vyberte zákazníka --</option>
-                                            </select>
-                                            <div class="input-group-append">
-                                                <button type="button" class="btn btn-primary" id="newCustomerBtn" data-toggle="modal" data-target="#newCustomerModal">
-                                                    <i class="fas fa-plus"></i> Nový
-                                                </button>
-                                            </div>
+                            <div class="form-group">
+                                <label>Zákazník</label>
+                                <select class="form-control" id="customerId" name="customerId">
+                                    <option value="">-- Vyberte zákazníka --</option>
+                                    <option value="new">➕ Nový zákazník (rychlé vytvoření)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Projekt</label>
+                                <select class="form-control" id="projectId" name="projectId">
+                                    <option value="">-- Vyberte projekt --</option>
+                                    <option value="new">🆕 Vytvořit nový projekt z tohoto požadavku</option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    Můžete přiložit k existujícímu projektu nebo vytvořit nový
+                                </small>
+                            </div>
+
+                            <!-- Quick project creation -->
+                            <div id="quickProjectSection" style="display: none;">
+                                <div class="card bg-info">
+                                    <div class="card-body">
+                                        <div class="form-group mb-0">
+                                            <label>Název projektu <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="quickProjectName" 
+                                                   placeholder="např. Analýza dat pro jarní kolekci">
+                                            <small class="form-text text-white">Projekt bude automaticky vytvořen při uložení požadavku</small>
                                         </div>
-                                        <small class="form-text text-muted">
-                                            Vyberte existujícího zákazníka nebo vytvořte nového
-                                        </small>
                                     </div>
                                 </div>
                             </div>
                             
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Deadline</label>
-                                        <input type="datetime-local" class="form-control" id="deadline" name="deadline" 
-                                               value="@(Model.Deadline?.ToString("yyyy-MM-ddTHH:mm"))">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Odhadovaná cena</label>
-                                        <div class="input-group">
-                                            <input type="number" class="form-control" id="estimatedCost" name="estimatedCost" 
-                                                   value="@Model.EstimatedCost" step="0.01">
-                                            <div class="input-group-append">
-                                                <span class="input-group-text">Kč</span>
-                                            </div>
+                            <!-- Quick customer creation -->
+                            <div id="quickCustomerSection" style="display: none;">
+                                <div class="card bg-warning">
+                                    <div class="card-body">
+                                        <div class="form-group mb-0">
+                                            <label>Jméno zákazníka <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="quickCustomerName" 
+                                                   placeholder="Jan Novák nebo Firma s.r.o.">
+                                            <small class="form-text text-muted">Zákazník bude automaticky vytvořen při uložení požadavku</small>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Detaily</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Deadline</label>
+                                <input type="datetime-local" class="form-control" id="deadline" name="deadline" 
+                                       value="@(Model.Deadline?.ToString("yyyy-MM-ddTHH:mm"))">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Odhadovaná cena</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="estimatedCost" name="estimatedCost" 
+                                           value="@Model.EstimatedCost" step="0.01">
+                                    <div class="input-group-append">
+                                        <span class="input-group-text">Kč</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Číslo požadavku</label>
+                                <input type="text" class="form-control" value="@Model.RequestNumber" readonly>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Vytvořeno</label>
+                                <input type="text" class="form-control" value="@Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")" readonly>
                             </div>
                         </div>
                     </div>
@@ -195,52 +205,12 @@
     </div>
 </section>
 
-<!-- New Customer Modal -->
-<div class="modal fade" id="newCustomerModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Nový zákazník</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <form id="newCustomerForm">
-                    <div class="form-group">
-                        <label>Název zákazníka <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="customerName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" class="form-control" id="customerEmail">
-                    </div>
-                    <div class="form-group">
-                        <label>Telefon</label>
-                        <input type="tel" class="form-control" id="customerPhone">
-                    </div>
-                    <div class="form-group">
-                        <label>Název společnosti</label>
-                        <input type="text" class="form-control" id="customerCompany">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                <button type="button" class="btn btn-primary" id="saveCustomerBtn">
-                    <i class="fas fa-save"></i> Uložit
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 @section Scripts {
     <script>
         $(document).ready(function() {
-            // Load customers
+            // Load customers and projects
             loadCustomers();
-            
+            loadProjects();
             
             // Form submission
             $('#editRequestForm').submit(function(e) {
@@ -248,79 +218,202 @@
                 updateRequest();
             });
             
-            // Save new customer
-            $('#saveCustomerBtn').click(function() {
-                const customerData = {
-                    name: $('#customerName').val(),
-                    email: $('#customerEmail').val() || null,
-                    phone: $('#customerPhone').val() || null,
-                    companyName: $('#customerCompany').val() || null
-                };
+            // Handle customer selection change
+            $('#customerId').on('change', function() {
+                const selectedValue = $(this).val();
                 
-                if (!customerData.name) {
-                    Swal.fire('Chyba', 'Název zákazníka je povinný', 'error');
-                    return;
+                if (selectedValue === 'new') {
+                    $('#quickCustomerSection').slideDown();
+                    $('#quickCustomerName').focus();
+                } else {
+                    $('#quickCustomerSection').slideUp();
+                    $('#quickCustomerName').val('');
                 }
+            });
+
+            // Handle project selection change
+            $('#projectId').on('change', function() {
+                const selectedValue = $(this).val();
                 
-                $.ajax({
-                    url: '/api/CustomersJson',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(customerData),
-                    success: function(response) {
-                        if (response.success && response.data) {
-                            $('#newCustomerModal').modal('hide');
-                            $('#newCustomerForm')[0].reset();
-                            
-                            // Reload customers and select the new one
-                            loadCustomers(response.data.id);
-                            
-                            Swal.fire('Úspěch', 'Zákazník byl vytvořen', 'success');
-                        }
-                    },
-                    error: function() {
-                        Swal.fire('Chyba', 'Nepodařilo se vytvořit zákazníka', 'error');
-                    }
-                });
+                if (selectedValue === 'new') {
+                    $('#quickProjectSection').slideDown();
+                    $('#quickProjectName').focus();
+                } else {
+                    $('#quickProjectSection').slideUp();
+                    $('#quickProjectName').val('');
+                }
             });
         });
         
         function loadCustomers(selectedId = null) {
             $.ajax({
-                url: '/api/CustomersJson',
+                url: '/api/customersapi',
                 method: 'GET',
                 success: function(response) {
                     const select = $('#customerId');
+                    const currentValue = select.val();
+                    
                     select.empty();
                     select.append('<option value="">-- Vyberte zákazníka --</option>');
+                    select.append('<option value="new">➕ Nový zákazník (rychlé vytvoření)</option>');
                     
                     if (response.data && response.data.length > 0) {
+                        select.append('<optgroup label="Existující zákazníci">');
                         response.data.forEach(customer => {
                             const selected = (selectedId && customer.id == selectedId) || 
                                            (customer.id == '@Model.ClientId') ? 'selected' : '';
                             const companyInfo = customer.companyName ? ` (${customer.companyName})` : '';
                             select.append(`<option value="${customer.id}" ${selected}>${customer.name}${companyInfo}</option>`);
                         });
+                        select.append('</optgroup>');
+                    }
+                    
+                    // Restore previous selection if it was "new"
+                    if (currentValue === 'new') {
+                        select.val('new');
+                    }
+                }
+            });
+        }
+
+        function loadProjects(selectedId = null) {
+            $.ajax({
+                url: '/api/projectsapi',
+                method: 'GET',
+                success: function(response) {
+                    const select = $('#projectId');
+                    const currentValue = select.val();
+                    
+                    select.empty();
+                    select.append('<option value="">-- Vyberte projekt --</option>');
+                    select.append('<option value="new">🆕 Vytvořit nový projekt z tohoto požadavku</option>');
+                    
+                    if (response.data && response.data.length > 0) {
+                        select.append('<optgroup label="Existující projekty">');
+                        response.data.forEach(project => {
+                            const selected = (selectedId && project.id == selectedId) || 
+                                           (project.id == '@Model.ProjectId') ? 'selected' : '';
+                            const statusInfo = project.status ? ` (${project.status})` : '';
+                            select.append(`<option value="${project.id}" ${selected}>${project.name}${statusInfo}</option>`);
+                        });
+                        select.append('</optgroup>');
+                    }
+                    
+                    // Restore previous selection if it was "new"
+                    if (currentValue === 'new') {
+                        select.val('new');
                     }
                 }
             });
         }
         
-        
         function updateRequest() {
-            const selectedCustomer = $('#customerId option:selected');
-            const customerId = $('#customerId').val();
+            const selectedCustomerValue = $('#customerId').val();
+            const selectedProjectValue = $('#projectId').val();
+            const submitBtn = $('#editRequestForm button[type="submit"]');
+            submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Ukládání...');
             
+            // If new customer is selected, create customer first
+            if (selectedCustomerValue === 'new') {
+                const customerName = $('#quickCustomerName').val().trim();
+                
+                if (!customerName) {
+                    toastr.error('Název zákazníka je povinný');
+                    submitBtn.prop('disabled', false).html('<i class="fas fa-save"></i> Uložit změny');
+                    return;
+                }
+                
+                // Create customer first
+                $.ajax({
+                    url: '/api/customersapi',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        name: customerName,
+                        companyName: customerName
+                    }),
+                    success: function(customerResponse) {
+                        if (customerResponse.success && customerResponse.data) {
+                            // Now handle project creation if needed
+                            handleProjectCreation(customerResponse.data.id.toString(), customerResponse.data.name);
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Nepodařilo se vytvořit zákazníka');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-save"></i> Uložit změny');
+                    }
+                });
+            } else {
+                // Use existing customer or no customer
+                const selectedCustomer = $('#customerId option:selected');
+                const clientId = selectedCustomerValue || null;
+                const clientName = clientId && selectedCustomerValue !== '' ? selectedCustomer.text().split(' (')[0] : null;
+                handleProjectCreation(clientId, clientName);
+            }
+        }
+
+        function handleProjectCreation(clientId, clientName) {
+            const selectedProjectValue = $('#projectId').val();
+            
+            // If new project is selected, create project first
+            if (selectedProjectValue === 'new') {
+                const projectName = $('#quickProjectName').val().trim();
+                
+                if (!projectName) {
+                    toastr.error('Název projektu je povinný');
+                    const submitBtn = $('#editRequestForm button[type="submit"]');
+                    submitBtn.prop('disabled', false).html('<i class="fas fa-save"></i> Uložit změny');
+                    return;
+                }
+                
+                // Create project first
+                const projectData = {
+                    name: projectName,
+                    description: `Projekt vytvořený z požadavku @Model.RequestNumber: @Model.Title`,
+                    customerId: clientId,
+                    customerName: clientName,
+                    status: 'Draft',
+                    priority: 'Medium'
+                };
+                
+                $.ajax({
+                    url: '/api/projectsapi',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(projectData),
+                    success: function(projectResponse) {
+                        if (projectResponse.success && projectResponse.data) {
+                            // Now update request with the new project
+                            submitRequestWithProjectAndCustomer(projectResponse.data.id, clientId, clientName);
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Nepodařilo se vytvořit projekt');
+                        const submitBtn = $('#editRequestForm button[type="submit"]');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-save"></i> Uložit změny');
+                    }
+                });
+            } else {
+                // Use existing project or no project
+                const projectId = selectedProjectValue || null;
+                submitRequestWithProjectAndCustomer(projectId, clientId, clientName);
+            }
+        }
+        
+        function submitRequestWithProjectAndCustomer(projectId, clientId, clientName) {
             const formData = {
                 title: $('#title').val(),
                 description: $('#description').val(),
                 requestType: $('#requestType').val(),
-                priority: parseInt($('#priority').val()),
+                priority: $('#priority').val(),
                 deadline: $('#deadline').val() || null,
                 estimatedCost: parseFloat($('#estimatedCost').val()) || null,
-                clientId: customerId || null,
-                clientName: customerId ? selectedCustomer.text().split(' (')[0] : null
+                projectId: projectId,
+                clientId: clientId,
+                clientName: clientName
             };
+            
+            const submitBtn = $('#editRequestForm button[type="submit"]');
             
             $.ajax({
                 url: '/api/requestsapi/@Model.Id',
@@ -329,24 +422,41 @@
                 data: JSON.stringify(formData),
                 success: function(response) {
                     if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Uloženo!',
-                            text: 'Změny byly úspěšně uloženy',
-                            showConfirmButton: false,
-                            timer: 1500
-                        }).then(() => {
+                        toastr.success('Změny byly úspěšně uloženy');
+                        setTimeout(() => {
                             window.location.href = '/Requests/@Model.Id';
-                        });
+                        }, 1000);
                     } else {
-                        Swal.fire('Chyba', response.message || 'Nepodařilo se uložit změny', 'error');
+                        toastr.error(response.message || 'Nepodařilo se uložit změny');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-save"></i> Uložit změny');
                     }
                 },
                 error: function(xhr) {
                     const error = xhr.responseJSON?.message || 'Nepodařilo se komunikovat se serverem';
-                    Swal.fire('Chyba', error, 'error');
+                    toastr.error(error);
+                    submitBtn.prop('disabled', false).html('<i class="fas fa-save"></i> Uložit změny');
                 }
             });
         }
     </script>
+}
+
+@functions {
+    string GetStatusText(OAI.Core.Entities.Business.RequestStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.RequestStatus.New => "Nový",
+        OAI.Core.Entities.Business.RequestStatus.InProgress => "V Procesu",
+        OAI.Core.Entities.Business.RequestStatus.OnHold => "Odloženo",
+        OAI.Core.Entities.Business.RequestStatus.Completed => "Ukončeno",
+        _ => status.ToString()
+    };
+
+    string GetStatusBadgeClass(OAI.Core.Entities.Business.RequestStatus status) => status switch
+    {
+        OAI.Core.Entities.Business.RequestStatus.New => "info",
+        OAI.Core.Entities.Business.RequestStatus.InProgress => "primary", 
+        OAI.Core.Entities.Business.RequestStatus.OnHold => "warning",
+        OAI.Core.Entities.Business.RequestStatus.Completed => "success",
+        _ => "secondary"
+    };
 }

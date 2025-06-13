@@ -52,6 +52,31 @@
                                     Můžete vybrat existujícího zákazníka nebo vytvořit nového
                                 </small>
                             </div>
+
+                            <div class="form-group">
+                                <label>Projekt</label>
+                                <select class="form-control" id="projectId" name="projectId">
+                                    <option value="">-- Vyberte projekt --</option>
+                                    <option value="new">🆕 Vytvořit nový projekt z tohoto požadavku</option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    Můžete přiložit k existujícímu projektu nebo vytvořit nový
+                                </small>
+                            </div>
+
+                            <!-- Quick project creation -->
+                            <div id="quickProjectSection" style="display: none;">
+                                <div class="card bg-info">
+                                    <div class="card-body">
+                                        <div class="form-group mb-0">
+                                            <label>Název projektu <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="quickProjectName" 
+                                                   placeholder="např. Analýza dat pro jarní kolekci">
+                                            <small class="form-text text-white">Projekt bude automaticky vytvořen při uložení požadavku</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <!-- Quick customer creation -->
                             <div id="quickCustomerSection" style="display: none;">
@@ -68,8 +93,8 @@
                             </div>
                             
                             <!-- Hidden fields with default values -->
-                            <input type="hidden" id="requestType" name="requestType" value="Analysis">
-                            <input type="hidden" id="priority" name="priority" value="2">
+                            <input type="hidden" id="requestType" name="requestType" value="Custom">
+                            <input type="hidden" id="priority" name="priority" value="Normal">
                             <input type="hidden" id="description" name="description" value=" ">
                         </div>
                         <div class="card-footer">
@@ -91,8 +116,9 @@
 @section Scripts {
     <script>
         $(document).ready(function() {
-            // Load customers
+            // Load customers and projects
             loadCustomers();
+            loadProjects();
             
             // Focus on title input
             $('#title').focus();
@@ -126,6 +152,19 @@
                 } else {
                     $('#quickCustomerSection').slideUp();
                     $('#quickCustomerName').val('');
+                }
+            });
+
+            // Handle project selection change
+            $('#projectId').on('change', function() {
+                const selectedValue = $(this).val();
+                
+                if (selectedValue === 'new') {
+                    $('#quickProjectSection').slideDown();
+                    $('#quickProjectName').focus();
+                } else {
+                    $('#quickProjectSection').slideUp();
+                    $('#quickProjectName').val('');
                 }
             });
         });
@@ -166,18 +205,56 @@
                 }
             });
         }
+
+        function loadProjects(selectedId = null) {
+            $.ajax({
+                url: '/api/projectsapi',
+                method: 'GET',
+                success: function(response) {
+                    const select = $('#projectId');
+                    const currentValue = select.val();
+                    
+                    select.empty();
+                    select.append('<option value="">-- Vyberte projekt --</option>');
+                    select.append('<option value="new">🆕 Vytvořit nový projekt z tohoto požadavku</option>');
+                    
+                    if (response.data && response.data.length > 0) {
+                        select.append('<optgroup label="Existující projekty">');
+                        response.data.forEach(project => {
+                            const selected = (selectedId && project.id == selectedId) ? 'selected' : '';
+                            const statusInfo = project.status ? ` (${project.status})` : '';
+                            select.append(`<option value="${project.id}" ${selected}>${project.name}${statusInfo}</option>`);
+                        });
+                        select.append('</optgroup>');
+                    }
+                    
+                    // Restore previous selection if it was "new"
+                    if (currentValue === 'new') {
+                        select.val('new');
+                    }
+                    
+                    // Check if there's a pre-selected project from URL
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const projectIdFromUrl = urlParams.get('projectId');
+                    if (projectIdFromUrl && !selectedId) {
+                        $('#projectId').val(projectIdFromUrl);
+                    }
+                }
+            });
+        }
         
         function createRequest() {
-            const selectedValue = $('#customerId').val();
+            const selectedCustomerValue = $('#customerId').val();
+            const selectedProjectValue = $('#projectId').val();
             const submitBtn = $('#newRequestForm button[type="submit"]');
             submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Vytváření...');
             
             // If new customer is selected, create customer first
-            if (selectedValue === 'new') {
+            if (selectedCustomerValue === 'new') {
                 const customerName = $('#quickCustomerName').val().trim();
                 
                 if (!customerName) {
-                    Swal.fire('Chyba', 'Název zákazníka je povinný', 'error');
+                    toastr.error('Název zákazníka je povinný');
                     submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
                     return;
                 }
@@ -193,30 +270,79 @@
                     }),
                     success: function(customerResponse) {
                         if (customerResponse.success && customerResponse.data) {
-                            // Now create request with the new customer
-                            submitRequestWithCustomer(customerResponse.data.id.toString(), customerResponse.data.name);
+                            // Now handle project creation if needed
+                            handleProjectCreation(customerResponse.data.id.toString(), customerResponse.data.name);
                         }
                     },
                     error: function() {
-                        Swal.fire('Chyba', 'Nepodařilo se vytvořit zákazníka', 'error');
+                        toastr.error('Nepodařilo se vytvořit zákazníka');
                         submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
                     }
                 });
             } else {
                 // Use existing customer or no customer
                 const selectedCustomer = $('#customerId option:selected');
-                const clientId = selectedValue || null;
-                const clientName = clientId && selectedValue !== '' ? selectedCustomer.text().split(' (')[0] : null;
-                submitRequestWithCustomer(clientId, clientName);
+                const clientId = selectedCustomerValue || null;
+                const clientName = clientId && selectedCustomerValue !== '' ? selectedCustomer.text().split(' (')[0] : null;
+                handleProjectCreation(clientId, clientName);
+            }
+        }
+
+        function handleProjectCreation(clientId, clientName) {
+            const selectedProjectValue = $('#projectId').val();
+            
+            // If new project is selected, create project first
+            if (selectedProjectValue === 'new') {
+                const projectName = $('#quickProjectName').val().trim();
+                
+                if (!projectName) {
+                    toastr.error('Název projektu je povinný');
+                    const submitBtn = $('#newRequestForm button[type="submit"]');
+                    submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
+                    return;
+                }
+                
+                // Create project first
+                const projectData = {
+                    name: projectName,
+                    description: `Projekt vytvořený z požadavku: ${$('#title').val()}`,
+                    customerId: clientId,
+                    customerName: clientName,
+                    status: 'Draft',
+                    priority: 'Medium'
+                };
+                
+                $.ajax({
+                    url: '/api/projectsapi',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(projectData),
+                    success: function(projectResponse) {
+                        if (projectResponse.success && projectResponse.data) {
+                            // Now create request with the new project
+                            submitRequestWithProjectAndCustomer(projectResponse.data.id, clientId, clientName);
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Nepodařilo se vytvořit projekt');
+                        const submitBtn = $('#newRequestForm button[type="submit"]');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
+                    }
+                });
+            } else {
+                // Use existing project or no project
+                const projectId = selectedProjectValue || null;
+                submitRequestWithProjectAndCustomer(projectId, clientId, clientName);
             }
         }
         
-        function submitRequestWithCustomer(clientId, clientName) {
+        function submitRequestWithProjectAndCustomer(projectId, clientId, clientName) {
             const formData = {
                 requestType: $('#requestType').val(),
                 title: $('#title').val(),
                 description: $('#description').val(),
-                priority: parseInt($('#priority').val()),
+                priority: $('#priority').val(),
+                projectId: projectId,
                 clientId: clientId,
                 clientName: clientName
             };
@@ -236,7 +362,7 @@
                 },
                 error: function(xhr) {
                     const error = xhr.responseJSON?.message || 'Nepodařilo se vytvořit požadavek';
-                    Swal.fire('Chyba', error, 'error');
+                    toastr.error(error);
                     submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
                 }
             });

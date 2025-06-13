@@ -29,7 +29,7 @@ namespace OptimalyAI.Controllers
         }
         
         [HttpGet]
-        public async Task<IActionResult> Index(Guid projectId)
+        public async Task<IActionResult> Index(Guid projectId, bool readOnly = false)
         {
             // Získej nebo vytvoř workflow
             if (!_workflows.ContainsKey(projectId))
@@ -40,6 +40,7 @@ namespace OptimalyAI.Controllers
             var workflow = _workflows[projectId];
             
             ViewBag.ProjectId = projectId;
+            ViewBag.ReadOnly = readOnly;
             ViewBag.AvailableTools = WorkflowPrototypeData.GetAvailableTools();
             ViewBag.ToolsByCategory = WorkflowPrototypeData.GetToolsByCategory();
             ViewBag.Orchestrators = new List<string> 
@@ -52,6 +53,24 @@ namespace OptimalyAI.Controllers
             
             // Použít Simple Workflow Designer - vlastní implementace
             return View("SimpleWorkflowDesigner", workflow);
+        }
+        
+        [HttpGet]
+        public async Task<IActionResult> DiagramOnly(Guid projectId)
+        {
+            // Získej nebo vytvoř workflow
+            if (!_workflows.ContainsKey(projectId))
+            {
+                _workflows[projectId] = await CreateDefaultWorkflowAsync(projectId);
+            }
+            
+            var workflow = _workflows[projectId];
+            
+            ViewBag.ProjectId = projectId;
+            ViewBag.ReadOnly = true;
+            
+            // Použít speciální view jen pro diagram bez menu
+            return View("DiagramOnly", workflow);
         }
         
         [HttpGet]
