@@ -218,7 +218,7 @@ namespace OptimalyAI.Controllers
         /// Formulář pro vytvoření nového projektu
         /// </summary>
         [HttpGet("create")]
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(Guid? customerId = null)
         {
             var workflowTypes = await _projectService.GetWorkflowTypesAsync();
             ViewBag.WorkflowTypes = workflowTypes;
@@ -227,7 +227,22 @@ namespace OptimalyAI.Controllers
             var customers = await _customerService.GetAllListAsync();
             ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
             
-            return View(new CreateProjectDto());
+            var dto = new CreateProjectDto();
+            
+            // If customerId is provided, prefill the customer data
+            if (customerId.HasValue)
+            {
+                var customer = await _customerService.GetByIdAsync(customerId.Value);
+                if (customer != null)
+                {
+                    dto.CustomerId = customer.Id;
+                    dto.CustomerName = customer.Name;
+                    dto.CustomerEmail = customer.Email;
+                    dto.CustomerPhone = customer.Phone;
+                }
+            }
+            
+            return View(dto);
         }
 
         /// <summary>

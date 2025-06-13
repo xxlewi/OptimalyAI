@@ -329,6 +329,14 @@
             // Focus on name field
             $('#Name').focus();
             
+            // If customer is already selected (from URL parameter), trigger change event
+            @if (Model.CustomerId.HasValue)
+            {
+                <text>
+                $('#customerSelect').val('@Model.CustomerId').trigger('change');
+                </text>
+            }
+            
             // Handle form submission
             $('#createProjectForm').on('submit', function(e) {
                 // If customer select has "new" selected, clear the value so CustomerId is null
