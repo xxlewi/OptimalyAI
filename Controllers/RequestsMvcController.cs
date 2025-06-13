@@ -13,13 +13,13 @@ namespace OptimalyAI.Controllers
     [Route("[controller]")]
     public class RequestsController : Controller
     {
-        private readonly IBusinessRequestService _requestService;
+        private readonly IRequestService _requestService;
         private readonly IWorkflowTemplateService _workflowService;
         private readonly IRequestExecutionService _executionService;
         private readonly ICustomerService _customerService;
 
         public RequestsController(
-            IBusinessRequestService requestService,
+            IRequestService requestService,
             IWorkflowTemplateService workflowService,
             IRequestExecutionService executionService,
             ICustomerService customerService)

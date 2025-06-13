@@ -5,7 +5,7 @@ namespace OAI.Core.DTOs.Business
 {
     public class RequestNoteDto : BaseDto
     {
-        public int BusinessRequestId { get; set; }
+        public int RequestId { get; set; }
         public string Content { get; set; }
         public string Author { get; set; }
         public NoteType Type { get; set; }

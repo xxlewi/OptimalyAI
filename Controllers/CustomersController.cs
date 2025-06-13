@@ -18,16 +18,16 @@ namespace OptimalyAI.Controllers
     public class CustomersController : Controller
     {
         private readonly ICustomerService _customerService;
-        private readonly IBusinessRequestService _businessRequestService;
+        private readonly IRequestService _requestService;
         private readonly ILogger<CustomersController> _logger;
 
         public CustomersController(
             ICustomerService customerService,
-            IBusinessRequestService businessRequestService,
+            IRequestService businessRequestService,
             ILogger<CustomersController> logger)
         {
             _customerService = customerService;
-            _businessRequestService = businessRequestService;
+            _requestService = businessRequestService;
             _logger = logger;
         }
 
@@ -85,7 +85,7 @@ namespace OptimalyAI.Controllers
                 _logger.LogInformation("Customer {Id} has {ProjectCount} projects", id, customer.RecentProjects?.Count ?? 0);
                 
                 // Načíst BusinessRequest požadavky pro tohoto zákazníka
-                var businessRequests = await _businessRequestService.GetRequestsByClientAsync(id.ToString());
+                var businessRequests = await _requestService.GetRequestsByClientAsync(id.ToString());
                 
                 var viewModel = new CustomerDetailViewModel
                 {

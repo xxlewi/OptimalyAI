@@ -5,8 +5,8 @@ namespace OAI.Core.Entities.Business
 {
     public class RequestExecution : BaseEntity
     {
-        public int BusinessRequestId { get; set; }
-        public virtual BusinessRequest BusinessRequest { get; set; }
+        public int RequestId { get; set; }
+        public virtual Request Request { get; set; }
 
         public ExecutionStatus Status { get; set; } = ExecutionStatus.Pending;
 

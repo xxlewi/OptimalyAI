@@ -1304,44 +1304,18 @@
         }
         
         function deleteProject(projectId) {
-            Swal.fire({
-                title: 'Trvale smazat projekt?',
-                text: 'POZOR! Tato akce je nevratná. Projekt bude trvale odstraněn včetně všech dat.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Ano, trvale smazat!',
-                cancelButtonText: 'Zrušit',
-                input: 'text',
-                inputPlaceholder: 'Napište SMAZAT pro potvrzení',
-                inputValidator: (value) => {
-                    if (value !== 'SMAZAT') {
-                        return 'Musíte napsat SMAZAT pro potvrzení!'
-                    }
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: '/api/projects/' + projectId + '/delete',
-                        type: 'DELETE',
-                        success: function(response) {
-                            Swal.fire(
-                                'Smazáno!',
-                                'Projekt byl trvale smazán.',
-                                'success'
-                            ).then(() => {
-                                window.location.href = '/Projects';
-                            });
-                        },
-                        error: function() {
-                            Swal.fire(
-                                'Chyba!',
-                                'Nepodařilo se smazat projekt.',
-                                'error'
-                            );
-                        }
-                    });
+            $.ajax({
+                url: '/api/projects/' + projectId + '/delete',
+                type: 'DELETE',
+                success: function(response) {
+                    window.location.href = '/Projects';
+                },
+                error: function() {
+                    Swal.fire(
+                        'Chyba!',
+                        'Nepodařilo se smazat projekt.',
+                        'error'
+                    );
                 }
             });
         }

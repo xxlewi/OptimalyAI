@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OptimalyAI.Infrastructure;
@@ -11,9 +12,11 @@ using OptimalyAI.Infrastructure;
 namespace OptimalyAI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250613140650_RenameBusinessRequestToRequest")]
+    partial class RenameBusinessRequestToRequest
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -68,6 +71,7 @@ namespace OptimalyAI.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("RequestNumber")
+                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
@@ -89,9 +93,6 @@ namespace OptimalyAI.Migrations
                     b.Property<int?>("WorkflowTemplateId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("WorkflowTemplateId1")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt")
@@ -103,8 +104,6 @@ namespace OptimalyAI.Migrations
                         .IsUnique();
 
                     b.HasIndex("WorkflowTemplateId");
-
-                    b.HasIndex("WorkflowTemplateId1");
 
                     b.ToTable("Requests");
                 });
@@ -1937,13 +1936,8 @@ namespace OptimalyAI.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("OAI.Core.Entities.Business.WorkflowTemplate", "WorkflowTemplate")
-                        .WithMany()
-                        .HasForeignKey("WorkflowTemplateId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("OAI.Core.Entities.Business.WorkflowTemplate", null)
                         .WithMany("Requests")
-                        .HasForeignKey("WorkflowTemplateId1");
+                        .HasForeignKey("WorkflowTemplateId");
 
                     b.Navigation("Project");
 

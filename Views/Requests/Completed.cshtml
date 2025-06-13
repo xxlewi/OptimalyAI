@@ -1,4 +1,4 @@
-@model IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto>
+@model IEnumerable<OAI.Core.DTOs.Business.RequestDto>
 @{
     ViewData["Title"] = "Dokončené požadavky";
 }
@@ -193,7 +193,7 @@
         return $"{duration.TotalDays:0.#} d";
     }
 
-    string CalculateAverageProcessingTime(IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto> requests)
+    string CalculateAverageProcessingTime(IEnumerable<OAI.Core.DTOs.Business.RequestDto> requests)
     {
         var executionsWithTime = requests
             .Where(r => r.Executions != null)

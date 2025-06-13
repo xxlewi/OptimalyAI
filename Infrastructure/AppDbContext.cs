@@ -63,23 +63,29 @@ public class AppDbContext : DbContext
     
     private void ConfigureBusinessEntities(ModelBuilder modelBuilder)
     {
-        // BusinessRequest configuration
-        modelBuilder.Entity<BusinessRequest>()
+        // Request configuration
+        modelBuilder.Entity<Request>()
             .HasIndex(br => br.RequestNumber)
             .IsUnique();
             
         // Configure request number
-        modelBuilder.Entity<BusinessRequest>()
+        modelBuilder.Entity<Request>()
             .Property(br => br.RequestNumber)
-            .HasMaxLength(50)
-            .IsRequired();
+            .HasMaxLength(50);
 
-        // Configure BusinessRequest -> Project relationship
-        modelBuilder.Entity<BusinessRequest>()
+        // Configure Request -> Project relationship
+        modelBuilder.Entity<Request>()
             .HasOne(br => br.Project)
-            .WithMany(p => p.BusinessRequests)
+            .WithMany(p => p.Requests)
             .HasForeignKey(br => br.ProjectId)
             .OnDelete(DeleteBehavior.SetNull); // Když se smaže projekt, nastaví se ProjectId na NULL
+            
+        // Configure Request -> WorkflowTemplate relationship
+        modelBuilder.Entity<Request>()
+            .HasOne(r => r.WorkflowTemplate)
+            .WithMany()
+            .HasForeignKey(r => r.WorkflowTemplateId)
+            .OnDelete(DeleteBehavior.SetNull);
             
         // Sequence will be created only for PostgreSQL during migration
             

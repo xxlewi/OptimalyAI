@@ -29,7 +29,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Id = entity.Id,
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = entity.UpdatedAt,
-                BusinessRequestId = entity.BusinessRequestId,
+                RequestId = entity.RequestId,
                 Status = entity.Status,
                 StartedAt = entity.StartedAt,
                 CompletedAt = entity.CompletedAt,
@@ -37,8 +37,8 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Results = entity.Results,
                 Errors = entity.Errors,
                 TotalCost = entity.TotalCost,
-                BusinessRequestTitle = entity.BusinessRequest?.Title,
-                RequestNumber = entity.BusinessRequest?.RequestNumber,
+                RequestTitle = entity.Request?.Title,
+                RequestNumber = entity.Request?.RequestNumber,
                 ExecutedBy = entity.ExecutedBy,
                 DurationMs = entity.CompletedAt.HasValue && entity.StartedAt != default
                     ? (int?)(entity.CompletedAt.Value - entity.StartedAt).TotalMilliseconds
@@ -56,7 +56,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 Id = dto.Id,
                 CreatedAt = dto.CreatedAt,
                 UpdatedAt = dto.UpdatedAt,
-                BusinessRequestId = dto.BusinessRequestId,
+                RequestId = dto.RequestId,
                 Status = dto.Status,
                 StartedAt = dto.StartedAt,
                 CompletedAt = dto.CompletedAt,
@@ -74,7 +74,7 @@ namespace OAI.ServiceLayer.Mapping.Business
 
             return new RequestExecution
             {
-                BusinessRequestId = dto.BusinessRequestId,
+                RequestId = dto.RequestId,
                 ExecutedBy = dto.ExecutedBy,
                 StartedAt = System.DateTime.UtcNow,
                 Status = ExecutionStatus.Pending

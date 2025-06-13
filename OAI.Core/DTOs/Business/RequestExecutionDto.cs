@@ -6,8 +6,8 @@ namespace OAI.Core.DTOs.Business
 {
     public class RequestExecutionDto : BaseDto
     {
-        public int BusinessRequestId { get; set; }
-        public string BusinessRequestTitle { get; set; }
+        public int RequestId { get; set; }
+        public string RequestTitle { get; set; }
         public string RequestNumber { get; set; }
         public ExecutionStatus Status { get; set; }
         public DateTime StartedAt { get; set; }
@@ -24,7 +24,7 @@ namespace OAI.Core.DTOs.Business
 
     public class CreateRequestExecutionDto : CreateDtoBase
     {
-        public int BusinessRequestId { get; set; }
+        public int RequestId { get; set; }
         public string ExecutedBy { get; set; }
     }
 

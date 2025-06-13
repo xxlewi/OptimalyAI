@@ -5,7 +5,7 @@ using OAI.Core.Entities.Business;
 
 namespace OAI.Core.DTOs.Business
 {
-    public class BusinessRequestDto : BaseDto
+    public class RequestDto : BaseDto
     {
         public string RequestNumber { get; set; }
         public string RequestType { get; set; }
@@ -27,7 +27,7 @@ namespace OAI.Core.DTOs.Business
         public List<RequestNoteDto> Notes { get; set; }
     }
 
-    public class CreateBusinessRequestDto : CreateDtoBase
+    public class CreateRequestDto : CreateDtoBase
     {
         [Required(ErrorMessage = "Název požadavku je povinný")]
         [MaxLength(200)]
@@ -56,7 +56,7 @@ namespace OAI.Core.DTOs.Business
         public int? WorkflowTemplateId { get; set; }
     }
 
-    public class UpdateBusinessRequestDto : UpdateDtoBase
+    public class UpdateRequestDto : UpdateDtoBase
     {
         public string Title { get; set; }
         public string Description { get; set; }

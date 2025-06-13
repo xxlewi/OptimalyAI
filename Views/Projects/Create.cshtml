@@ -301,6 +301,7 @@
                     $('input[name="InternalProject"]').remove();
                 } else {
                     // Existing customer selected
+                    const selectedOption = $(this).find('option:selected');
                     const name = selectedOption.data('name');
                     
                     $('#customerDetails').slideDown();

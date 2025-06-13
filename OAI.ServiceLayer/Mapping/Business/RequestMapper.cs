@@ -5,30 +5,30 @@ using System.Linq;
 
 namespace OAI.ServiceLayer.Mapping.Business
 {
-    public interface IBusinessRequestMapper : IMapper<BusinessRequest, BusinessRequestDto>
+    public interface IRequestMapper : IMapper<Request, RequestDto>
     {
-        BusinessRequest MapCreateDtoToEntity(CreateBusinessRequestDto dto);
-        void MapUpdateDtoToEntity(UpdateBusinessRequestDto dto, BusinessRequest entity);
+        Request MapCreateDtoToEntity(CreateRequestDto dto);
+        void MapUpdateDtoToEntity(UpdateRequestDto dto, Request entity);
     }
 
-    public class BusinessRequestMapper : BaseMapper<BusinessRequest, BusinessRequestDto>, IBusinessRequestMapper
+    public class RequestMapper : BaseMapper<Request, RequestDto>, IRequestMapper
     {
         private readonly IRequestExecutionMapper _executionMapper;
         private readonly IRequestFileMapper _fileMapper;
         private readonly IRequestNoteMapper _noteMapper;
 
-        public BusinessRequestMapper(IRequestExecutionMapper executionMapper, IRequestFileMapper fileMapper, IRequestNoteMapper noteMapper)
+        public RequestMapper(IRequestExecutionMapper executionMapper, IRequestFileMapper fileMapper, IRequestNoteMapper noteMapper)
         {
             _executionMapper = executionMapper;
             _fileMapper = fileMapper;
             _noteMapper = noteMapper;
         }
 
-        public override BusinessRequestDto ToDto(BusinessRequest entity)
+        public override RequestDto ToDto(Request entity)
         {
             if (entity == null) return null;
 
-            return new BusinessRequestDto
+            return new RequestDto
             {
                 Id = entity.Id,
                 CreatedAt = entity.CreatedAt,
@@ -54,11 +54,11 @@ namespace OAI.ServiceLayer.Mapping.Business
             };
         }
 
-        public override BusinessRequest ToEntity(BusinessRequestDto dto)
+        public override Request ToEntity(RequestDto dto)
         {
             if (dto == null) return null;
 
-            return new BusinessRequest
+            return new Request
             {
                 Id = dto.Id,
                 CreatedAt = dto.CreatedAt,
@@ -71,7 +71,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 ClientName = dto.ClientName,
                 Status = dto.Status,
                 Priority = dto.Priority,
-                Deadline = dto.Deadline,
+                Deadline = dto.Deadline?.ToUniversalTime(),
                 EstimatedCost = dto.EstimatedCost,
                 ActualCost = dto.ActualCost,
                 ProjectId = dto.ProjectId,
@@ -79,11 +79,11 @@ namespace OAI.ServiceLayer.Mapping.Business
             };
         }
 
-        public BusinessRequest MapCreateDtoToEntity(CreateBusinessRequestDto dto)
+        public Request MapCreateDtoToEntity(CreateRequestDto dto)
         {
             if (dto == null) return null;
 
-            return new BusinessRequest
+            return new Request
             {
                 RequestType = dto.RequestType,
                 Title = dto.Title,
@@ -91,7 +91,7 @@ namespace OAI.ServiceLayer.Mapping.Business
                 ClientId = dto.ClientId,
                 ClientName = dto.ClientName,
                 Priority = dto.Priority,
-                Deadline = dto.Deadline,
+                Deadline = dto.Deadline?.ToUniversalTime(),
                 EstimatedCost = dto.EstimatedCost,
                 ProjectId = dto.ProjectId,
                 WorkflowTemplateId = dto.WorkflowTemplateId,
@@ -99,7 +99,7 @@ namespace OAI.ServiceLayer.Mapping.Business
             };
         }
 
-        public void MapUpdateDtoToEntity(UpdateBusinessRequestDto dto, BusinessRequest entity)
+        public void MapUpdateDtoToEntity(UpdateRequestDto dto, Request entity)
         {
             if (dto == null || entity == null) return;
 

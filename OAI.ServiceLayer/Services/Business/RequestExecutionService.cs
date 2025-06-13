@@ -34,7 +34,7 @@ namespace OAI.ServiceLayer.Services.Business
         private readonly IRequestExecutionMapper _mapper;
         private readonly IStepExecutionMapper _stepMapper;
         private readonly ILogger<RequestExecutionService> _logger;
-        private readonly IBusinessRequestService _requestService;
+        private readonly IRequestService _requestService;
         private readonly IWorkflowTemplateService _workflowService;
         private readonly IOrchestrator<ToolChainOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
         private readonly DbContext _dbContext;
@@ -45,7 +45,7 @@ namespace OAI.ServiceLayer.Services.Business
             IRequestExecutionMapper mapper,
             IStepExecutionMapper stepMapper,
             ILogger<RequestExecutionService> logger,
-            IBusinessRequestService requestService,
+            IRequestService requestService,
             IWorkflowTemplateService workflowService,
             IOrchestrator<ToolChainOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator,
             DbContext dbContext) 
@@ -66,10 +66,10 @@ namespace OAI.ServiceLayer.Services.Business
                 throw new ArgumentNullException(nameof(dto));
 
             // Get the business request
-            var request = await _requestService.GetByIdAsync(dto.BusinessRequestId);
+            var request = await _requestService.GetByIdAsync(dto.RequestId);
             if (request == null)
             {
-                throw new NotFoundException("BusinessRequest", dto.BusinessRequestId);
+                throw new NotFoundException("Request", dto.RequestId);
             }
 
             if (!request.WorkflowTemplateId.HasValue)
@@ -208,7 +208,7 @@ namespace OAI.ServiceLayer.Services.Business
         public async Task<RequestExecutionDto> UpdateExecutionStatusAsync(int id, ExecutionStatus status, string results = null, string errors = null)
         {
             var execution = await _repository.GetByIdAsync(id,
-                include: q => q.Include(re => re.BusinessRequest));
+                include: q => q.Include(re => re.Request));
 
             if (execution == null)
             {
@@ -230,19 +230,19 @@ namespace OAI.ServiceLayer.Services.Business
             }
 
             // Update business request status based on execution status
-            if (execution.BusinessRequest != null)
+            if (execution.Request != null)
             {
-                execution.BusinessRequest.Status = status switch
+                execution.Request.Status = status switch
                 {
                     ExecutionStatus.Completed => RequestStatus.Completed,
                     ExecutionStatus.Failed => RequestStatus.OnHold, // Map failed to OnHold since Failed status doesn't exist
-                    _ => execution.BusinessRequest.Status
+                    _ => execution.Request.Status
                 };
 
                 // Update actual cost if completed
                 if (status == ExecutionStatus.Completed && execution.TotalCost.HasValue)
                 {
-                    execution.BusinessRequest.ActualCost = execution.TotalCost;
+                    execution.Request.ActualCost = execution.TotalCost;
                 }
             }
 
@@ -350,7 +350,7 @@ namespace OAI.ServiceLayer.Services.Business
             var executions = await _repository.GetAsync(
                 filter: re => activeStatuses.Contains(re.Status),
                 orderBy: q => q.OrderBy(re => re.StartedAt),
-                include: q => q.Include(re => re.BusinessRequest)
+                include: q => q.Include(re => re.Request)
                     .Include(re => re.StepExecutions));
 
             return executions.Select(_mapper.ToDto);

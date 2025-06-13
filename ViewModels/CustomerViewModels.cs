@@ -151,7 +151,7 @@ namespace OptimalyAI.ViewModels
         // Související data
         public List<ContactViewModel> Contacts { get; set; } = new();
         public List<RequestViewModel> RecentRequests { get; set; } = new();
-        public List<BusinessRequestDto> BusinessRequests { get; set; } = new();
+        public List<RequestDto> BusinessRequests { get; set; } = new();
         public List<OAI.Core.DTOs.ProjectDto> RecentProjects { get; set; } = new();
     }
 

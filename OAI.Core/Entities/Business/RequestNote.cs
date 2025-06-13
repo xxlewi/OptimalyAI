@@ -5,8 +5,8 @@ namespace OAI.Core.Entities.Business
 {
     public class RequestNote : BaseEntity
     {
-        public int BusinessRequestId { get; set; }
-        public virtual BusinessRequest BusinessRequest { get; set; }
+        public int RequestId { get; set; }
+        public virtual Request Request { get; set; }
 
         [Required]
         [MaxLength(2000)]

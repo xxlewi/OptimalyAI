@@ -151,7 +151,7 @@ namespace OAI.Core.Entities.Projects
 
         // Navigační vlastnosti
         public virtual Customers.Customer? Customer { get; set; }
-        public virtual ICollection<Business.BusinessRequest> BusinessRequests { get; set; }
+        public virtual ICollection<Business.Request> Requests { get; set; }
         public virtual ICollection<ProjectStage> Stages { get; set; }
         public virtual ICollection<ProjectOrchestrator> ProjectOrchestrators { get; set; }
         public virtual ICollection<ProjectTool> ProjectTools { get; set; }
@@ -163,7 +163,7 @@ namespace OAI.Core.Entities.Projects
 
         public Project()
         {
-            BusinessRequests = new HashSet<Business.BusinessRequest>();
+            Requests = new HashSet<Business.Request>();
             Stages = new HashSet<ProjectStage>();
             ProjectOrchestrators = new HashSet<ProjectOrchestrator>();
             ProjectTools = new HashSet<ProjectTool>();

@@ -17,12 +17,12 @@ namespace OptimalyAI.Controllers
     [ApiController]
     public class RequestsApiController : BaseApiController
     {
-        private readonly IBusinessRequestService _requestService;
+        private readonly IRequestService _requestService;
         private readonly IRequestExecutionService _executionService;
         private readonly IHubContext<MonitoringHub> _monitoringHub;
 
         public RequestsApiController(
-            IBusinessRequestService requestService,
+            IRequestService requestService,
             IRequestExecutionService executionService,
             IHubContext<MonitoringHub> monitoringHub)
         {
@@ -35,7 +35,7 @@ namespace OptimalyAI.Controllers
         /// Get all business requests
         /// </summary>
         [HttpGet]
-        [ProducesResponseType(typeof(ApiResponse<IEnumerable<BusinessRequestDto>>), 200)]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<RequestDto>>), 200)]
         public async Task<IActionResult> GetAll([FromQuery] RequestStatus? status = null)
         {
             if (status.HasValue)
@@ -73,7 +73,7 @@ namespace OptimalyAI.Controllers
         /// Get business request by ID
         /// </summary>
         [HttpGet("{id}")]
-        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
+        [ProducesResponseType(typeof(ApiResponse<RequestDto>), 200)]
         [ProducesResponseType(404)]
         public async Task<IActionResult> GetById(int id)
         {
@@ -85,7 +85,7 @@ namespace OptimalyAI.Controllers
         /// Get business requests by client
         /// </summary>
         [HttpGet("client/{clientId}")]
-        [ProducesResponseType(typeof(ApiResponse<IEnumerable<BusinessRequestDto>>), 200)]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<RequestDto>>), 200)]
         public async Task<IActionResult> GetByClient(string clientId)
         {
             var requests = await _requestService.GetRequestsByClientAsync(clientId);
@@ -96,9 +96,9 @@ namespace OptimalyAI.Controllers
         /// Create new business request
         /// </summary>
         [HttpPost]
-        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 201)]
+        [ProducesResponseType(typeof(ApiResponse<RequestDto>), 201)]
         [ProducesResponseType(400)]
-        public async Task<IActionResult> Create([FromBody] CreateBusinessRequestDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateRequestDto dto)
         {
             var request = await _requestService.CreateRequestAsync(dto);
             
@@ -106,17 +106,17 @@ namespace OptimalyAI.Controllers
             await _monitoringHub.Clients.All.SendAsync("RequestCreated", request);
             
             return CreatedAtAction(nameof(GetById), new { id = request.Id }, 
-                ApiResponse<BusinessRequestDto>.SuccessResponse(request, "Business request created successfully"));
+                ApiResponse<RequestDto>.SuccessResponse(request, "Business request created successfully"));
         }
 
         /// <summary>
         /// Update business request
         /// </summary>
         [HttpPut("{id}")]
-        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
+        [ProducesResponseType(typeof(ApiResponse<RequestDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<IActionResult> Update(int id, [FromBody] UpdateBusinessRequestDto dto)
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateRequestDto dto)
         {
             var request = await _requestService.UpdateRequestAsync(id, dto);
             
@@ -148,7 +148,7 @@ namespace OptimalyAI.Controllers
         /// Change status of business request
         /// </summary>
         [HttpPost("{id}/status")]
-        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
+        [ProducesResponseType(typeof(ApiResponse<RequestDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
         public async Task<IActionResult> ChangeStatus(int id, [FromBody] ChangeStatusDto dto)
@@ -165,7 +165,7 @@ namespace OptimalyAI.Controllers
         /// Add note to business request
         /// </summary>
         [HttpPost("{id}/notes")]
-        [ProducesResponseType(typeof(ApiResponse<BusinessRequestDto>), 200)]
+        [ProducesResponseType(typeof(ApiResponse<RequestDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
         public async Task<IActionResult> AddNote(int id, [FromBody] AddNoteDto dto)
@@ -194,7 +194,7 @@ namespace OptimalyAI.Controllers
         {
             var executionDto = new CreateRequestExecutionDto
             {
-                BusinessRequestId = id,
+                RequestId = id,
                 ExecutedBy = User.Identity?.Name ?? "System"
             };
 

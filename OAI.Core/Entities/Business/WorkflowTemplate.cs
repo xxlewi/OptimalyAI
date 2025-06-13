@@ -26,6 +26,6 @@ namespace OAI.Core.Entities.Business
 
         // Relationships
         public virtual ICollection<WorkflowStep> Steps { get; set; } = new List<WorkflowStep>();
-        public virtual ICollection<BusinessRequest> BusinessRequests { get; set; } = new List<BusinessRequest>();
+        public virtual ICollection<Request> Requests { get; set; } = new List<Request>();
     }
 }

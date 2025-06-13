@@ -1,4 +1,4 @@
-@model IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto>
+@model IEnumerable<OAI.Core.DTOs.Business.RequestDto>
 @{
     ViewData["Title"] = "Selhané požadavky";
 }
@@ -212,7 +212,7 @@
             : error;
     }
 
-    IEnumerable<IGrouping<string, OAI.Core.DTOs.Business.RequestExecutionDto>> GetTopErrors(IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto> requests)
+    IEnumerable<IGrouping<string, OAI.Core.DTOs.Business.RequestExecutionDto>> GetTopErrors(IEnumerable<OAI.Core.DTOs.Business.RequestDto> requests)
     {
         return requests
             .Where(r => r.Executions != null)
@@ -239,14 +239,14 @@
         return "Jiná chyba";
     }
 
-    double CalculateFailureRate(IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto> failedRequests)
+    double CalculateFailureRate(IEnumerable<OAI.Core.DTOs.Business.RequestDto> failedRequests)
     {
         // This is a simplified calculation
         // In real scenario, you'd calculate against all requests
         return 5.2; // Mock value
     }
 
-    int GetRecoverableCount(IEnumerable<OAI.Core.DTOs.Business.BusinessRequestDto> requests)
+    int GetRecoverableCount(IEnumerable<OAI.Core.DTOs.Business.RequestDto> requests)
     {
         return requests.Count(r => 
             r.Executions?.Any(e => 

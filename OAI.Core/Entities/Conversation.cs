@@ -14,8 +14,8 @@ namespace OAI.Core.Entities
         public string SystemPrompt { get; set; }
         
         // Business integration
-        public int? BusinessRequestId { get; set; }
-        public virtual BusinessRequest BusinessRequest { get; set; }
+        public int? RequestId { get; set; }
+        public virtual Request Request { get; set; }
         
         public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
     }

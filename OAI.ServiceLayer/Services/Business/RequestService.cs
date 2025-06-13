@@ -9,6 +9,7 @@ using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Projects;
 using OAI.ServiceLayer.Interfaces;
 using OAI.ServiceLayer.Mapping.Business;
+using OAI.ServiceLayer.Services.Customers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,54 +17,74 @@ using System.Threading.Tasks;
 
 namespace OAI.ServiceLayer.Services.Business
 {
-    public interface IBusinessRequestService : IBaseService<BusinessRequest>
+    public interface IRequestService : IBaseService<Request>
     {
-        new Task<IEnumerable<BusinessRequestDto>> GetAllAsync();
-        Task<BusinessRequestDto> CreateRequestAsync(CreateBusinessRequestDto dto);
-        Task<BusinessRequestDto> UpdateRequestAsync(int id, UpdateBusinessRequestDto dto);
-        Task<BusinessRequestDto> GetRequestWithDetailsAsync(int id);
-        Task<IEnumerable<BusinessRequestDto>> GetRequestsByStatusAsync(RequestStatus status);
-        Task<IEnumerable<BusinessRequestDto>> GetRequestsByClientAsync(string clientId);
+        new Task<IEnumerable<RequestDto>> GetAllAsync();
+        Task<RequestDto> CreateRequestAsync(CreateRequestDto dto);
+        Task<RequestDto> UpdateRequestAsync(int id, UpdateRequestDto dto);
+        Task<RequestDto> GetRequestWithDetailsAsync(int id);
+        Task<IEnumerable<RequestDto>> GetRequestsByStatusAsync(RequestStatus status);
+        Task<IEnumerable<RequestDto>> GetRequestsByClientAsync(string clientId);
         Task<string> GenerateRequestNumberAsync();
-        Task<BusinessRequestDto> ChangeStatusAsync(int id, RequestStatus newStatus);
-        Task<BusinessRequestDto> AddNoteAsync(int id, string content, string author, NoteType type = NoteType.Note, bool isInternal = false);
+        Task<RequestDto> ChangeStatusAsync(int id, RequestStatus newStatus);
+        Task<RequestDto> AddNoteAsync(int id, string content, string author, NoteType type = NoteType.Note, bool isInternal = false);
     }
 
-    public class BusinessRequestService : BaseService<BusinessRequest>, IBusinessRequestService
+    public class RequestService : BaseService<Request>, IRequestService
     {
-        private readonly IBusinessRequestMapper _mapper;
-        private readonly ILogger<BusinessRequestService> _logger;
+        private readonly IRequestMapper _mapper;
+        private readonly ILogger<RequestService> _logger;
         private readonly IWorkflowTemplateService _workflowService;
         private readonly IProjectService _projectService;
+        private readonly ICustomerService _customerService;
 
-        public BusinessRequestService(
-            IRepository<BusinessRequest> repository,
+        public RequestService(
+            IRepository<Request> repository,
             IUnitOfWork unitOfWork,
-            IBusinessRequestMapper mapper,
-            ILogger<BusinessRequestService> logger,
+            IRequestMapper mapper,
+            ILogger<RequestService> logger,
             IWorkflowTemplateService workflowService,
-            IProjectService projectService) 
+            IProjectService projectService,
+            ICustomerService customerService) 
             : base(repository, unitOfWork)
         {
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
             _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
+            _customerService = customerService ?? throw new ArgumentNullException(nameof(customerService));
         }
 
-        public new async Task<IEnumerable<BusinessRequestDto>> GetAllAsync()
+        public new async Task<IEnumerable<RequestDto>> GetAllAsync()
         {
             var entities = await _repository.GetAsync(
                 include: q => q.Include(br => br.Project));
             return entities.Select(_mapper.ToDto);
         }
 
-        public async Task<BusinessRequestDto> CreateRequestAsync(CreateBusinessRequestDto dto)
+        public async Task<RequestDto> CreateRequestAsync(CreateRequestDto dto)
         {
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
 
             _logger.LogInformation("Creating new business request: {Title}", dto.Title);
+
+            // Pokud má být vytvořen nový zákazník
+            if (string.IsNullOrEmpty(dto.ClientId) && !string.IsNullOrWhiteSpace(dto.ClientName) && dto.ClientName != "Interní")
+            {
+                _logger.LogInformation("Creating new customer: {ClientName}", dto.ClientName);
+                
+                // Vytvoření nového zákazníka
+                var createCustomerDto = new OAI.Core.DTOs.Customers.CreateCustomerDto
+                {
+                    Name = dto.ClientName,
+                    Type = OAI.Core.Entities.Customers.CustomerType.Company
+                };
+                
+                var newCustomer = await _customerService.CreateAsync(createCustomerDto);
+                dto.ClientId = newCustomer.Id.ToString();
+                _logger.LogInformation("Created customer {CustomerId} for request", newCustomer.Id);
+            }
 
             // Pokud má být vytvořen nový projekt
             if (!dto.ProjectId.HasValue && !string.IsNullOrWhiteSpace(dto.ProjectName))
@@ -84,7 +105,7 @@ namespace OAI.ServiceLayer.Services.Business
                 _logger.LogInformation("Created project {ProjectId} for request", newProject.Id);
             }
 
-            var entity = ((BusinessRequestMapper)_mapper).MapCreateDtoToEntity(dto);
+            var entity = ((RequestMapper)_mapper).MapCreateDtoToEntity(dto);
             entity.RequestNumber = await GenerateRequestNumberAsync();
             entity.Status = RequestStatus.New;
             
@@ -114,7 +135,7 @@ namespace OAI.ServiceLayer.Services.Business
             return _mapper.ToDto(created);
         }
 
-        public async Task<BusinessRequestDto> UpdateRequestAsync(int id, UpdateBusinessRequestDto dto)
+        public async Task<RequestDto> UpdateRequestAsync(int id, UpdateRequestDto dto)
         {
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
@@ -122,7 +143,7 @@ namespace OAI.ServiceLayer.Services.Business
             var entity = await GetByIdAsync(id);
             if (entity == null)
             {
-                throw new NotFoundException("BusinessRequest", id);
+                throw new NotFoundException("Request", id);
             }
 
             // Validate status transitions
@@ -131,7 +152,7 @@ namespace OAI.ServiceLayer.Services.Business
                 throw new BusinessException($"Invalid status transition from {entity.Status} to {dto.Status}");
             }
 
-            ((BusinessRequestMapper)_mapper).MapUpdateDtoToEntity(dto, entity);
+            ((RequestMapper)_mapper).MapUpdateDtoToEntity(dto, entity);
             
             var updated = await UpdateAsync(entity);
             _logger.LogInformation("Updated business request {RequestNumber}", updated.RequestNumber);
@@ -139,7 +160,7 @@ namespace OAI.ServiceLayer.Services.Business
             return _mapper.ToDto(updated);
         }
 
-        public async Task<BusinessRequestDto> GetRequestWithDetailsAsync(int id)
+        public async Task<RequestDto> GetRequestWithDetailsAsync(int id)
         {
             var entity = await _repository.GetByIdAsync(id,
                 include: q => q.Include(br => br.Executions)
@@ -151,13 +172,13 @@ namespace OAI.ServiceLayer.Services.Business
 
             if (entity == null)
             {
-                throw new NotFoundException("BusinessRequest", id);
+                throw new NotFoundException("Request", id);
             }
 
             return _mapper.ToDto(entity);
         }
 
-        public async Task<IEnumerable<BusinessRequestDto>> GetRequestsByStatusAsync(RequestStatus status)
+        public async Task<IEnumerable<RequestDto>> GetRequestsByStatusAsync(RequestStatus status)
         {
             var entities = await _repository.GetAsync(
                 filter: br => br.Status == status,
@@ -166,7 +187,7 @@ namespace OAI.ServiceLayer.Services.Business
             return entities.Select(_mapper.ToDto);
         }
 
-        public async Task<IEnumerable<BusinessRequestDto>> GetRequestsByClientAsync(string clientId)
+        public async Task<IEnumerable<RequestDto>> GetRequestsByClientAsync(string clientId)
         {
             if (string.IsNullOrWhiteSpace(clientId))
                 throw new ArgumentException("Client ID cannot be empty", nameof(clientId));
@@ -226,12 +247,12 @@ namespace OAI.ServiceLayer.Services.Business
             return $"{prefix}T{timestamp}";
         }
 
-        public async Task<BusinessRequestDto> SubmitRequestAsync(int id)
+        public async Task<RequestDto> SubmitRequestAsync(int id)
         {
             var entity = await GetByIdAsync(id);
             if (entity == null)
             {
-                throw new NotFoundException("BusinessRequest", id);
+                throw new NotFoundException("Request", id);
             }
 
             if (entity.Status != RequestStatus.New)
@@ -246,12 +267,12 @@ namespace OAI.ServiceLayer.Services.Business
             return _mapper.ToDto(updated);
         }
 
-        public async Task<BusinessRequestDto> ChangeStatusAsync(int id, RequestStatus newStatus)
+        public async Task<RequestDto> ChangeStatusAsync(int id, RequestStatus newStatus)
         {
             var entity = await GetByIdAsync(id);
             if (entity == null)
             {
-                throw new NotFoundException("BusinessRequest", id);
+                throw new NotFoundException("Request", id);
             }
 
             var oldStatus = entity.Status;
@@ -264,7 +285,7 @@ namespace OAI.ServiceLayer.Services.Business
             return _mapper.ToDto(updated);
         }
 
-        public async Task<BusinessRequestDto> AddNoteAsync(int id, string content, string author, NoteType type = NoteType.Note, bool isInternal = false)
+        public async Task<RequestDto> AddNoteAsync(int id, string content, string author, NoteType type = NoteType.Note, bool isInternal = false)
         {
             if (string.IsNullOrWhiteSpace(content))
                 throw new ArgumentException("Note content is required", nameof(content));
@@ -272,12 +293,12 @@ namespace OAI.ServiceLayer.Services.Business
             var entity = await GetByIdAsync(id);
             if (entity == null)
             {
-                throw new NotFoundException("BusinessRequest", id);
+                throw new NotFoundException("Request", id);
             }
 
             var note = new RequestNote
             {
-                BusinessRequestId = id,
+                RequestId = id,
                 Content = content,
                 Author = author,
                 Type = type,

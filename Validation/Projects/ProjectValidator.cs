@@ -12,9 +12,23 @@ namespace OptimalyAI.Validation.Projects
                 .NotEmpty().WithMessage("Název projektu je povinný")
                 .MaximumLength(200).WithMessage("Název projektu může mít maximálně 200 znaků");
 
-            // CustomerName je povinné pouze pokud NENÍ zadáno CustomerId a není to interní projekt
+            // Při submitování musí být vybrán zákazník nebo označen jako interní projekt
+            // Ale nevyžaduje se validace pokud jsou všechna pole prázdná (uživatel ještě nevybral)
+            RuleFor(x => x)
+                .Must(x => {
+                    // Pokud jsou všechna pole prázdná, nekontrolujeme (uživatel ještě nevybral)
+                    if (!x.CustomerId.HasValue && string.IsNullOrEmpty(x.CustomerName))
+                        return true;
+                    
+                    // Jinak musí být splněna jedna z podmínek
+                    return x.CustomerId.HasValue || x.CustomerName == "Interní projekt" || !string.IsNullOrEmpty(x.CustomerName);
+                })
+                .WithMessage("Musíte vybrat existujícího zákazníka, vytvořit nového nebo označit projekt jako interní");
+
+            // CustomerName je povinné pouze pokud se vybere možnost "nový zákazník"
+            // (tj. CustomerId není vyplněno, ale CustomerName je neprázdný a není "Interní projekt")
             RuleFor(x => x.CustomerName)
-                .NotEmpty().When(x => !x.CustomerId.HasValue && x.CustomerName != "Interní projekt")
+                .NotEmpty().When(x => !x.CustomerId.HasValue && !string.IsNullOrEmpty(x.CustomerName) && x.CustomerName != "Interní projekt")
                 .WithMessage("Jméno zákazníka je povinné při vytváření nového zákazníka")
                 .MaximumLength(200).WithMessage("Jméno zákazníka může mít maximálně 200 znaků");
 
@@ -77,9 +91,10 @@ namespace OptimalyAI.Validation.Projects
                 .NotEmpty().WithMessage("Název projektu je povinný")
                 .MaximumLength(200).WithMessage("Název projektu může mít maximálně 200 znaků");
 
-            // CustomerName je povinné pouze pokud NENÍ zadáno CustomerId a není to interní projekt
+            // CustomerName je povinné pouze pokud se vybere možnost "nový zákazník"
+            // (tj. CustomerId není vyplněno, ale CustomerName je neprázdný a není "Interní projekt")
             RuleFor(x => x.CustomerName)
-                .NotEmpty().When(x => !x.CustomerId.HasValue && x.CustomerName != "Interní projekt")
+                .NotEmpty().When(x => !x.CustomerId.HasValue && !string.IsNullOrEmpty(x.CustomerName) && x.CustomerName != "Interní projekt")
                 .WithMessage("Jméno zákazníka je povinné při vytváření nového zákazníka")
                 .MaximumLength(200).WithMessage("Jméno zákazníka může mít maximálně 200 znaků");
 

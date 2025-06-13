@@ -148,7 +148,7 @@ public static class ServiceCollectionExtensions
                 services.AddScoped(interfaceType, mapperType);
             }
             
-            // Register specific named interfaces (e.g., IBusinessRequestMapper)
+            // Register specific named interfaces (e.g., IRequestMapper)
             var specificInterface = mapperType.GetInterfaces()
                 .FirstOrDefault(i => i.Name == $"I{mapperType.Name}");
             

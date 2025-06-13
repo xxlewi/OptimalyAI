@@ -46,7 +46,7 @@
                                             </span>
                                             <div class="info-box-content">
                                                 <span class="info-box-text">
-                                                    @execution.RequestNumber - @execution.BusinessRequestTitle
+                                                    @execution.RequestNumber - @execution.RequestTitle
                                                 </span>
                                                 <span class="info-box-number">
                                                     @GetExecutionStatusText(execution.Status)
@@ -60,7 +60,7 @@
                                                 </span>
                                             </div>
                                             <div class="info-box-more">
-                                                <a href="/Requests/@execution.BusinessRequestId/Progress" class="btn btn-sm btn-light">
+                                                <a href="/Requests/@execution.RequestId/Progress" class="btn btn-sm btn-light">
                                                     <i class="fas fa-chart-line"></i> Průběh
                                                 </a>
                                             </div>
@@ -87,11 +87,11 @@
                                         {
                                             <tr>
                                                 <td>
-                                                    <a href="/Requests/@execution.BusinessRequestId">
+                                                    <a href="/Requests/@execution.RequestId">
                                                         @execution.RequestNumber
                                                     </a>
                                                 </td>
-                                                <td>@execution.BusinessRequestTitle</td>
+                                                <td>@execution.RequestTitle</td>
                                                 <td>
                                                     <span class="badge badge-@GetExecutionStatusColor(execution.Status)">
                                                         @GetExecutionStatusText(execution.Status)
@@ -101,7 +101,7 @@
                                                 <td>@FormatDuration(execution.StartedAt, DateTime.Now)</td>
                                                 <td>@execution.ExecutedBy</td>
                                                 <td>
-                                                    <a href="/Requests/@execution.BusinessRequestId/Progress" 
+                                                    <a href="/Requests/@execution.RequestId/Progress" 
                                                        class="btn btn-sm btn-info" title="Zobrazit průběh">
                                                         <i class="fas fa-chart-line"></i>
                                                     </a>

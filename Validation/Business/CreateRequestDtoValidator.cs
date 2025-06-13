@@ -3,9 +3,9 @@ using OAI.Core.DTOs.Business;
 
 namespace OptimalyAI.Validation.Business
 {
-    public class CreateBusinessRequestDtoValidator : SimpleBaseValidator<CreateBusinessRequestDto>
+    public class CreateRequestDtoValidator : SimpleBaseValidator<CreateRequestDto>
     {
-        public CreateBusinessRequestDtoValidator()
+        public CreateRequestDtoValidator()
         {
             RuleFor(x => x.Title)
                 .NotEmpty().WithMessage("Název požadavku je povinný")

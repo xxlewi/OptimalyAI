@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace OAI.Core.Entities.Business
 {
-    public class BusinessRequest : BaseEntity
+    public class Request : BaseEntity
     {
         [MaxLength(50)]
         public string? RequestNumber { get; set; } // REQ-2024-001
