@@ -20,6 +20,10 @@ namespace OAI.Core.DTOs.Projects
 
         [MaxLength(200)]
         public string? CustomerName { get; set; }
+        
+        [Required(ErrorMessage = "Typ workflow je povinný")]
+        [MaxLength(100)]
+        public string WorkflowType { get; set; }
 
         [EmailAddress(ErrorMessage = "Neplatný formát emailu")]
         [MaxLength(100)]

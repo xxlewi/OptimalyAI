@@ -1,371 +1,401 @@
 @{
-    ViewData["Title"] = "Nový požadavek";
+    ViewData["Title"] = "Vytvořit požadavek";
 }
 
-<!-- Content Header -->
 <section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
                 <h1>
-                    <i class="fas fa-plus-circle"></i> Nový požadavek
+                    <i class="fas fa-plus-circle text-info"></i> Vytvořit nový požadavek
                 </h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
                     <li class="breadcrumb-item"><a href="/Requests">Požadavky</a></li>
-                    <li class="breadcrumb-item active">Nový</li>
+                    <li class="breadcrumb-item active">Vytvořit</li>
                 </ol>
             </div>
         </div>
     </div>
 </section>
 
-<!-- Main content -->
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-6 offset-md-3">
-                <!-- Simple Form -->
-                <form id="newRequestForm">
-                    <div class="card">
+        <form id="newRequestForm">
+            <div class="row">
+                <!-- Main form -->
+                <div class="col-xl-9">
+                    <!-- Error messages placeholder -->
+                    <div id="errorContainer"></div>
+                    
+                    <!-- Basic Information Card -->
+                    <div class="card card-info card-outline">
                         <div class="card-header">
-                            <h3 class="card-title">Vytvořit požadavek</h3>
+                            <h3 class="card-title">
+                                <i class="fas fa-tasks"></i> Základní informace požadavku
+                            </h3>
                         </div>
+                        
                         <div class="card-body">
+                            <!-- Request Title -->
                             <div class="form-group">
-                                <label>Název požadavku <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control form-control-lg" id="title" name="title" 
-                                       placeholder="např. Produktové fotky pro kolekci Jaro 2024" 
-                                       autofocus required>
+                                <label class="font-weight-bold">Název požadavku <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-lg">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fas fa-file-alt"></i></span>
+                                    </div>
+                                    <input type="text" class="form-control" id="title" name="title" 
+                                           placeholder="např. Produktové fotky pro kolekci Jaro 2024" 
+                                           autofocus required>
+                                </div>
                                 <small class="form-text text-muted">Zadejte krátký a výstižný název požadavku</small>
                             </div>
                             
-                            <div class="form-group">
-                                <label>Zákazník</label>
-                                <select class="form-control" id="customerId" name="customerId">
-                                    <option value="">-- Vyberte zákazníka --</option>
-                                    <option value="new">➕ Nový zákazník (rychlé vytvoření)</option>
-                                </select>
-                                <small class="form-text text-muted">
-                                    Můžete vybrat existujícího zákazníka nebo vytvořit nového
-                                </small>
+                            <!-- Customer and Project Row -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="font-weight-bold">
+                                            <i class="fas fa-user-tie text-primary"></i> Zákazník
+                                        </label>
+                                        <select class="form-control custom-select" id="customerId" name="customerId">
+                                            <option value="">-- Vyberte zákazníka --</option>
+                                            <option value="" data-internal="true">🏢 Interní požadavek (bez zákazníka)</option>
+                                            <option value="new">➕ Nový zákazník (rychlé vytvoření)</option>
+                                        </select>
+                                        <small class="form-text text-muted">Můžete vybrat existujícího zákazníka nebo vytvořit nového</small>
+                                        
+                                        <!-- Quick customer creation inline -->
+                                        <div id="quickCustomerSection" style="display: none;" class="mt-3 p-3 bg-light rounded">
+                                            <div class="form-group mb-0">
+                                                <label class="font-weight-bold">Jméno zákazníka <span class="text-danger">*</span></label>
+                                                <input type="text" class="form-control" id="quickCustomerName" 
+                                                       placeholder="Jan Novák nebo Firma s.r.o.">
+                                                <small class="form-text text-muted">Zákazník bude automaticky vytvořen při uložení požadavku</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="font-weight-bold">
+                                            <i class="fas fa-project-diagram text-info"></i> Projekt
+                                        </label>
+                                        <select class="form-control custom-select" id="projectId" name="projectId">
+                                            <option value="">-- Vyberte projekt --</option>
+                                            <option value="new">🆕 Vytvořit nový projekt z tohoto požadavku</option>
+                                        </select>
+                                        <small class="form-text text-muted">Požadavek bude přiřazen k vybranému projektu</small>
+                                    </div>
+                                </div>
                             </div>
-
+                            
+                            <!-- Description -->
                             <div class="form-group">
-                                <label>Projekt</label>
-                                <select class="form-control" id="projectId" name="projectId">
-                                    <option value="">-- Vyberte projekt --</option>
-                                    <option value="new">🆕 Vytvořit nový projekt z tohoto požadavku</option>
-                                </select>
-                                <small class="form-text text-muted">
-                                    Můžete přiložit k existujícímu projektu nebo vytvořit nový
-                                </small>
+                                <label class="font-weight-bold">Popis požadavku</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fas fa-align-left"></i></span>
+                                    </div>
+                                    <textarea class="form-control" id="description" name="description" rows="4" 
+                                              placeholder="Popište co přesně požadujete..."></textarea>
+                                </div>
+                                <small class="form-text text-muted">Čím podrobnější popis, tím lepší výsledek</small>
                             </div>
-
-                            <!-- Quick project creation -->
-                            <div id="quickProjectSection" style="display: none;">
-                                <div class="card bg-info">
-                                    <div class="card-body">
-                                        <div class="form-group mb-0">
-                                            <label>Název projektu <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control" id="quickProjectName" 
-                                                   placeholder="např. Analýza dat pro jarní kolekci">
-                                            <small class="form-text text-white">Projekt bude automaticky vytvořen při uložení požadavku</small>
+                            
+                            <!-- Priority and Type Row -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="font-weight-bold">Priorita</label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text"><i class="fas fa-flag"></i></span>
+                                            </div>
+                                            <select class="form-control custom-select" id="priority" name="priority">
+                                                <option value="Low">Nízká</option>
+                                                <option value="Normal" selected>Normální</option>
+                                                <option value="High">Vysoká</option>
+                                                <option value="Urgent">Urgentní</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="font-weight-bold">Typ požadavku</label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text"><i class="fas fa-tag"></i></span>
+                                            </div>
+                                            <select class="form-control custom-select" id="requestType" name="requestType">
+                                                <option value="Custom">Vlastní</option>
+                                                <option value="Support">Podpora</option>
+                                                <option value="Feature">Nová funkce</option>
+                                                <option value="Bug">Chyba</option>
+                                                <option value="Analysis">Analýza</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Quick customer creation -->
-                            <div id="quickCustomerSection" style="display: none;">
-                                <div class="card bg-warning">
-                                    <div class="card-body">
-                                        <div class="form-group mb-0">
-                                            <label>Jméno zákazníka <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control" id="quickCustomerName" 
-                                                   placeholder="Jan Novák nebo Firma s.r.o.">
-                                            <small class="form-text text-muted">Zákazník bude automaticky vytvořen při uložení požadavku</small>
-                                        </div>
+                            <!-- Deadline -->
+                            <div class="form-group">
+                                <label class="font-weight-bold">Požadovaný termín dokončení</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
                                     </div>
+                                    <input type="date" class="form-control" id="deadline" name="deadline">
                                 </div>
+                                <small class="form-text text-muted">Nepovinné - pokud máte konkrétní termín</small>
                             </div>
-                            
-                            <!-- Hidden fields with default values -->
-                            <input type="hidden" id="requestType" name="requestType" value="Custom">
-                            <input type="hidden" id="priority" name="priority" value="Normal">
-                            <input type="hidden" id="description" name="description" value=" ">
-                        </div>
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary btn-lg btn-block">
-                                <i class="fas fa-check"></i> Vytvořit požadavek
-                            </button>
-                            <p class="text-center mt-3 text-muted">
-                                <small>Všechny další informace můžete doplnit později</small>
-                            </p>
                         </div>
                     </div>
-                </form>
+                </div>
+                
+                <!-- Right sidebar -->
+                <div class="col-xl-3">
+                    <!-- Tips Card -->
+                    <div class="card card-secondary">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-lightbulb"></i> Tipy
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="fas fa-check text-success"></i> 
+                                    Pište jasný a konkrétní název
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-check text-success"></i> 
+                                    Přiřaďte požadavek k projektu
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-check text-success"></i> 
+                                    Nastavte správnou prioritu
+                                </li>
+                                <li>
+                                    <i class="fas fa-check text-success"></i> 
+                                    Definujte realistický termín
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions Card -->
+                    <div class="card">
+                        <div class="card-body">
+                            <button type="submit" class="btn btn-info btn-block btn-lg">
+                                <i class="fas fa-save"></i> Vytvořit požadavek
+                            </button>
+                            <a href="/Requests" class="btn btn-default btn-block">
+                                <i class="fas fa-times"></i> Zrušit
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+        </form>
     </div>
 </section>
-
 
 @section Scripts {
     <script>
         $(document).ready(function() {
-            // Load customers and projects
-            loadCustomers();
-            loadProjects();
-            
-            // Focus on title input
-            $('#title').focus();
-            
-            // Form submission
-            $('#newRequestForm').submit(function(e) {
-                e.preventDefault();
-                
-                const title = $('#title').val().trim();
-                if (!title) {
-                    $('#title').addClass('is-invalid');
-                    return;
-                }
-                
-                $('#title').removeClass('is-invalid');
-                createRequest();
+            // Initialize Select2 for better dropdowns
+            $('#customerId, #projectId').select2({
+                theme: 'bootstrap4',
+                width: '100%'
             });
             
-            // Remove invalid class on input
-            $('#title').on('input', function() {
-                $(this).removeClass('is-invalid');
-            });
+            // Get URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const preselectedCustomerId = urlParams.get('customerId');
+            const preselectedProjectId = urlParams.get('projectId');
             
-            // Handle customer selection change
+            // Load customers and handle preselection
+            loadCustomers(preselectedCustomerId, preselectedProjectId);
+            
+            // Handle customer selection
             $('#customerId').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
                 const selectedValue = $(this).val();
                 
-                if (selectedValue === 'new') {
+                if (selectedOption.data('internal') === true) {
+                    // Internal request - hide customer section and clear projects
+                    $('#quickCustomerSection').slideUp();
+                    $('#quickCustomerName').val('');
+                    loadProjects(); // Clear projects for internal request
+                } else if (selectedValue === 'new') {
                     $('#quickCustomerSection').slideDown();
-                    $('#quickCustomerName').focus();
+                    loadProjects(); // Clear projects when selecting new customer
                 } else {
                     $('#quickCustomerSection').slideUp();
                     $('#quickCustomerName').val('');
+                    if (selectedValue) {
+                        loadProjects(selectedValue);
+                    } else {
+                        loadProjects();
+                    }
                 }
             });
-
-            // Handle project selection change
+            
+            // Handle project selection - store project name when "new" is selected
             $('#projectId').on('change', function() {
                 const selectedValue = $(this).val();
-                
                 if (selectedValue === 'new') {
-                    $('#quickProjectSection').slideDown();
-                    $('#quickProjectName').focus();
-                } else {
-                    $('#quickProjectSection').slideUp();
-                    $('#quickProjectName').val('');
+                    // Store the title as project name internally
+                    const title = $('#title').val().trim();
+                    $('#projectId').data('projectName', title);
+                }
+            });
+            
+            // Update stored project name when title changes
+            $('#title').on('input', function() {
+                const title = $(this).val().trim();
+                if ($('#projectId').val() === 'new') {
+                    $('#projectId').data('projectName', title);
                 }
             });
         });
         
-        function loadCustomers(selectedId = null) {
+        function loadCustomers(preselectedCustomerId = null, preselectedProjectId = null) {
             $.ajax({
                 url: '/api/customersapi',
-                method: 'GET',
+                type: 'GET',
                 success: function(response) {
-                    const select = $('#customerId');
-                    const currentValue = select.val();
+                    const customers = response.data || response;
+                    const $select = $('#customerId');
                     
-                    select.empty();
-                    select.append('<option value="">-- Vyberte zákazníka --</option>');
-                    select.append('<option value="new">➕ Nový zákazník (rychlé vytvoření)</option>');
+                    // Keep the first three options (empty, internal, new)
+                    $select.find('option:gt(2)').remove();
                     
-                    if (response.data && response.data.length > 0) {
-                        select.append('<optgroup label="Existující zákazníci">');
-                        response.data.forEach(customer => {
-                            const selected = (selectedId && customer.id == selectedId) ? 'selected' : '';
-                            const companyInfo = customer.companyName ? ` (${customer.companyName})` : '';
-                            select.append(`<option value="${customer.id}" ${selected}>${customer.name}${companyInfo}</option>`);
-                        });
-                        select.append('</optgroup>');
+                    customers.forEach(customer => {
+                        $select.append(`<option value="${customer.id}">${customer.name}</option>`);
+                    });
+                    
+                    // If there's a preselected customer, set it and load its projects
+                    if (preselectedCustomerId) {
+                        $select.val(preselectedCustomerId);
+                        loadProjects(preselectedCustomerId, preselectedProjectId);
                     }
                     
-                    // Restore previous selection if it was "new"
-                    if (currentValue === 'new') {
-                        select.val('new');
-                    }
-                    
-                    // Check if there's a pre-selected customer from URL
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const customerIdFromUrl = urlParams.get('customerId');
-                    if (customerIdFromUrl && !selectedId) {
-                        $('#customerId').val(customerIdFromUrl);
-                    }
+                    // Refresh Select2
+                    $select.trigger('change');
+                },
+                error: function() {
+                    console.error('Failed to load customers');
                 }
             });
         }
-
-        function loadProjects(selectedId = null) {
+        
+        function loadProjects(customerId = null, preselectedProjectId = null) {
             $.ajax({
-                url: '/api/projectsapi',
-                method: 'GET',
+                url: '/api/projects',
+                type: 'GET',
+                data: customerId ? { customerId: customerId } : {},
                 success: function(response) {
-                    const select = $('#projectId');
-                    const currentValue = select.val();
+                    const projects = response.data?.projects || response.projects || [];
+                    const $select = $('#projectId');
                     
-                    select.empty();
-                    select.append('<option value="">-- Vyberte projekt --</option>');
-                    select.append('<option value="new">🆕 Vytvořit nový projekt z tohoto požadavku</option>');
+                    // Keep the first two options
+                    $select.find('option:gt(1)').remove();
                     
-                    if (response.data && response.data.length > 0) {
-                        select.append('<optgroup label="Existující projekty">');
-                        response.data.forEach(project => {
-                            const selected = (selectedId && project.id == selectedId) ? 'selected' : '';
-                            const statusInfo = project.status ? ` (${project.status})` : '';
-                            select.append(`<option value="${project.id}" ${selected}>${project.name}${statusInfo}</option>`);
+                    if (Array.isArray(projects)) {
+                        projects.forEach(project => {
+                            $select.append(`<option value="${project.id}">${project.name}</option>`);
                         });
-                        select.append('</optgroup>');
                     }
                     
-                    // Restore previous selection if it was "new"
-                    if (currentValue === 'new') {
-                        select.val('new');
+                    // If there's a preselected project, set it
+                    if (preselectedProjectId) {
+                        $select.val(preselectedProjectId);
                     }
                     
-                    // Check if there's a pre-selected project from URL
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const projectIdFromUrl = urlParams.get('projectId');
-                    if (projectIdFromUrl && !selectedId) {
-                        $('#projectId').val(projectIdFromUrl);
-                    }
+                    // Refresh Select2
+                    $select.trigger('change');
+                },
+                error: function() {
+                    console.error('Failed to load projects');
                 }
             });
         }
         
-        function createRequest() {
-            const selectedCustomerValue = $('#customerId').val();
-            const selectedProjectValue = $('#projectId').val();
-            const submitBtn = $('#newRequestForm button[type="submit"]');
-            submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Vytváření...');
+        // Form submission
+        $('#newRequestForm').on('submit', function(e) {
+            e.preventDefault();
             
-            // If new customer is selected, create customer first
-            if (selectedCustomerValue === 'new') {
-                const customerName = $('#quickCustomerName').val().trim();
-                
-                if (!customerName) {
-                    toastr.error('Název zákazníka je povinný');
-                    submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
-                    return;
-                }
-                
-                // Create customer first
-                $.ajax({
-                    url: '/api/customersapi',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        name: customerName,
-                        companyName: customerName
-                    }),
-                    success: function(customerResponse) {
-                        if (customerResponse.success && customerResponse.data) {
-                            // Now handle project creation if needed
-                            handleProjectCreation(customerResponse.data.id.toString(), customerResponse.data.name);
-                        }
-                    },
-                    error: function() {
-                        toastr.error('Nepodařilo se vytvořit zákazníka');
-                        submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
-                    }
-                });
-            } else {
-                // Use existing customer or no customer
-                const selectedCustomer = $('#customerId option:selected');
-                const clientId = selectedCustomerValue || null;
-                const clientName = clientId && selectedCustomerValue !== '' ? selectedCustomer.text().split(' (')[0] : null;
-                handleProjectCreation(clientId, clientName);
-            }
-        }
-
-        function handleProjectCreation(clientId, clientName) {
-            const selectedProjectValue = $('#projectId').val();
+            // Clear previous errors
+            $('#errorContainer').empty();
             
-            // If new project is selected, create project first
-            if (selectedProjectValue === 'new') {
-                const projectName = $('#quickProjectName').val().trim();
-                
-                if (!projectName) {
-                    toastr.error('Název projektu je povinný');
-                    const submitBtn = $('#newRequestForm button[type="submit"]');
-                    submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
-                    return;
-                }
-                
-                // Create project first
-                const projectData = {
-                    name: projectName,
-                    description: `Projekt vytvořený z požadavku: ${$('#title').val()}`,
-                    customerId: clientId,
-                    customerName: clientName,
-                    status: 'Draft',
-                    priority: 'Medium'
-                };
-                
-                $.ajax({
-                    url: '/api/projectsapi',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(projectData),
-                    success: function(projectResponse) {
-                        if (projectResponse.success && projectResponse.data) {
-                            // Now create request with the new project
-                            submitRequestWithProjectAndCustomer(projectResponse.data.id, clientId, clientName);
-                        }
-                    },
-                    error: function() {
-                        toastr.error('Nepodařilo se vytvořit projekt');
-                        const submitBtn = $('#newRequestForm button[type="submit"]');
-                        submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
-                    }
-                });
-            } else {
-                // Use existing project or no project
-                const projectId = selectedProjectValue || null;
-                submitRequestWithProjectAndCustomer(projectId, clientId, clientName);
+            // Validate required fields
+            const title = $('#title').val().trim();
+            if (!title) {
+                showError('Název požadavku je povinný');
+                return;
             }
-        }
-        
-        function submitRequestWithProjectAndCustomer(projectId, clientId, clientName) {
+            
+            // Prepare data
+            const selectedCustomerOption = $('#customerId').find('option:selected');
+            const isInternal = selectedCustomerOption.data('internal') === true;
+            
             const formData = {
-                requestType: $('#requestType').val(),
-                title: $('#title').val(),
-                description: $('#description').val(),
+                title: title,
+                description: $('#description').val() || ' ',
                 priority: $('#priority').val(),
-                projectId: projectId,
-                clientId: clientId,
-                clientName: clientName
+                requestType: $('#requestType').val(),
+                deadline: $('#deadline').val() || null,
+                clientId: isInternal ? null : ($('#customerId').val() === 'new' ? null : $('#customerId').val()),
+                clientName: $('#customerId').val() === 'new' ? $('#quickCustomerName').val() : (isInternal ? 'Interní' : null),
+                projectId: $('#projectId').val() === 'new' ? null : $('#projectId').val()
             };
             
-            const submitBtn = $('#newRequestForm button[type="submit"]');
+            // Validate quick customer creation
+            if ($('#customerId').val() === 'new' && !$('#quickCustomerName').val().trim()) {
+                showError('Při vytváření nového zákazníka je nutné zadat jeho jméno');
+                return;
+            }
             
+            // Add project name if creating new project
+            if ($('#projectId').val() === 'new') {
+                const projectName = $('#projectId').data('projectName') || $('#title').val().trim();
+                formData.projectName = projectName;
+            }
+            
+            // Submit
             $.ajax({
                 url: '/api/requestsapi',
-                method: 'POST',
+                type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(formData),
                 success: function(response) {
-                    if (response.success && response.data) {
-                        // Rovnou přesměrovat na detail
-                        window.location.href = `/Requests/${response.data.id}`;
-                    }
+                    toastr.success('Požadavek byl úspěšně vytvořen');
+                    window.location.href = `/Requests/${response.data.id}`;
                 },
                 error: function(xhr) {
-                    const error = xhr.responseJSON?.message || 'Nepodařilo se vytvořit požadavek';
-                    toastr.error(error);
-                    submitBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Vytvořit požadavek');
+                    const errorMessage = xhr.responseJSON?.message || 'Chyba při vytváření požadavku';
+                    showError(errorMessage);
                 }
             });
+        });
+        
+        function showError(message) {
+            const alert = `
+                <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+                    <h5><i class="icon fas fa-ban"></i> Chyba:</h5>
+                    <p class="mb-0">${message}</p>
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            `;
+            $('#errorContainer').html(alert);
         }
     </script>
 }

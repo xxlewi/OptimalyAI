@@ -49,6 +49,10 @@ namespace OAI.Core.DTOs.Business
         public DateTime? Deadline { get; set; }
         public decimal? EstimatedCost { get; set; }
         public Guid? ProjectId { get; set; }
+        
+        [MaxLength(200)]
+        public string? ProjectName { get; set; } // Pro vytvoření nového projektu
+        
         public int? WorkflowTemplateId { get; set; }
     }
 

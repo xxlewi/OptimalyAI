@@ -1,9 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using OAI.Core.DTOs;
 using OAI.Core.DTOs.Business;
 using OAI.Core.Entities.Business;
+using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
 using OAI.Core.Interfaces;
+using OAI.Core.Interfaces.Projects;
 using OAI.ServiceLayer.Interfaces;
 using OAI.ServiceLayer.Mapping.Business;
 using System;
@@ -31,18 +34,21 @@ namespace OAI.ServiceLayer.Services.Business
         private readonly IBusinessRequestMapper _mapper;
         private readonly ILogger<BusinessRequestService> _logger;
         private readonly IWorkflowTemplateService _workflowService;
+        private readonly IProjectService _projectService;
 
         public BusinessRequestService(
             IRepository<BusinessRequest> repository,
             IUnitOfWork unitOfWork,
             IBusinessRequestMapper mapper,
             ILogger<BusinessRequestService> logger,
-            IWorkflowTemplateService workflowService) 
+            IWorkflowTemplateService workflowService,
+            IProjectService projectService) 
             : base(repository, unitOfWork)
         {
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _workflowService = workflowService ?? throw new ArgumentNullException(nameof(workflowService));
+            _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         }
 
         public new async Task<IEnumerable<BusinessRequestDto>> GetAllAsync()
@@ -58,6 +64,25 @@ namespace OAI.ServiceLayer.Services.Business
                 throw new ArgumentNullException(nameof(dto));
 
             _logger.LogInformation("Creating new business request: {Title}", dto.Title);
+
+            // Pokud má být vytvořen nový projekt
+            if (!dto.ProjectId.HasValue && !string.IsNullOrWhiteSpace(dto.ProjectName))
+            {
+                _logger.LogInformation("Creating new project: {ProjectName}", dto.ProjectName);
+                
+                var createProjectDto = new CreateProjectDto
+                {
+                    Name = dto.ProjectName,
+                    Description = $"Projekt vytvořený z požadavku: {dto.Title}",
+                    CustomerName = dto.ClientName ?? "Interní projekt",
+                    Priority = "Normal",
+                    WorkflowType = dto.RequestType ?? "custom"
+                };
+                
+                var newProject = await _projectService.CreateProjectAsync(createProjectDto);
+                dto.ProjectId = newProject.Id;
+                _logger.LogInformation("Created project {ProjectId} for request", newProject.Id);
+            }
 
             var entity = ((BusinessRequestMapper)_mapper).MapCreateDtoToEntity(dto);
             entity.RequestNumber = await GenerateRequestNumberAsync();

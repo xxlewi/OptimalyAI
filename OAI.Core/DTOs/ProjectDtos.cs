@@ -76,6 +76,8 @@ namespace OAI.Core.DTOs
         [MaxLength(1000)]
         public string? Description { get; set; }
         
+        public Guid? CustomerId { get; set; }
+        
         [MaxLength(50)]
         public string? Status { get; set; }
         

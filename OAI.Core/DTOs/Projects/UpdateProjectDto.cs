@@ -36,6 +36,9 @@ namespace OAI.Core.DTOs.Projects
         public string? ProjectType { get; set; }
 
         public ProjectPriority? Priority { get; set; }
+        
+        [MaxLength(100)]
+        public string? WorkflowType { get; set; }
 
         public DateTime? StartDate { get; set; }
 

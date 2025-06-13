@@ -189,6 +189,17 @@ namespace OptimalyAI.Controllers
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromForm] CreateProjectDto createDto, string? nextAction = null, bool internalProject = false)
         {
+            // Handle internal project before validation
+            if (internalProject || Request.Form["InternalProject"] == "true")
+            {
+                createDto.CustomerId = null;
+                createDto.CustomerName = "Interní projekt";
+                createDto.CustomerEmail = "";
+                
+                // Remove CustomerName validation error if it exists
+                ModelState.Remove("CustomerName");
+            }
+            
             if (!ModelState.IsValid)
             {
                 var workflowTypes = await _projectService.GetWorkflowTypesAsync();
@@ -202,18 +213,11 @@ namespace OptimalyAI.Controllers
 
             try
             {
-                // Handle internal project
-                if (internalProject || Request.Form["InternalProject"] == "true")
-                {
-                    createDto.CustomerId = null;
-                    createDto.CustomerName = "Interní projekt";
-                    createDto.CustomerEmail = "";
-                }
                 // Handle new customer creation - only if NOT internal project
-                else if (createDto.CustomerId == null && !string.IsNullOrEmpty(createDto.CustomerName) && createDto.CustomerName != "Interní projekt")
+                if (createDto.CustomerId == null && !string.IsNullOrEmpty(createDto.CustomerName) && createDto.CustomerName != "Interní projekt")
                 {
                     // Create new customer first
-                    var newCustomer = await _customerService.CreateAsync(new CreateCustomerDto
+                    var newCustomer = await _customerService.CreateAsync(new OAI.Core.DTOs.Customers.CreateCustomerDto
                     {
                         Name = createDto.CustomerName,
                         Email = createDto.CustomerEmail ?? "",
@@ -239,6 +243,92 @@ namespace OptimalyAI.Controllers
                 ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
                 
                 return View(createDto);
+            }
+        }
+
+        /// <summary>
+        /// Editace projektu - GET
+        /// </summary>
+        [HttpGet("edit/{id}")]
+        public async Task<IActionResult> Edit(Guid id)
+        {
+            try
+            {
+                var project = await _projectService.GetByIdAsync(id);
+                if (project == null)
+                {
+                    return NotFound();
+                }
+
+                var updateDto = new UpdateProjectDto
+                {
+                    Name = project.Name,
+                    Description = project.Description,
+                    CustomerId = project.CustomerId,
+                    CustomerName = project.CustomerName,
+                    CustomerEmail = project.CustomerEmail,
+                    Status = project.Status,
+                    Priority = project.Priority,
+                    WorkflowType = project.WorkflowType
+                };
+
+                var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+                ViewBag.WorkflowTypes = workflowTypes;
+                
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
+
+                ViewBag.ProjectId = id;
+
+                return View(updateDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading project for edit");
+                TempData["Error"] = "Nepodařilo se načíst projekt.";
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+        /// <summary>
+        /// Editace projektu - POST
+        /// </summary>
+        [HttpPost("edit/{id}")]
+        public async Task<IActionResult> Edit(Guid id, [FromForm] UpdateProjectDto updateDto)
+        {
+            if (!ModelState.IsValid)
+            {
+                var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+                ViewBag.WorkflowTypes = workflowTypes;
+                
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
+                
+                ViewBag.ProjectId = id;
+                
+                return View(updateDto);
+            }
+
+            try
+            {
+                await _projectService.UpdateProjectAsync(id, updateDto);
+                TempData["Success"] = "Projekt byl úspěšně aktualizován.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating project");
+                ModelState.AddModelError("", $"Chyba při aktualizaci projektu: {ex.Message}");
+                
+                var workflowTypes = await _projectService.GetWorkflowTypesAsync();
+                ViewBag.WorkflowTypes = workflowTypes;
+                
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
+                
+                ViewBag.ProjectId = id;
+                
+                return View(updateDto);
             }
         }
 

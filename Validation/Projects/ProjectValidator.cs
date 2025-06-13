@@ -12,8 +12,10 @@ namespace OptimalyAI.Validation.Projects
                 .NotEmpty().WithMessage("Název projektu je povinný")
                 .MaximumLength(200).WithMessage("Název projektu může mít maximálně 200 znaků");
 
+            // CustomerName je povinné pouze pokud NENÍ zadáno CustomerId a není to interní projekt
             RuleFor(x => x.CustomerName)
-                .NotEmpty().WithMessage("Jméno zákazníka je povinné")
+                .NotEmpty().When(x => !x.CustomerId.HasValue && x.CustomerName != "Interní projekt")
+                .WithMessage("Jméno zákazníka je povinné při vytváření nového zákazníka")
                 .MaximumLength(200).WithMessage("Jméno zákazníka může mít maximálně 200 znaků");
 
             RuleFor(x => x.CustomerEmail)
@@ -27,9 +29,10 @@ namespace OptimalyAI.Validation.Projects
                 .WithMessage("Neplatný formát telefonu")
                 .MaximumLength(50).WithMessage("Telefon může mít maximálně 50 znaků");
 
+            // CustomerRequirement je nepovinné
             RuleFor(x => x.CustomerRequirement)
-                .NotEmpty().WithMessage("Požadavek zákazníka je povinný")
-                .MinimumLength(10).WithMessage("Požadavek zákazníka musí být podrobnější (min. 10 znaků)");
+                .MinimumLength(10).When(x => !string.IsNullOrEmpty(x.CustomerRequirement))
+                .WithMessage("Požadavek zákazníka musí být podrobnější (min. 10 znaků)");
 
             RuleFor(x => x.EstimatedHours)
                 .InclusiveBetween(0, 10000).When(x => x.EstimatedHours.HasValue)
@@ -74,8 +77,10 @@ namespace OptimalyAI.Validation.Projects
                 .NotEmpty().WithMessage("Název projektu je povinný")
                 .MaximumLength(200).WithMessage("Název projektu může mít maximálně 200 znaků");
 
+            // CustomerName je povinné pouze pokud NENÍ zadáno CustomerId a není to interní projekt
             RuleFor(x => x.CustomerName)
-                .NotEmpty().WithMessage("Jméno zákazníka je povinné")
+                .NotEmpty().When(x => !x.CustomerId.HasValue && x.CustomerName != "Interní projekt")
+                .WithMessage("Jméno zákazníka je povinné při vytváření nového zákazníka")
                 .MaximumLength(200).WithMessage("Jméno zákazníka může mít maximálně 200 znaků");
 
             RuleFor(x => x.CustomerEmail)
@@ -89,9 +94,10 @@ namespace OptimalyAI.Validation.Projects
                 .WithMessage("Neplatný formát telefonu")
                 .MaximumLength(50).WithMessage("Telefon může mít maximálně 50 znaků");
 
+            // CustomerRequirement je nepovinné
             RuleFor(x => x.CustomerRequirement)
-                .NotEmpty().WithMessage("Požadavek zákazníka je povinný")
-                .MinimumLength(10).WithMessage("Požadavek zákazníka musí být podrobnější (min. 10 znaků)");
+                .MinimumLength(10).When(x => !string.IsNullOrEmpty(x.CustomerRequirement))
+                .WithMessage("Požadavek zákazníka musí být podrobnější (min. 10 znaků)");
 
             RuleFor(x => x.EstimatedHours)
                 .InclusiveBetween(0, 10000).When(x => x.EstimatedHours.HasValue)

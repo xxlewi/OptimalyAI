@@ -66,43 +66,38 @@
                                 <span asp-validation-for="Name" class="text-danger small"></span>
                             </div>
                             
-                            <!-- Type and Description Row -->
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="WorkflowType" class="font-weight-bold">Typ workflow <span class="text-danger">*</span></label>
-                                        <div class="input-group">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text"><i class="fas fa-cogs"></i></span>
-                                            </div>
-                                            <select asp-for="WorkflowType" class="form-control custom-select">
-                                                <option value="">-- Vyberte typ --</option>
-                                                @foreach (var type in workflowTypes)
-                                                {
-                                                    <option value="@type.Value" data-icon="@type.Icon" data-description="@type.Description">
-                                                        @type.Name
-                                                    </option>
-                                                }
-                                            </select>
-                                        </div>
-                                        <span asp-validation-for="WorkflowType" class="text-danger small"></span>
-                                        <small id="workflowDescription" class="form-text text-muted" style="display: none;"></small>
+                            <!-- Workflow Type -->
+                            <div class="form-group">
+                                <label asp-for="WorkflowType" class="font-weight-bold">Typ workflow <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fas fa-cogs"></i></span>
                                     </div>
+                                    <select asp-for="WorkflowType" class="form-control custom-select">
+                                        <option value="">-- Vyberte typ --</option>
+                                        @foreach (var type in workflowTypes)
+                                        {
+                                            <option value="@type.Value" data-icon="@type.Icon" data-description="@type.Description">
+                                                @type.Name
+                                            </option>
+                                        }
+                                    </select>
                                 </div>
-                                <div class="col-md-6">
-                                    <!-- Description -->
-                                    <div class="form-group">
-                                        <label asp-for="Description" class="font-weight-bold">Popis projektu</label>
-                                        <div class="input-group">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text"><i class="fas fa-align-left"></i></span>
-                                            </div>
-                                            <textarea asp-for="Description" class="form-control" rows="3" 
-                                                      placeholder="Stručný popis účelu a cíle projektu..."></textarea>
-                                        </div>
-                                        <span asp-validation-for="Description" class="text-danger small"></span>
+                                <span asp-validation-for="WorkflowType" class="text-danger small"></span>
+                                <small id="workflowDescription" class="form-text text-muted" style="display: none;"></small>
+                            </div>
+                            
+                            <!-- Description -->
+                            <div class="form-group">
+                                <label asp-for="Description" class="font-weight-bold">Popis projektu</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fas fa-align-left"></i></span>
                                     </div>
+                                    <textarea asp-for="Description" class="form-control" rows="3" 
+                                              placeholder="Stručný popis účelu a cíle projektu..."></textarea>
                                 </div>
+                                <span asp-validation-for="Description" class="text-danger small"></span>
                             </div>
                         </div>
                     </div>
@@ -115,27 +110,39 @@
                             </h3>
                         </div>
                         <div class="card-body">
+                            <!-- Internal project checkbox -->
                             <div class="form-group">
-                                <label class="font-weight-bold">Vyberte nebo vytvořte zákazníka</label>
-                                <select asp-for="CustomerId" class="form-control select2" id="customerSelect" style="width: 100%;">
-                                    <option value="">-- Vyberte možnost --</option>
-                                    <option value="" data-internal="true">🏢 Interní projekt (bez zákazníka)</option>
-                                    <option value="new">➕ Nový zákazník</option>
-                                    <optgroup label="Existující zákazníci">
-                                        @foreach (var customer in customers)
-                                        {
-                                            <option value="@customer.Id" 
-                                                    data-name="@customer.Name" 
-                                                    data-company="@customer.CompanyName">
-                                                @customer.Name
-                                                @if (!string.IsNullOrEmpty(customer.CompanyName))
-                                                {
-                                                    <text> (@customer.CompanyName)</text>
-                                                }
-                                            </option>
-                                        }
-                                    </optgroup>
-                                </select>
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="internalProject">
+                                    <label class="custom-control-label" for="internalProject">
+                                        <i class="fas fa-building"></i> Interní projekt (bez zákazníka)
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Customer selection -->
+                            <div id="customerSection">
+                                <div class="form-group">
+                                    <label class="font-weight-bold">Vyberte nebo vytvořte zákazníka</label>
+                                    <select asp-for="CustomerId" class="form-control select2" id="customerSelect" style="width: 100%;">
+                                        <option value="">-- Vyberte možnost --</option>
+                                        <option value="new">➕ Nový zákazník</option>
+                                        <optgroup label="Existující zákazníci">
+                                            @foreach (var customer in customers)
+                                            {
+                                                <option value="@customer.Id" 
+                                                        data-name="@customer.Name" 
+                                                        data-company="@customer.CompanyName">
+                                                    @customer.Name
+                                                    @if (!string.IsNullOrEmpty(customer.CompanyName))
+                                                    {
+                                                        <text> (@customer.CompanyName)</text>
+                                                    }
+                                                </option>
+                                            }
+                                        </optgroup>
+                                    </select>
+                                </div>
                             </div>
                             
                             <!-- Customer Details Section -->
@@ -252,32 +259,37 @@
                 allowClear: true
             });
             
-            // Handle customer selection
-            $('#customerSelect').on('change', function() {
-                const selectedOption = $(this).find('option:selected');
-                const selectedValue = $(this).val();
-                
-                if (selectedOption.data('internal') === true) {
-                    // Internal project - hide customer details
+            // Handle internal project checkbox
+            $('#internalProject').on('change', function() {
+                if ($(this).is(':checked')) {
+                    // Hide customer section and clear selections
+                    $('#customerSection').slideUp();
                     $('#customerDetails').slideUp();
-                    $('#customerAlertText').text('Interní projekt - bez zákazníka');
-                    $('#customerAlert').removeClass('alert-info alert-warning').addClass('alert-info').slideDown();
-                    $('#CustomerName').val('Interní projekt');
-                    $('#CustomerEmail').val('');
-                    // Clear the CustomerId by setting a hidden field
+                    $('#customerAlert').slideUp();
+                    $('#customerSelect').val('').trigger('change');
+                    // Add hidden field to mark as internal
                     $('input[name="InternalProject"]').remove();
                     $('<input>').attr({
                         type: 'hidden',
                         name: 'InternalProject',
                         value: 'true'
                     }).appendTo('#createProjectForm');
-                } else if (selectedValue === 'new') {
+                } else {
+                    // Show customer section
+                    $('#customerSection').slideDown();
+                    $('input[name="InternalProject"]').remove();
+                }
+            });
+            
+            // Handle customer selection
+            $('#customerSelect').on('change', function() {
+                const selectedValue = $(this).val();
+                
+                if (selectedValue === 'new') {
                     // New customer - will be created automatically
                     $('#customerDetails').slideDown();
                     $('#CustomerName').val('').prop('readonly', false);
                     $('#CustomerEmail').val('');
-                    // Don't send 'new' as CustomerId - it should be null
-                    $(this).val(''); // Clear the select to send null CustomerId
                     $('#customerDetails .card').removeClass('bg-light').addClass('bg-warning');
                     $('#customerAlertText').text('Nový zákazník bude automaticky vytvořen při založení projektu.');
                     $('#customerAlert').removeClass('alert-info alert-warning').addClass('alert-warning').slideDown();
@@ -315,6 +327,22 @@
             
             // Focus on name field
             $('#Name').focus();
+            
+            // Handle form submission
+            $('#createProjectForm').on('submit', function(e) {
+                // If customer select has "new" selected, clear the value so CustomerId is null
+                if ($('#customerSelect').val() === 'new') {
+                    // Create a hidden input to indicate new customer creation
+                    $('<input>').attr({
+                        type: 'hidden',
+                        name: 'CreateNewCustomer',
+                        value: 'true'
+                    }).appendTo(this);
+                    
+                    // Clear the select value so CustomerId is null
+                    $('#customerSelect').val('');
+                }
+            });
         });
     </script>
 }

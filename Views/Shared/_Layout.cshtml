@@ -15,6 +15,9 @@
     <link rel="stylesheet" href="~/plugins/sweetalert2-theme-bootstrap-4/bootstrap-4.min.css">
     <!-- Toastr -->
     <link rel="stylesheet" href="~/plugins/toastr/toastr.min.css">
+    <!-- Select2 -->
+    <link rel="stylesheet" href="~/plugins/select2/css/select2.min.css">
+    <link rel="stylesheet" href="~/plugins/select2-bootstrap4-theme/select2-bootstrap4.min.css">
     <!-- Custom styles -->
     <link rel="stylesheet" href="~/css/site.css">
     <style>
@@ -66,6 +69,20 @@
 
             <!-- Right navbar links -->
             <ul class="navbar-nav ml-auto">
+                <!-- Quick Actions -->
+                <li class="nav-item">
+                    <a class="nav-link" asp-controller="Requests" asp-action="New" role="button" title="Nový požadavek">
+                        <i class="fas fa-plus-circle text-success"></i>
+                        <span class="d-none d-sm-inline ml-1">Nový požadavek</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" asp-controller="Projects" asp-action="Create" role="button" title="Nový projekt">
+                        <i class="fas fa-project-diagram text-info"></i>
+                        <span class="d-none d-sm-inline ml-1">Nový projekt</span>
+                    </a>
+                </li>
+                
                 <!-- Navbar Search -->
                 <li class="nav-item">
                     <a class="nav-link" data-widget="navbar-search" href="#" role="button">
@@ -148,76 +165,81 @@
                 <!-- Sidebar Menu -->
                 <nav class="mt-2">
                     <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-                        <li class="nav-header">ZÁKAZNÍCI</li>
                         <li class="nav-item">
                             <a asp-controller="Customers" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-users"></i>
-                                <p>Seznam zákazníků</p>
+                                <p>Zákazníci</p>
                             </a>
                         </li>
-                        
-                        <li class="nav-header">POŽADAVKY</li>
-                        <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="New" class="nav-link">
-                                <i class="nav-icon fas fa-plus-circle text-success"></i>
-                                <p>Nový požadavek</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Requests" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-list"></i>
+                        <li class="nav-item has-treeview">
+                            <a href="#" class="nav-link">
+                                <i class="nav-icon fas fa-tasks"></i>
                                 <p>
-                                    Všechny požadavky
+                                    Požadavky
+                                    <i class="right fas fa-angle-left"></i>
                                     <span class="badge badge-info right request-count-total">0</span>
                                 </p>
                             </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="/Requests?status=New" class="nav-link">
-                                <i class="nav-icon fas fa-plus-circle text-info"></i>
-                                <p>
-                                    Nové
-                                    <span class="badge badge-info right request-count-new">0</span>
-                                </p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="/Requests?status=InProgress" class="nav-link">
-                                <i class="nav-icon fas fa-cog text-primary"></i>
-                                <p>
-                                    V Procesu
-                                    <span class="badge badge-primary right request-count-inprogress">0</span>
-                                </p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="/Requests?status=OnHold" class="nav-link">
-                                <i class="nav-icon fas fa-pause-circle text-warning"></i>
-                                <p>
-                                    Odložené
-                                    <span class="badge badge-warning right request-count-onhold">0</span>
-                                </p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="/Requests?status=Completed" class="nav-link">
-                                <i class="nav-icon fas fa-check-circle text-success"></i>
-                                <p>
-                                    Ukončené
-                                    <span class="badge badge-success right request-count-completed">0</span>
-                                </p>
-                            </a>
+                            <ul class="nav nav-treeview">
+                                <li class="nav-item">
+                                    <a asp-controller="Requests" asp-action="New" class="nav-link">
+                                        <i class="fas fa-plus-circle nav-icon text-success"></i>
+                                        <p>Nový požadavek</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Requests" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-list nav-icon"></i>
+                                        <p>Všechny požadavky</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="/Requests?status=New" class="nav-link">
+                                        <i class="fas fa-plus-circle nav-icon text-info"></i>
+                                        <p>
+                                            Nové
+                                            <span class="badge badge-info right request-count-new">0</span>
+                                        </p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="/Requests?status=InProgress" class="nav-link">
+                                        <i class="fas fa-cog nav-icon text-primary"></i>
+                                        <p>
+                                            V Procesu
+                                            <span class="badge badge-primary right request-count-inprogress">0</span>
+                                        </p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="/Requests?status=OnHold" class="nav-link">
+                                        <i class="fas fa-pause-circle nav-icon text-warning"></i>
+                                        <p>
+                                            Odložené
+                                            <span class="badge badge-warning right request-count-onhold">0</span>
+                                        </p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="/Requests?status=Completed" class="nav-link">
+                                        <i class="fas fa-check-circle nav-icon text-success"></i>
+                                        <p>
+                                            Ukončené
+                                            <span class="badge badge-success right request-count-completed">0</span>
+                                        </p>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         
-                        <li class="nav-header">PROJEKTY</li>
                         <li class="nav-item">
                             <a asp-controller="Projects" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-project-diagram"></i>
-                                <p>Seznam projektů</p>
+                                <p>Projekty</p>
                             </a>
                         </li>
                         
-                        <li class="nav-header">CHAT</li>
+
                         <li class="nav-item has-treeview menu-open" id="chat-menu">
                             <a href="#" class="nav-link">
                                 <i class="nav-icon fas fa-comments"></i>
@@ -350,6 +372,8 @@
     <script src="~/plugins/toastr/toastr.min.js"></script>
     <!-- AdminLTE App -->
     <script src="~/js/adminlte.min.js"></script>
+    <!-- Select2 -->
+    <script src="~/plugins/select2/js/select2.full.min.js"></script>
     
     <!-- Dark Mode Script -->
     <script>
