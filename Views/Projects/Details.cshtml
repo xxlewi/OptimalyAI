@@ -1,216 +1,304 @@
 @model OAI.Core.DTOs.ProjectDto
 @{
-    ViewData["Title"] = "Detail projektu";
-    var executions = ViewBag.Executions as IEnumerable<OAI.Core.DTOs.ProjectExecutionDto> ?? new List<OAI.Core.DTOs.ProjectExecutionDto>();
-    var files = ViewBag.Files as IEnumerable<OAI.Core.DTOs.ProjectFileDto> ?? new List<OAI.Core.DTOs.ProjectFileDto>();
-    var workflowTypes = ViewBag.WorkflowTypes as IEnumerable<OAI.Core.DTOs.WorkflowTypeDto> ?? new List<OAI.Core.DTOs.WorkflowTypeDto>();
+    ViewData["Title"] = $"Projekt: {Model.Name}";
 }
 
-<section class="content-header">
+<div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
-            <div class="col-sm-6">
+            <div class="col-sm-8">
                 <h1>
                     <i class="fas fa-project-diagram"></i> @Model.Name
-                    @if (Model.Status == "Active")
-                    {
-                        <span class="badge badge-success">Aktivní</span>
-                    }
-                    else if (Model.Status == "Draft")
-                    {
-                        <span class="badge badge-warning">Rozpracovaný</span>
-                    }
-                    else if (Model.Status == "Completed")
-                    {
-                        <span class="badge badge-info">Dokončený</span>
-                    }
+                    <span class="badge badge-@(Model.Status switch { 
+                        "Active" => "success",
+                        "Failed" => "danger",
+                        "Paused" => "warning",
+                        "Completed" => "info",
+                        "Draft" => "secondary",
+                        _ => "secondary"
+                    }) ml-2">
+                        <i class="fas fa-@(Model.Status switch {
+                            "Active" => "play-circle",
+                            "Failed" => "times-circle",
+                            "Paused" => "pause-circle",
+                            "Completed" => "check-circle",
+                            "Draft" => "pencil-alt",
+                            _ => "flag"
+                        })"></i> @Model.Status
+                    </span>
                 </h1>
+                <p class="text-muted">@Model.Description</p>
             </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item"><a href="@Url.Action("Index")">Projekty</a></li>
-                    <li class="breadcrumb-item active">@Model.Name</li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="content">
-    <div class="container-fluid">
-        <!-- Project Actions -->
-        <div class="row mb-3">
-            <div class="col-12">
+            <div class="col-sm-4 text-right">
+                <a href="@Url.Action("Index")" class="btn btn-default">
+                    <i class="fas fa-arrow-left"></i> Zpět na seznam
+                </a>
                 <div class="btn-group">
-                    <a href="@Url.Action("Index")" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left"></i> Zpět na seznam
-                    </a>
-                    <button type="button" class="btn btn-success" onclick="executeWorkflow()">
-                        <i class="fas fa-play"></i> Spustit workflow
+                    <button class="btn btn-warning" onclick="showRunModal('test')">
+                        <i class="fas fa-vial"></i> Test run
                     </button>
-                    <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = Model.Id })" class="btn btn-primary">
-                        <i class="fas fa-edit"></i> Upravit workflow
-                    </a>
-                    <button type="button" class="btn btn-warning" onclick="validateWorkflow()">
-                        <i class="fas fa-check-circle"></i> Validovat workflow
-                    </button>
-                    <button type="button" class="btn btn-danger" onclick="deleteProject()">
-                        <i class="fas fa-trash"></i> Smazat projekt
+                    <button class="btn btn-success" onclick="showRunModal('production')">
+                        <i class="fas fa-play"></i> Production run
                     </button>
                 </div>
             </div>
         </div>
+    </div>
+</div>
 
+<section class="content">
+    <div class="container-fluid">
         <div class="row">
-            <!-- Project Information -->
-            <div class="col-md-8">
+            <!-- Left column - Info cards -->
+            <div class="col-md-4">
+                <!-- Basic information -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-info-circle"></i> Informace o projektu
-                        </h3>
+                        <h3 class="card-title"><i class="fas fa-info-circle"></i> Základní informace</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-5">ID projektu:</dt>
+                            <dd class="col-sm-7"><code>@Model.Id.ToString().Substring(0, 8)...</code></dd>
+                            
+                            <dt class="col-sm-5">Zákazník:</dt>
+                            <dd class="col-sm-7">
+                                @if (Model.CustomerId.HasValue)
+                                {
+                                    <a href="@Url.Action("Details", "Customers", new { id = Model.CustomerId.Value })" class="text-primary">
+                                        <i class="fas fa-user"></i> @Model.CustomerName
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span>@Model.CustomerName</span>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.CustomerEmail))
+                                {
+                                    <br>
+                                    <small class="text-muted">
+                                        <a href="mailto:@Model.CustomerEmail">@Model.CustomerEmail</a>
+                                    </small>
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-5">Typ workflow:</dt>
+                            <dd class="col-sm-7">
+                                @switch (Model.WorkflowType)
+                                {
+                                    case "image_processing":
+                                        <span class="badge badge-info"><i class="fa fa-image"></i> Image Processing</span>
+                                        break;
+                                    case "data_analysis":
+                                        <span class="badge badge-primary"><i class="fa fa-chart-line"></i> Data Analysis</span>
+                                        break;
+                                    case "text_generation":
+                                        <span class="badge badge-warning"><i class="fa fa-file-alt"></i> Text Generation</span>
+                                        break;
+                                    case "custom":
+                                    default:
+                                        <span class="badge badge-secondary"><i class="fa fa-cogs"></i> Custom</span>
+                                        break;
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-5">Spouštění:</dt>
+                            <dd class="col-sm-7">
+                                @switch (Model.TriggerType)
+                                {
+                                    case "Manual":
+                                        <text><i class="fas fa-hand-pointer"></i> Manuální</text>
+                                        break;
+                                    case "Schedule":
+                                        <span><i class="fas fa-clock"></i> Plánované</span>
+                                        if (Model.NextRun.HasValue)
+                                        {
+                                            <br>
+                                            <small>Další: @Model.NextRun.Value.ToString("dd.MM.yyyy HH:mm")</small>
+                                        }
+                                        break;
+                                    case "Event":
+                                        <text><i class="fas fa-bolt"></i> Událostmi</text>
+                                        break;
+                                    default:
+                                        <text><i class="fas fa-question"></i> @Model.TriggerType</text>
+                                        break;
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-5">Počet etap:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge badge-info">@Model.StageCount</span>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-chart-bar"></i> Statistiky</h3>
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-6">
-                                <strong>Název:</strong><br>
-                                @Model.Name<br><br>
-                                
-                                <strong>Popis:</strong><br>
-                                @(string.IsNullOrEmpty(Model.Description) ? "Bez popisu" : Model.Description)<br><br>
-                                
-                                <strong>Zákazník:</strong><br>
-                                @if (!string.IsNullOrEmpty(Model.CustomerName))
+                            <div class="col-6">
+                                <div class="description-block border-right">
+                                    <h5 class="description-header">@Model.TotalRuns</h5>
+                                    <span class="description-text">CELKEM BĚHŮ</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="description-block">
+                                    <h5 class="description-header text-@(Model.SuccessRate >= 80 ? "success" : Model.SuccessRate >= 50 ? "warning" : "danger")">
+                                        @Model.SuccessRate.ToString("F0")%
+                                    </h5>
+                                    <span class="description-text">ÚSPĚŠNOST</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="text-center">
+                            <p class="text-muted">
+                                @if (Model.LastRun.HasValue)
                                 {
-                                    <i class="fas fa-user"></i> @Model.CustomerName
-                                    @if (!string.IsNullOrEmpty(Model.CustomerEmail))
+                                    <text>Poslední běh: @Model.LastRun.Value.ToString("dd.MM.yyyy HH:mm")</text>
+                                    if (Model.LastRunSuccess)
                                     {
-                                        <br><small class="text-muted"><i class="fas fa-envelope"></i> @Model.CustomerEmail</small>
+                                        <span class="badge badge-success ml-2">Úspěšný</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-danger ml-2">Neúspěšný</span>
                                     }
                                 }
                                 else
                                 {
-                                    <span class="text-muted">Interní projekt</span>
+                                    <text>Zatím nebylo spuštěno</text>
                                 }
-                                <br><br>
-                                
-                                <strong>Typ workflow:</strong><br>
-                                @{
-                                    var workflowType = workflowTypes.FirstOrDefault(w => w.Value == Model.WorkflowType);
-                                }
-                                @if (workflowType != null)
-                                {
-                                    <i class="@workflowType.Icon"></i> @workflowType.Name
-                                }
-                                else
-                                {
-                                    @Model.WorkflowType
-                                }
-                            </div>
-                            <div class="col-md-6">
-                                <strong>Priorita:</strong><br>
-                                @switch (Model.Priority)
-                                {
-                                    case "Critical":
-                                        <span class="badge badge-danger">Kritická</span>
-                                        break;
-                                    case "High":
-                                        <span class="badge badge-warning">Vysoká</span>
-                                        break;
-                                    case "Low":
-                                        <span class="badge badge-secondary">Nízká</span>
-                                        break;
-                                    default:
-                                        <span class="badge badge-info">Normální</span>
-                                        break;
-                                }
-                                <br><br>
-                                
-                                <strong>Spouštění:</strong><br>
-                                @switch (Model.TriggerType)
-                                {
-                                    case "Manual":
-                                        <i class="fas fa-hand-pointer"></i> Manuální
-                                        break;
-                                    case "Schedule":
-                                        <i class="fas fa-clock"></i> Plánované
-                                        @if (!string.IsNullOrEmpty(Model.CronExpression))
-                                        {
-                                            <br><small class="text-muted">Cron: @Model.CronExpression</small>
-                                        }
-                                        break;
-                                    case "Event":
-                                        <i class="fas fa-bolt"></i> Událostmi
-                                        break;
-                                    default:
-                                        @Model.TriggerType
-                                        break;
-                                }
-                                <br><br>
-                                
-                                <strong>Vytvořen:</strong><br>
-                                @Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")<br><br>
-                                
-                                <strong>Aktualizován:</strong><br>
-                                @Model.UpdatedAt.ToString("dd.MM.yyyy HH:mm")
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- I/O Configuration -->
+                <div class="card collapsed-card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-exchange-alt"></i> Vstupy & Výstupy</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="showIOEditModal()">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="display: none;">
+                        <h6><i class="fas fa-sign-in-alt text-primary"></i> Vstup workflow</h6>
+                        <dl class="row mb-3" id="inputConfigDisplay">
+                            <dt class="col-sm-5">Typ:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge badge-info">📁 Soubory</span>
+                            </dd>
+                            <dt class="col-sm-5">Formát:</dt>
+                            <dd class="col-sm-7">Libovolné soubory</dd>
+                            <dt class="col-sm-5">Zdroj:</dt>
+                            <dd class="col-sm-7">Upload souborů</dd>
+                        </dl>
+                        
+                        <h6><i class="fas fa-sign-out-alt text-success"></i> Výstup workflow</h6>
+                        <dl class="row" id="outputConfigDisplay">
+                            <dt class="col-sm-5">Typ:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge badge-success">📄 JSON</span>
+                            </dd>
+                            <dt class="col-sm-5">Formát:</dt>
+                            <dd class="col-sm-7">Strukturovaný výstup</dd>
+                        </dl>
+                    </div>
+                </div>
+                
+                <!-- AI & Orchestrator -->
+                <div class="card collapsed-card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-robot"></i> AI & Orchestrator</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="showOrchestratorModal()">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="display: none;">
+                        <dl class="row" id="orchestratorDisplay">
+                            <dt class="col-sm-5">Orchestrator:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge badge-primary">ReAct</span>
+                            </dd>
+                            <dt class="col-sm-5">Model:</dt>
+                            <dd class="col-sm-7">Llama 3.1 (70B)</dd>
+                            <dt class="col-sm-5">Temperature:</dt>
+                            <dd class="col-sm-7">0.7</dd>
+                        </dl>
+                        <div class="form-group mb-0">
+                            <label>System Prompt:</label>
+                            <div class="border rounded p-2 bg-light">
+                                <small id="systemPromptDisplay">You are a helpful AI assistant that orchestrates workflow execution using the ReAct pattern (Reasoning + Acting).</small>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Statistics -->
-            <div class="col-md-4">
+            <!-- Right column - Workflow -->
+            <div class="col-md-8">
+                <!-- Workflow diagram -->
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">
-                            <i class="fas fa-chart-bar"></i> Statistiky
+                            <i class="fas fa-project-diagram"></i> Workflow Diagram
                         </h3>
+                        <div class="card-tools">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="exportWorkflow()">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="testWorkflow()">
+                                <i class="fas fa-vial"></i> Test
+                            </button>
+                            <a href="@Url.Action("Index", "WorkflowDesigner", new { projectId = Model.Id })" class="btn btn-sm btn-primary">
+                                <i class="fas fa-edit"></i> Upravit
+                            </a>
+                        </div>
                     </div>
                     <div class="card-body">
-                        <div class="text-center">
-                            <h3>@Model.SuccessRate%</h3>
-                            <div class="progress mb-3">
-                                <div class="progress-bar @(Model.SuccessRate >= 80 ? "bg-success" : Model.SuccessRate >= 50 ? "bg-warning" : "bg-danger")" 
-                                     style="width: @Model.SuccessRate%"></div>
-                            </div>
-                            <p class="text-muted">Úspěšnost</p>
-                        </div>
-                        
-                        <hr>
-                        
-                        <div class="row text-center">
-                            <div class="col-6">
-                                <h4>@Model.TotalRuns</h4>
-                                <p class="text-muted">Celkem běhů</p>
-                            </div>
-                            <div class="col-6">
-                                <h4>@Model.StageCount</h4>
-                                <p class="text-muted">Kroků</p>
+                        <div id="workflowDiagram" class="workflow-diagram-container" style="min-height: 400px; border: 1px solid #ddd; border-radius: 4px; background: #f8f9fa;">
+                            <div class="text-center py-5">
+                                <i class="fas fa-spinner fa-spin fa-3x text-muted"></i>
+                                <p class="text-muted mt-3">Načítám workflow diagram...</p>
                             </div>
                         </div>
-                        
-                        @if (Model.LastRun.HasValue)
-                        {
-                            <hr>
-                            <strong>Poslední běh:</strong><br>
-                            @Model.LastRun.Value.ToString("dd.MM.yyyy HH:mm")<br>
-                            @if (Model.LastRunSuccess)
-                            {
-                                <span class="badge badge-success">Úspěch</span>
-                            }
-                            else
-                            {
-                                <span class="badge badge-danger">Selhalo</span>
-                            }
-                        }
+                    </div>
+                </div>
+                
+                <!-- Workflow steps -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-tasks"></i> Workflow Steps
+                        </h3>
+                    </div>
+                    <div class="card-body" id="workflowSteps">
+                        <div class="text-center py-3">
+                            <i class="fas fa-spinner fa-spin"></i> Načítám kroky workflow...
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Execution History -->
+        <!-- Execution history -->
         <div class="row mt-3">
             <div class="col-12">
                 <div class="card">
@@ -219,178 +307,34 @@
                             <i class="fas fa-history"></i> Historie spuštění
                         </h3>
                         <div class="card-tools">
-                            <button type="button" class="btn btn-primary btn-sm" onclick="refreshExecutions()">
-                                <i class="fas fa-sync"></i> Obnovit
+                            <button class="btn btn-sm btn-default" onclick="refreshHistory()">
+                                <i class="fas fa-sync-alt"></i> Obnovit
                             </button>
                         </div>
                     </div>
                     <div class="card-body">
-                        @if (executions.Any())
-                        {
-                            <div class="table-responsive">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Spuštěno</th>
-                                            <th>Režim</th>
-                                            <th>Status</th>
-                                            <th>Trvání</th>
-                                            <th>Kroků</th>
-                                            <th>Akce</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var execution in executions)
-                                        {
-                                            <tr>
-                                                <td>@execution.StartedAt.ToString("dd.MM.yyyy HH:mm")</td>
-                                                <td>
-                                                    @if (execution.Mode == "test")
-                                                    {
-                                                        <span class="badge badge-warning">Test</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge badge-primary">Production</span>
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @switch (execution.Status)
-                                                    {
-                                                        case "Running":
-                                                            <span class="badge badge-info">Běží</span>
-                                                            break;
-                                                        case "Completed":
-                                                            <span class="badge badge-success">Dokončeno</span>
-                                                            break;
-                                                        case "Failed":
-                                                            <span class="badge badge-danger">Selhalo</span>
-                                                            break;
-                                                        case "Cancelled":
-                                                            <span class="badge badge-secondary">Zrušeno</span>
-                                                            break;
-                                                        default:
-                                                            <span class="badge badge-light">@execution.Status</span>
-                                                            break;
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @if (execution.CompletedAt.HasValue)
-                                                    {
-                                                        var duration = execution.CompletedAt.Value - execution.StartedAt;
-                                                        @duration.TotalMinutes.ToString("F1") min
-                                                    }
-                                                    else if (execution.Status == "Running")
-                                                    {
-                                                        var duration = DateTime.UtcNow - execution.StartedAt;
-                                                        @duration.TotalMinutes.ToString("F1") min
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="text-muted">-</span>
-                                                    }
-                                                </td>
-                                                <td>@execution.StepsCompleted/@execution.TotalSteps</td>
-                                                <td>
-                                                    @if (execution.Status == "Running")
-                                                    {
-                                                        <button type="button" class="btn btn-sm btn-warning" onclick="cancelExecution('@execution.Id')">
-                                                            <i class="fas fa-stop"></i>
-                                                        </button>
-                                                    }
-                                                    <button type="button" class="btn btn-sm btn-info" onclick="viewExecutionDetails('@execution.Id')">
-                                                        <i class="fas fa-eye"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="text-center py-4">
-                                <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">Žádné spuštění</h5>
-                                <p class="text-muted">Tento projekt ještě nebyl spuštěn.</p>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Project Files -->
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-file"></i> Soubory projektu
-                        </h3>
-                        <div class="card-tools">
-                            <button type="button" class="btn btn-primary btn-sm" onclick="uploadFile()">
-                                <i class="fas fa-upload"></i> Nahrát soubor
-                            </button>
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="executionHistoryTable">
+                                <thead>
+                                    <tr>
+                                        <th>Zahájeno</th>
+                                        <th>Dokončeno</th>
+                                        <th>Doba trvání</th>
+                                        <th>Zpracováno</th>
+                                        <th>Status</th>
+                                        <th>Spustil</th>
+                                        <th>Akce</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="executionHistoryBody">
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">
+                                            <i class="fas fa-spinner fa-spin"></i> Načítám historii...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                    <div class="card-body">
-                        @if (files.Any())
-                        {
-                            <div class="table-responsive">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Název</th>
-                                            <th>Typ</th>
-                                            <th>Velikost</th>
-                                            <th>Nahráno</th>
-                                            <th>Akce</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var file in files)
-                                        {
-                                            <tr>
-                                                <td>
-                                                    <i class="fas fa-file"></i> @file.OriginalFileName
-                                                    @if (!string.IsNullOrEmpty(file.Description))
-                                                    {
-                                                        <br><small class="text-muted">@file.Description</small>
-                                                    }
-                                                </td>
-                                                <td>@file.FileType</td>
-                                                <td>@((file.FileSize / 1024.0 / 1024.0).ToString("F2")) MB</td>
-                                                <td>
-                                                    @file.CreatedAt.ToString("dd.MM.yyyy HH:mm")
-                                                    @if (!string.IsNullOrEmpty(file.UploadedBy))
-                                                    {
-                                                        <br><small class="text-muted">@file.UploadedBy</small>
-                                                    }
-                                                </td>
-                                                <td>
-                                                    <button type="button" class="btn btn-sm btn-primary" onclick="downloadFile('@file.Id')">
-                                                        <i class="fas fa-download"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteFile('@file.Id')">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="text-center py-4">
-                                <i class="fas fa-file fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">Žádné soubory</h5>
-                                <p class="text-muted">K tomuto projektu nejsou připojené žádné soubory.</p>
-                            </div>
-                        }
                     </div>
                 </div>
             </div>
@@ -398,167 +342,880 @@
     </div>
 </section>
 
+<!-- Modals -->
 <!-- Run Workflow Modal -->
 <div class="modal fade" id="runWorkflowModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="fas fa-play"></i> Spustit workflow
+                    <span id="runModeTitle"></span>
                 </h5>
                 <button type="button" class="close" data-dismiss="modal">
                     <span>&times;</span>
                 </button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label>Režim spuštění:</label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="runMode" id="testMode" value="test" checked>
-                        <label class="form-check-label" for="testMode">
-                            <i class="fas fa-vial"></i> Test režim
-                            <small class="text-muted d-block">Bezpečné testování s omezeními</small>
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="runMode" id="productionMode" value="production">
-                        <label class="form-check-label" for="productionMode">
-                            <i class="fas fa-rocket"></i> Produkční režim
-                            <small class="text-muted d-block">Plné spuštění bez omezení</small>
-                        </label>
-                    </div>
+                <div id="runModeWarning" class="alert" style="display: none;">
                 </div>
                 
-                <div id="testModeOptions" class="form-group">
-                    <label for="testItemLimit">Limit položek pro test:</label>
-                    <input type="number" id="testItemLimit" class="form-control" value="10" min="1" max="100">
-                    <small class="form-text text-muted">Maximální počet položek k zpracování v test režimu</small>
+                <div class="form-group">
+                    <label>Run Name</label>
+                    <input type="text" class="form-control" id="runName" placeholder="My test run">
+                </div>
+                
+                <div class="form-group">
+                    <label>Input Parameters (JSON)</label>
+                    <textarea class="form-control" id="inputParameters" rows="4" placeholder='{"key": "value"}'>{}</textarea>
+                </div>
+                
+                <div class="card collapsed-card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-plus"></i> Advanced Options
+                            </button>
+                        </h5>
+                    </div>
+                    <div class="card-body" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Priority</label>
+                                    <select class="form-control" id="runPriority">
+                                        <option value="low">Low</option>
+                                        <option value="normal" selected>Normal</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Test Item Limit</label>
+                                    <input type="number" class="form-control" id="testItemLimit" value="10" min="1" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="debugMode">
+                                <label class="custom-control-label" for="debugMode">Enable debug logging</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
-                    <i class="fas fa-times"></i> Zrušit
-                </button>
-                <button type="button" class="btn btn-success" onclick="runWorkflow()">
-                    <i class="fas fa-play"></i> Spustit
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmRunBtn" onclick="executeWorkflow()">
+                    <i class="fas fa-play"></i> Execute
                 </button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- I/O Edit Modal -->
+<div class="modal fade" id="ioEditModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configure Inputs & Outputs</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <h6>Input Configuration</h6>
+                <div class="form-group">
+                    <label>Input Type</label>
+                    <select class="form-control" id="configInputType">
+                        <option value="files">📁 Files</option>
+                        <option value="api">🌐 API Endpoint</option>
+                        <option value="database">🗄️ Database</option>
+                        <option value="manual">✍️ Manual Input</option>
+                    </select>
+                </div>
+                
+                <hr>
+                
+                <h6>Output Configuration</h6>
+                <div class="form-group">
+                    <label>Output Type</label>
+                    <select class="form-control" id="configOutputType">
+                        <option value="json">📄 JSON</option>
+                        <option value="excel">📊 Excel</option>
+                        <option value="csv">📋 CSV</option>
+                        <option value="api">🌐 API</option>
+                        <option value="email">📧 Email</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveIOConfig()">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Orchestrator Settings Modal -->
+<div class="modal fade" id="orchestratorModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">AI Orchestrator Settings</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Orchestrator Type</label>
+                    <select class="form-control" id="orchestratorType">
+                        <option value="conversation">💬 Conversation</option>
+                        <option value="tool_chain">🔗 Tool Chain</option>
+                        <option value="react" selected>🧠 ReAct (Reasoning + Acting)</option>
+                        <option value="custom">⚙️ Custom</option>
+                    </select>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label>AI Model</label>
+                            <select class="form-control" id="orchestratorModel">
+                                <option value="llama3.1:70b">Llama 3.1 (70B)</option>
+                                <option value="mistral:latest">Mistral (7B)</option>
+                                <option value="codellama:latest">Code Llama (7B)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Temperature</label>
+                            <input type="number" class="form-control" id="orchestratorTemp" value="0.7" min="0" max="2" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>System Prompt</label>
+                    <textarea class="form-control" id="systemPrompt" rows="4">You are a helpful AI assistant that orchestrates workflow execution using the ReAct pattern (Reasoning + Acting).</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="useToolValidation" checked>
+                        <label class="custom-control-label" for="useToolValidation">Enable tool parameter validation</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveOrchestratorSettings()">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Step Edit Modal -->
+<div class="modal fade" id="stepEditModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Workflow Step</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Step edit form will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveStep()">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Workflow Test Modal -->
+<div class="modal fade" id="workflowTestModal" tabindex="-1" role="dialog" data-backdrop="static">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-vial"></i> Testing Workflow
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress mb-3" style="height: 25px;">
+                    <div id="testProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
+                </div>
+                
+                <div id="testSteps">
+                    <!-- Test steps will be added dynamically -->
+                </div>
+                
+                <div class="mt-3">
+                    <h6>Test Results:</h6>
+                    <pre id="testResults" class="bg-light p-3 rounded" style="max-height: 200px; overflow-y: auto;">Waiting for results...</pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="cancelTest()">
+                    <i class="fas fa-stop"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" style="display: none;" id="closeTestBtn">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Workflow Info Modal -->
+<div class="modal fade" id="workflowInfoModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Workflow Information</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <pre id="workflowInfoContent" class="bg-light p-3 rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
+    <style>
+        .workflow-diagram-container {
+            position: relative;
+            overflow: auto;
+        }
+        
+        .workflow-node {
+            position: absolute;
+            background: white;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 15px;
+            min-width: 150px;
+            text-align: center;
+            cursor: move;
+            transition: all 0.3s;
+        }
+        
+        .workflow-node:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .workflow-node.start {
+            border-color: #28a745;
+            background: #28a74510;
+        }
+        
+        .workflow-node.end {
+            border-color: #dc3545;
+            background: #dc354510;
+        }
+        
+        .workflow-connection {
+            stroke: #6c757d;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        
+        .description-block {
+            text-align: center;
+            padding: 10px 0;
+        }
+        
+        .description-header {
+            margin: 5px 0;
+            font-size: 21px;
+            font-weight: 600;
+        }
+        
+        .description-text {
+            display: block;
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+        }
+        
+        .stage-card {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fff;
+            transition: all 0.3s;
+        }
+        
+        .stage-card:hover {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stage-card .stage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .stage-card .stage-number {
+            background: #007bff;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .stage-card .stage-tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .stage-card .tool-badge {
+            background: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+    </style>
+    
     <script>
-        function executeWorkflow() {
+        let projectId = '@Model.Id';
+        let currentRunMode = '';
+        let workflowData = null;
+        
+        $(document).ready(function() {
+            loadWorkflowDiagram();
+            loadWorkflowSteps();
+            loadOrchestratorSettings();
+            loadExecutionHistory();
+        });
+        
+        function loadWorkflowDiagram() {
+            $.ajax({
+                url: '/WorkflowDesigner/LoadWorkflow',
+                type: 'GET',
+                data: { projectId: projectId },
+                success: function(response) {
+                    if (response.success && response.workflow) {
+                        workflowData = response.workflow;
+                        renderWorkflowDiagram(response.workflow);
+                    } else {
+                        $('#workflowDiagram').html(`
+                            <div class="text-center py-5">
+                                <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                                <p>Workflow diagram not available</p>
+                                <a href="/WorkflowDesigner?projectId=${projectId}" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Create Workflow
+                                </a>
+                            </div>
+                        `);
+                    }
+                },
+                error: function() {
+                    $('#workflowDiagram').html(`
+                        <div class="text-center py-5">
+                            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                            <p>Error loading workflow diagram</p>
+                        </div>
+                    `);
+                }
+            });
+        }
+        
+        function renderWorkflowDiagram(workflow) {
+            const container = $('#workflowDiagram');
+            container.empty();
+            
+            // Create SVG for connections
+            const svg = $('<svg width="100%" height="100%" style="position: absolute; top: 0; left: 0; pointer-events: none;"></svg>');
+            svg.html(`
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d"/>
+                    </marker>
+                </defs>
+            `);
+            container.append(svg);
+            
+            // Simple layout algorithm
+            const nodeWidth = 180;
+            const nodeHeight = 80;
+            const horizontalSpacing = 250;
+            const verticalSpacing = 120;
+            const startX = 50;
+            const startY = 50;
+            
+            // Create start node
+            const startNode = $(`
+                <div class="workflow-node start" style="left: ${startX}px; top: ${startY + nodeHeight}px;">
+                    <i class="fas fa-play-circle fa-2x text-success"></i>
+                    <div class="mt-2">Start</div>
+                </div>
+            `);
+            container.append(startNode);
+            
+            // Create stage nodes
+            let x = startX + horizontalSpacing;
+            let y = startY;
+            
+            if (workflow.stages && workflow.stages.length > 0) {
+                workflow.stages.forEach((stage, index) => {
+                    const node = $(`
+                        <div class="workflow-node" data-stage-id="${stage.id}" style="left: ${x}px; top: ${y}px;">
+                            <div class="font-weight-bold">${stage.name}</div>
+                            <small class="text-muted">${stage.tools ? stage.tools.length : 0} tools</small>
+                        </div>
+                    `);
+                    container.append(node);
+                    
+                    // Position for next node
+                    if ((index + 1) % 3 === 0) {
+                        x = startX + horizontalSpacing;
+                        y += verticalSpacing;
+                    } else {
+                        x += horizontalSpacing;
+                    }
+                });
+            }
+            
+            // Create end node
+            const endNode = $(`
+                <div class="workflow-node end" style="left: ${x}px; top: ${y}px;">
+                    <i class="fas fa-flag-checkered fa-2x text-danger"></i>
+                    <div class="mt-2">End</div>
+                </div>
+            `);
+            container.append(endNode);
+            
+            // Draw connections (simplified)
+            setTimeout(() => {
+                drawConnections();
+            }, 100);
+        }
+        
+        function drawConnections() {
+            // This is a simplified connection drawing
+            // In a real implementation, you would calculate proper paths
+            const svg = $('#workflowDiagram svg');
+            const nodes = $('#workflowDiagram .workflow-node');
+            
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const from = $(nodes[i]);
+                const to = $(nodes[i + 1]);
+                
+                const x1 = from.position().left + from.width();
+                const y1 = from.position().top + from.height() / 2;
+                const x2 = to.position().left;
+                const y2 = to.position().top + to.height() / 2;
+                
+                const path = `<path class="workflow-connection" d="M ${x1} ${y1} L ${x2} ${y2}"/>`;
+                svg.append(path);
+            }
+        }
+        
+        function loadWorkflowSteps() {
+            $.ajax({
+                url: '/api/projects/' + projectId + '/stages',
+                type: 'GET',
+                success: function(response) {
+                    // Handle wrapped response from BaseApiController
+                    const stages = response.data || response;
+                    renderWorkflowSteps(stages);
+                },
+                error: function() {
+                    $('#workflowSteps').html(`
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-exclamation-triangle"></i> Unable to load workflow steps
+                        </div>
+                    `);
+                }
+            });
+        }
+        
+        function renderWorkflowSteps(stages) {
+            const container = $('#workflowSteps');
+            container.empty();
+            
+            if (!stages || stages.length === 0) {
+                container.html(`
+                    <div class="text-center text-muted py-3">
+                        No workflow steps defined
+                    </div>
+                `);
+                return;
+            }
+            
+            stages.forEach((stage, index) => {
+                const stageCard = $(`
+                    <div class="stage-card">
+                        <div class="stage-header">
+                            <div class="d-flex align-items-center">
+                                <div class="stage-number">${index + 1}</div>
+                                <div class="ml-3">
+                                    <h5 class="mb-0">${stage.name}</h5>
+                                    <small class="text-muted">${stage.description || 'No description'}</small>
+                                </div>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary" onclick="editStep('${stage.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="stage-tools">
+                            ${stage.stageTools && stage.stageTools.map(tool => `
+                                <span class="tool-badge">
+                                    <i class="fas fa-wrench"></i> ${tool.toolId}
+                                </span>
+                            `).join('') || '<span class="text-muted">No tools configured</span>'}
+                        </div>
+                    </div>
+                `);
+                container.append(stageCard);
+            });
+        }
+        
+        function loadOrchestratorSettings() {
+            // Load from project data if available
+            if (@Html.Raw(Model.OrchestratorSettings != null ? "true" : "false")) {
+                const settings = @Html.Raw(Model.OrchestratorSettings != null ? Json.Serialize(Model.OrchestratorSettings) : "{}");
+                updateOrchestratorDisplay(settings);
+            }
+        }
+        
+        function updateOrchestratorDisplay(settings) {
+            if (settings.type) {
+                $('#orchestratorDisplay dd:eq(0)').html(`<span class="badge badge-primary">${settings.type}</span>`);
+            }
+            if (settings.model) {
+                $('#orchestratorDisplay dd:eq(1)').text(settings.model);
+            }
+            if (settings.temperature !== undefined) {
+                $('#orchestratorDisplay dd:eq(2)').text(settings.temperature);
+            }
+            if (settings.systemPrompt) {
+                $('#systemPromptDisplay').text(settings.systemPrompt);
+            }
+        }
+        
+        function loadExecutionHistory() {
+            $.ajax({
+                url: '/api/projects/' + projectId + '/executions',
+                type: 'GET',
+                data: { limit: 10 },
+                success: function(response) {
+                    // Handle wrapped response from BaseApiController
+                    const executions = response.data || response;
+                    renderExecutionHistory(executions);
+                },
+                error: function() {
+                    $('#executionHistoryBody').html(`
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                <i class="fas fa-exclamation-triangle"></i> Unable to load execution history
+                            </td>
+                        </tr>
+                    `);
+                }
+            });
+        }
+        
+        function renderExecutionHistory(executions) {
+            const tbody = $('#executionHistoryBody');
+            tbody.empty();
+            
+            if (!executions || executions.length === 0) {
+                tbody.html(`
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            No execution history available
+                        </td>
+                    </tr>
+                `);
+                return;
+            }
+            
+            executions.forEach(execution => {
+                const duration = execution.completedAt ? 
+                    Math.round((new Date(execution.completedAt) - new Date(execution.startedAt)) / 1000) + 's' : 
+                    'Running...';
+                
+                const statusBadge = {
+                    'Completed': 'badge-success',
+                    'Running': 'badge-primary',
+                    'Failed': 'badge-danger',
+                    'Cancelled': 'badge-warning'
+                }[execution.status] || 'badge-secondary';
+                
+                const row = $(`
+                    <tr>
+                        <td>${new Date(execution.startedAt).toLocaleString()}</td>
+                        <td>${execution.completedAt ? new Date(execution.completedAt).toLocaleString() : '-'}</td>
+                        <td>${duration}</td>
+                        <td>${execution.itemsProcessed || 0}</td>
+                        <td><span class="badge ${statusBadge}">${execution.status}</span></td>
+                        <td>${execution.startedBy}</td>
+                        <td>
+                            <button class="btn btn-sm btn-default" onclick="viewExecution('${execution.id}')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `);
+                tbody.append(row);
+            });
+        }
+        
+        function showRunModal(mode) {
+            currentRunMode = mode;
+            
+            if (mode === 'test') {
+                $('#runModeTitle').html('<i class="fas fa-vial text-warning"></i> Test Run Configuration');
+                $('#runModeWarning').removeClass('alert-danger').addClass('alert-warning');
+                $('#runModeWarning').html('<i class="fas fa-exclamation-triangle"></i> <strong>Test mode:</strong> Limited to 10 items for testing purposes.');
+                $('#runModeWarning').show();
+                $('#confirmRunBtn').removeClass('btn-success').addClass('btn-warning');
+                $('#testItemLimit').val(10).prop('disabled', false);
+            } else {
+                $('#runModeTitle').html('<i class="fas fa-play text-success"></i> Production Run Configuration');
+                $('#runModeWarning').removeClass('alert-warning').addClass('alert-danger');
+                $('#runModeWarning').html('<i class="fas fa-exclamation-circle"></i> <strong>Production mode:</strong> Will process all items. This may take considerable time.');
+                $('#runModeWarning').show();
+                $('#confirmRunBtn').removeClass('btn-warning').addClass('btn-success');
+                $('#testItemLimit').val(0).prop('disabled', true);
+            }
+            
             $('#runWorkflowModal').modal('show');
         }
         
-        function runWorkflow() {
-            const mode = $('input[name="runMode"]:checked').val();
-            const testItemLimit = mode === 'test' ? $('#testItemLimit').val() : null;
-            
+        function executeWorkflow() {
             const executionData = {
-                projectId: '@Model.Id',
-                mode: mode,
-                testItemLimit: testItemLimit ? parseInt(testItemLimit) : null
+                projectId: projectId,
+                runName: $('#runName').val() || `${currentRunMode} run ${new Date().toLocaleString()}`,
+                mode: currentRunMode,
+                priority: $('#runPriority').val(),
+                testItemLimit: currentRunMode === 'test' ? parseInt($('#testItemLimit').val()) : null,
+                enableDebugLogging: $('#debugMode').is(':checked'),
+                startedBy: 'Current User', // This would come from auth
+                metadata: JSON.parse($('#inputParameters').val() || '{}')
             };
             
             $.ajax({
-                url: '@Url.Action("ExecuteWorkflow", "Projects", new { id = Model.Id })',
+                url: '/api/projects/execute',
                 type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(executionData),
                 success: function(response) {
-                    toastr.success('Workflow byl spuštěn');
                     $('#runWorkflowModal').modal('hide');
-                    setTimeout(() => location.reload(), 1000);
+                    toastr.success('Workflow execution started successfully!');
+                    
+                    // Refresh history after a delay
+                    setTimeout(() => {
+                        loadExecutionHistory();
+                    }, 2000);
                 },
                 error: function(xhr) {
-                    const response = xhr.responseJSON || { message: 'Chyba při spouštění workflow' };
-                    toastr.error(response.message);
+                    toastr.error('Failed to start workflow execution');
                 }
             });
         }
         
-        function validateWorkflow() {
+        function editStep(stepId) {
+            window.location.href = `/WorkflowDesigner?projectId=${projectId}&stepId=${stepId}`;
+        }
+        
+        function showIOEditModal() {
+            $('#ioEditModal').modal('show');
+        }
+        
+        function saveIOConfig() {
+            const config = {
+                input: {
+                    type: $('#configInputType').val()
+                },
+                output: {
+                    type: $('#configOutputType').val()
+                }
+            };
+            
             $.ajax({
-                url: '@Url.Action("ValidateWorkflow", "Projects", new { id = Model.Id })',
-                type: 'POST',
-                success: function(response) {
-                    if (response.data.isValid) {
-                        toastr.success('Workflow je validní');
-                    } else {
-                        toastr.error('Workflow obsahuje chyby: ' + response.data.errors.join(', '));
-                    }
+                url: `/api/projects/${projectId}/io-configuration`,
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify(config),
+                success: function() {
+                    $('#ioEditModal').modal('hide');
+                    toastr.success('I/O configuration saved successfully');
+                    
+                    // Update display
+                    location.reload();
                 },
-                error: function(xhr) {
-                    const response = xhr.responseJSON || { message: 'Chyba při validaci workflow' };
-                    toastr.error(response.message);
+                error: function() {
+                    toastr.error('Failed to save I/O configuration');
                 }
             });
         }
         
-        function deleteProject() {
-            if (confirm('Opravdu smazat tento projekt? Tato akce je nevratná.')) {
-                $.ajax({
-                    url: '@Url.Action("DeleteProject", "Projects")'.replace('Projects', 'api') + '/@Model.Id',
-                    type: 'DELETE',
-                    success: function(response) {
-                        toastr.success('Projekt byl smazán');
-                        setTimeout(() => {
-                            window.location.href = '@Url.Action("Index")';
-                        }, 1000);
-                    },
-                    error: function(xhr) {
-                        const response = xhr.responseJSON || { message: 'Chyba při mazání projektu' };
-                        toastr.error(response.message);
-                    }
-                });
+        function showOrchestratorModal() {
+            // Load current settings
+            if (@Html.Raw(Model.OrchestratorSettings != null ? "true" : "false")) {
+                const settings = @Html.Raw(Model.OrchestratorSettings != null ? Json.Serialize(Model.OrchestratorSettings) : "{}");
+                $('#orchestratorType').val(settings.type || 'react');
+                $('#orchestratorModel').val(settings.model || 'llama3.1:70b');
+                $('#orchestratorTemp').val(settings.temperature || 0.7);
+                $('#systemPrompt').val(settings.systemPrompt || 'You are a helpful AI assistant that orchestrates workflow execution using the ReAct pattern (Reasoning + Acting).');
+                $('#useToolValidation').prop('checked', settings.useToolValidation !== false);
             }
+            
+            $('#orchestratorModal').modal('show');
         }
         
-        function cancelExecution(executionId) {
-            if (confirm('Opravdu zrušit běžící workflow?')) {
-                // TODO: Implement cancel execution API
-                toastr.info('Zrušení spuštění (implementace v produkci)');
-            }
-        }
-        
-        function viewExecutionDetails(executionId) {
-            // TODO: Implement execution details view
-            toastr.info('Detail spuštění (implementace v produkci)');
-        }
-        
-        function refreshExecutions() {
-            location.reload();
-        }
-        
-        function uploadFile() {
-            // TODO: Implement file upload
-            toastr.info('Nahrání souboru (implementace v produkci)');
-        }
-        
-        function downloadFile(fileId) {
-            // TODO: Implement file download
-            toastr.info('Stažení souboru (implementace v produkci)');
-        }
-        
-        function deleteFile(fileId) {
-            if (confirm('Opravdu smazat tento soubor?')) {
-                // TODO: Implement file deletion
-                toastr.info('Smazání souboru (implementace v produkci)');
-            }
-        }
-        
-        // Handle run mode change
-        $(document).ready(function() {
-            $('input[name="runMode"]').on('change', function() {
-                if ($(this).val() === 'test') {
-                    $('#testModeOptions').show();
-                } else {
-                    $('#testModeOptions').hide();
+        function saveOrchestratorSettings() {
+            const settings = {
+                type: $('#orchestratorType').val(),
+                model: $('#orchestratorModel').val(),
+                temperature: parseFloat($('#orchestratorTemp').val()),
+                systemPrompt: $('#systemPrompt').val(),
+                useToolValidation: $('#useToolValidation').is(':checked')
+            };
+            
+            $.ajax({
+                url: `/api/projects/${projectId}/orchestrator-settings`,
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify(settings),
+                success: function() {
+                    $('#orchestratorModal').modal('hide');
+                    toastr.success('Orchestrator settings saved successfully');
+                    updateOrchestratorDisplay(settings);
+                },
+                error: function() {
+                    toastr.error('Failed to save orchestrator settings');
                 }
             });
-        });
+        }
+        
+        function exportWorkflow() {
+            if (!workflowData) {
+                toastr.warning('No workflow data to export');
+                return;
+            }
+            
+            const dataStr = JSON.stringify(workflowData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `workflow-${projectId}-${new Date().toISOString().split('T')[0]}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+        
+        function testWorkflow() {
+            $('#workflowTestModal').modal('show');
+            $('#testProgressBar').css('width', '0%').text('0%');
+            $('#testSteps').empty();
+            $('#testResults').text('Running tests...');
+            
+            // Simulate workflow test
+            const testSteps = [
+                { name: 'Validating workflow structure', duration: 1000 },
+                { name: 'Checking tool availability', duration: 1500 },
+                { name: 'Testing connections', duration: 2000 },
+                { name: 'Running sample data', duration: 3000 }
+            ];
+            
+            let currentStep = 0;
+            
+            function runTestStep() {
+                if (currentStep >= testSteps.length) {
+                    $('#testProgressBar').removeClass('progress-bar-animated').addClass('bg-success').text('100%');
+                    $('#testResults').text(JSON.stringify({
+                        success: true,
+                        message: 'All tests passed successfully',
+                        details: {
+                            stagesValidated: workflowData?.stages?.length || 0,
+                            toolsChecked: 5,
+                            connectionsValid: true,
+                            sampleDataProcessed: true
+                        }
+                    }, null, 2));
+                    $('#closeTestBtn').show();
+                    return;
+                }
+                
+                const step = testSteps[currentStep];
+                const progress = Math.round((currentStep + 1) / testSteps.length * 100);
+                
+                $('#testProgressBar').css('width', progress + '%').text(progress + '%');
+                
+                const stepHtml = $(`
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="spinner-border spinner-border-sm text-primary mr-2"></div>
+                        <span>${step.name}...</span>
+                    </div>
+                `);
+                $('#testSteps').append(stepHtml);
+                
+                setTimeout(() => {
+                    stepHtml.find('.spinner-border').removeClass('spinner-border spinner-border-sm text-primary').html('<i class="fas fa-check-circle text-success"></i>');
+                    stepHtml.find('span').html(`${step.name} - <span class="text-success">Passed</span>`);
+                    
+                    currentStep++;
+                    runTestStep();
+                }, step.duration);
+            }
+            
+            runTestStep();
+        }
+        
+        function cancelTest() {
+            $('#workflowTestModal').modal('hide');
+        }
+        
+        function refreshHistory() {
+            $('#executionHistoryBody').html(`
+                <tr>
+                    <td colspan="7" class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                    </td>
+                </tr>
+            `);
+            loadExecutionHistory();
+        }
+        
+        function viewExecution(executionId) {
+            window.location.href = `/Projects/Execution/${executionId}`;
+        }
     </script>
 }

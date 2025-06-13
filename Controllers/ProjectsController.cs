@@ -1,8 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs;
+using OAI.Core.DTOs.Customers;
+using OAI.Core.Entities.Customers;
+using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Tools;
+using OAI.ServiceLayer.Services.Customers;
 using OptimalyAI.ViewModels;
 
 namespace OptimalyAI.Controllers
@@ -16,14 +20,17 @@ namespace OptimalyAI.Controllers
         private readonly IProjectService _projectService;
         private readonly IToolRegistry _toolRegistry;
         private readonly ILogger<ProjectsController> _logger;
+        private readonly ICustomerService _customerService;
 
         public ProjectsController(
             IProjectService projectService,
             IToolRegistry toolRegistry,
+            ICustomerService customerService,
             ILogger<ProjectsController> logger)
         {
             _projectService = projectService;
             _toolRegistry = toolRegistry;
+            _customerService = customerService;
             _logger = logger;
         }
 
@@ -169,6 +176,10 @@ namespace OptimalyAI.Controllers
             var workflowTypes = await _projectService.GetWorkflowTypesAsync();
             ViewBag.WorkflowTypes = workflowTypes;
             
+            // Load customers for dropdown
+            var customers = await _customerService.GetAllListAsync();
+            ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
+            
             return View(new CreateProjectDto());
         }
 
@@ -176,32 +187,57 @@ namespace OptimalyAI.Controllers
         /// Vytvoření nového projektu
         /// </summary>
         [HttpPost("create")]
-        public async Task<IActionResult> Create([FromForm] CreateProjectDto createDto, string? nextAction = null)
+        public async Task<IActionResult> Create([FromForm] CreateProjectDto createDto, string? nextAction = null, bool internalProject = false)
         {
             if (!ModelState.IsValid)
             {
                 var workflowTypes = await _projectService.GetWorkflowTypesAsync();
                 ViewBag.WorkflowTypes = workflowTypes;
+                
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
+                
                 return View(createDto);
             }
 
             try
             {
+                // Handle internal project
+                if (internalProject || Request.Form["InternalProject"] == "true")
+                {
+                    createDto.CustomerId = null;
+                    createDto.CustomerName = "Interní projekt";
+                    createDto.CustomerEmail = "";
+                }
+                // Handle new customer creation
+                else if (createDto.CustomerId == null && !string.IsNullOrEmpty(createDto.CustomerName))
+                {
+                    // Create new customer first
+                    var newCustomer = await _customerService.CreateAsync(new CreateCustomerDto
+                    {
+                        Name = createDto.CustomerName,
+                        Email = createDto.CustomerEmail ?? "",
+                        Type = CustomerType.Company
+                    });
+                    
+                    // Assign the new customer ID to the project
+                    createDto.CustomerId = newCustomer.Id;
+                }
+                
                 var project = await _projectService.CreateProjectAsync(createDto);
                 
-                // Handle next action based on form selection
-                return nextAction switch
-                {
-                    "designer" => RedirectToAction("Index", "WorkflowDesigner", new { projectId = project.Id }),
-                    "list" => RedirectToAction(nameof(Index)),
-                    "detail" or _ => RedirectToAction(nameof(Details), new { id = project.Id })
-                };
+                // Always redirect to detail
+                return RedirectToAction(nameof(Details), new { id = project.Id });
             }
             catch (Exception ex)
             {
                 ModelState.AddModelError("", $"Chyba při vytváření projektu: {ex.Message}");
                 var workflowTypes = await _projectService.GetWorkflowTypesAsync();
                 ViewBag.WorkflowTypes = workflowTypes;
+                
+                var customers = await _customerService.GetAllListAsync();
+                ViewBag.Customers = customers.OrderBy(c => c.Name).ToList();
+                
                 return View(createDto);
             }
         }

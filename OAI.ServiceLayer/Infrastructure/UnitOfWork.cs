@@ -21,7 +21,9 @@ public class UnitOfWork : IUnitOfWork
 
     public async Task<int> SaveChangesAsync()
     {
-        return await _context.SaveChangesAsync();
+        var result = await _context.SaveChangesAsync();
+        Console.WriteLine($"[UnitOfWork] SaveChangesAsync called, {result} entities affected");
+        return result;
     }
 
     public async Task BeginTransactionAsync()

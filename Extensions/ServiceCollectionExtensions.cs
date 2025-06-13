@@ -110,21 +110,7 @@ public static class ServiceCollectionExtensions
             }
         }
         
-        // Explicitní registrace projektových služeb
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectService, OAI.ServiceLayer.Services.Projects.ProjectService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectWorkflowService, OAI.ServiceLayer.Services.Projects.ProjectWorkflowService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectExecutionService, OAI.ServiceLayer.Services.Projects.ProjectExecutionService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectMetricsService, OAI.ServiceLayer.Services.Projects.ProjectMetricsService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectContextService, OAI.ServiceLayer.Services.Projects.ProjectContextService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IProjectStageService, OAI.ServiceLayer.Services.Projects.ProjectStageService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IWorkflowDesignerService, OAI.ServiceLayer.Services.Projects.WorkflowDesignerService>();
-        
-        // Register notification services
-        services.AddScoped<OptimalyAI.Services.Workflow.IWorkflowNotificationService, OptimalyAI.Services.Workflow.WorkflowNotificationService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IWorkflowExecutionNotificationHandler, OptimalyAI.Services.Workflow.WorkflowNotificationAdapter>();
-        
-        // Register WorkflowExecutionService with notification handler
-        services.AddScoped<OAI.ServiceLayer.Services.Projects.IWorkflowExecutionService, OAI.ServiceLayer.Services.Projects.WorkflowExecutionService>();
+        // Project services are auto-registered via automatic service discovery
 
         // Explicitní registrace zákaznických služeb
         services.AddScoped<OAI.ServiceLayer.Services.Customers.ICustomerService, OAI.ServiceLayer.Services.Customers.CustomerService>();

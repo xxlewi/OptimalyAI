@@ -1,51 +1,30 @@
 using OAI.Core.DTOs.Projects;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Mapping;
-using System.Text.Json;
 
 namespace OAI.ServiceLayer.Mapping.Projects
 {
-    public interface IProjectMapper : IMapper<Project, ProjectDto>
-    {
-        ProjectListDto ToListDto(Project entity);
-        Project ToEntity(CreateProjectDto dto);
-        void UpdateEntity(Project entity, UpdateProjectDto dto);
-    }
-
+    /// <summary>
+    /// Mapper for Project entities and DTOs
+    /// </summary>
     public class ProjectMapper : BaseMapper<Project, ProjectDto>, IProjectMapper
     {
-        private readonly IProjectOrchestratorMapper _orchestratorMapper;
-        private readonly IProjectToolMapper _toolMapper;
-        private readonly IProjectWorkflowMapper _workflowMapper;
-
-        public ProjectMapper(
-            IProjectOrchestratorMapper orchestratorMapper,
-            IProjectToolMapper toolMapper,
-            IProjectWorkflowMapper workflowMapper)
-        {
-            _orchestratorMapper = orchestratorMapper;
-            _toolMapper = toolMapper;
-            _workflowMapper = workflowMapper;
-        }
-
         public override ProjectDto ToDto(Project entity)
         {
-            if (entity == null) return null;
-
-            var dto = new ProjectDto
+            return new ProjectDto
             {
                 Id = entity.Id,
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = entity.UpdatedAt,
                 Name = entity.Name,
-                Description = entity.Description,
-                CustomerId = entity.CustomerId,
-                CustomerName = entity.CustomerName,
-                CustomerEmail = entity.CustomerEmail,
-                CustomerPhone = entity.CustomerPhone,
-                CustomerRequirement = entity.CustomerRequirement,
+                Description = entity.Description ?? string.Empty,
                 Status = entity.Status,
-                ProjectType = entity.ProjectType,
+                CustomerId = entity.CustomerId,
+                CustomerName = entity.CustomerName ?? string.Empty,
+                CustomerEmail = entity.CustomerEmail ?? string.Empty,
+                CustomerPhone = entity.CustomerPhone ?? string.Empty,
+                CustomerRequirement = entity.CustomerRequirement ?? string.Empty,
+                ProjectType = entity.ProjectType ?? string.Empty,
                 Priority = entity.Priority,
                 StartDate = entity.StartDate,
                 CompletedDate = entity.CompletedDate,
@@ -53,61 +32,37 @@ namespace OAI.ServiceLayer.Mapping.Projects
                 EstimatedHours = entity.EstimatedHours,
                 ActualHours = entity.ActualHours,
                 HourlyRate = entity.HourlyRate,
-                Configuration = entity.Configuration,
-                ProjectContext = entity.ProjectContext,
+                Configuration = entity.Configuration ?? string.Empty,
+                ProjectContext = entity.ProjectContext ?? string.Empty,
                 Version = entity.Version,
-                Notes = entity.Notes,
-                
-                // Workflow properties
+                Notes = entity.Notes ?? string.Empty,
                 WorkflowVersion = entity.WorkflowVersion,
                 IsTemplate = entity.IsTemplate,
                 TemplateId = entity.TemplateId,
-                TriggerType = entity.TriggerType,
-                Schedule = entity.Schedule
+                TriggerType = entity.TriggerType ?? "Manual",
+                Schedule = entity.Schedule ?? string.Empty,
+                Stages = new List<ProjectStageDto>(), // TODO: Map stages
+                Orchestrators = new List<ProjectOrchestratorDto>(), // TODO: Map orchestrators
+                Tools = new List<ProjectToolDto>(), // TODO: Map tools
+                Workflows = new List<ProjectWorkflowDto>() // TODO: Map workflows
             };
-
-            // Mapování kolekcí pokud jsou načtené
-            if (entity.ProjectOrchestrators != null)
-            {
-                dto.Orchestrators = entity.ProjectOrchestrators
-                    .Select(_orchestratorMapper.ToDto)
-                    .ToList();
-            }
-
-            if (entity.ProjectTools != null)
-            {
-                dto.Tools = entity.ProjectTools
-                    .Select(_toolMapper.ToDto)
-                    .ToList();
-            }
-
-            if (entity.Workflows != null)
-            {
-                dto.Workflows = entity.Workflows
-                    .Select(_workflowMapper.ToDto)
-                    .ToList();
-            }
-
-            return dto;
         }
 
         public override Project ToEntity(ProjectDto dto)
         {
-            if (dto == null) return null;
-
-            return new Project
+            var entity = new Project
             {
                 Id = dto.Id,
                 CreatedAt = dto.CreatedAt,
                 UpdatedAt = dto.UpdatedAt ?? DateTime.UtcNow,
                 Name = dto.Name,
                 Description = dto.Description,
+                Status = dto.Status,
                 CustomerId = dto.CustomerId,
                 CustomerName = dto.CustomerName,
                 CustomerEmail = dto.CustomerEmail,
                 CustomerPhone = dto.CustomerPhone,
                 CustomerRequirement = dto.CustomerRequirement,
-                Status = dto.Status,
                 ProjectType = dto.ProjectType,
                 Priority = dto.Priority,
                 StartDate = dto.StartDate,
@@ -119,64 +74,20 @@ namespace OAI.ServiceLayer.Mapping.Projects
                 Configuration = dto.Configuration,
                 ProjectContext = dto.ProjectContext,
                 Version = dto.Version,
-                Notes = dto.Notes
-            };
-        }
-
-        public ProjectListDto ToListDto(Project entity)
-        {
-            if (entity == null) return null;
-
-            var dto = new ProjectListDto
-            {
-                Id = entity.Id,
-                CreatedAt = entity.CreatedAt,
-                UpdatedAt = entity.UpdatedAt,
-                Name = entity.Name,
-                CustomerName = entity.CustomerName,
-                CustomerRequirement = entity.CustomerRequirement,
-                Status = entity.Status,
-                Priority = entity.Priority,
-                StartDate = entity.StartDate,
-                DueDate = entity.DueDate
+                Notes = dto.Notes,
+                WorkflowVersion = dto.WorkflowVersion,
+                IsTemplate = dto.IsTemplate,
+                TemplateId = dto.TemplateId,
+                TriggerType = dto.TriggerType,
+                Schedule = dto.Schedule
             };
 
-            // Výpočet progress a statistik
-            if (entity.Workflows != null)
-            {
-                dto.ActiveWorkflows = entity.Workflows.Count(w => w.IsActive);
-            }
-
-            if (entity.Executions != null)
-            {
-                dto.TotalExecutions = entity.Executions.Count;
-                var completedExecutions = entity.Executions.Count(e => e.Status == ExecutionStatus.Completed);
-                dto.SuccessRate = dto.TotalExecutions > 0 
-                    ? (decimal)completedExecutions / dto.TotalExecutions * 100 
-                    : 0;
-            }
-
-            // Výpočet progress podle statusu
-            dto.Progress = entity.Status switch
-            {
-                ProjectStatus.Draft => 0,
-                ProjectStatus.Analysis => 15,
-                ProjectStatus.Planning => 30,
-                ProjectStatus.Development => 50,
-                ProjectStatus.Testing => 70,
-                ProjectStatus.Active => 85,
-                ProjectStatus.Completed => 100,
-                _ => 0
-            };
-
-            return dto;
+            return entity;
         }
 
         public Project ToEntity(CreateProjectDto dto)
         {
-            if (dto == null) return null;
-
-            return new Project
+            var entity = new Project
             {
                 Name = dto.Name,
                 Description = dto.Description,
@@ -185,44 +96,160 @@ namespace OAI.ServiceLayer.Mapping.Projects
                 CustomerEmail = dto.CustomerEmail,
                 CustomerPhone = dto.CustomerPhone,
                 CustomerRequirement = dto.CustomerRequirement,
-                Status = dto.Status,
                 ProjectType = dto.ProjectType,
                 Priority = dto.Priority,
                 StartDate = dto.StartDate,
                 DueDate = dto.DueDate,
                 EstimatedHours = dto.EstimatedHours,
                 HourlyRate = dto.HourlyRate,
-                Configuration = dto.Configuration ?? "{}",
-                ProjectContext = dto.ProjectContext ?? "",
+                Configuration = dto.Configuration,
+                ProjectContext = dto.ProjectContext,
                 Notes = dto.Notes,
-                Version = 1,
-                IsTemplate = dto.IsTemplate
+                IsTemplate = dto.IsTemplate,
+                TemplateId = dto.TemplateId,
+                TriggerType = dto.TriggerType,
+                Schedule = dto.Schedule,
+                Status = ProjectStatus.Draft,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
+
+            return entity;
         }
 
         public void UpdateEntity(Project entity, UpdateProjectDto dto)
         {
-            if (entity == null || dto == null) return;
+            if (!string.IsNullOrEmpty(dto.Name))
+                entity.Name = dto.Name;
+            
+            if (dto.Description != null)
+                entity.Description = dto.Description;
+            
+            if (dto.CustomerId.HasValue)
+                entity.CustomerId = dto.CustomerId;
+                
+            if (!string.IsNullOrEmpty(dto.CustomerName))
+                entity.CustomerName = dto.CustomerName;
+            
+            if (!string.IsNullOrEmpty(dto.CustomerEmail))
+                entity.CustomerEmail = dto.CustomerEmail;
+                
+            if (!string.IsNullOrEmpty(dto.CustomerPhone))
+                entity.CustomerPhone = dto.CustomerPhone;
+                
+            if (!string.IsNullOrEmpty(dto.CustomerRequirement))
+                entity.CustomerRequirement = dto.CustomerRequirement;
+                
+            if (!string.IsNullOrEmpty(dto.ProjectType))
+                entity.ProjectType = dto.ProjectType;
+                
+            if (dto.Status.HasValue)
+                entity.Status = dto.Status.Value;
+                
+            if (dto.Priority.HasValue)
+                entity.Priority = dto.Priority.Value;
+                
+            if (dto.StartDate.HasValue)
+                entity.StartDate = dto.StartDate;
+                
+            if (dto.CompletedDate.HasValue)
+                entity.CompletedDate = dto.CompletedDate;
+                
+            if (dto.DueDate.HasValue)
+                entity.DueDate = dto.DueDate;
+                
+            if (dto.EstimatedHours.HasValue)
+                entity.EstimatedHours = dto.EstimatedHours;
+                
+            if (dto.ActualHours.HasValue)
+                entity.ActualHours = dto.ActualHours;
+                
+            if (dto.HourlyRate.HasValue)
+                entity.HourlyRate = dto.HourlyRate;
+                
+            if (dto.Configuration != null)
+                entity.Configuration = dto.Configuration;
+                
+            if (dto.ProjectContext != null)
+                entity.ProjectContext = dto.ProjectContext;
+                
+            if (dto.Notes != null)
+                entity.Notes = dto.Notes;
+                
+            if (dto.IsTemplate.HasValue)
+                entity.IsTemplate = dto.IsTemplate.Value;
+                
+            if (dto.TemplateId.HasValue)
+                entity.TemplateId = dto.TemplateId;
+                
+            if (!string.IsNullOrEmpty(dto.TriggerType))
+                entity.TriggerType = dto.TriggerType;
+            
+            if (dto.Schedule != null)
+                entity.Schedule = dto.Schedule;
 
-            entity.Name = dto.Name;
-            entity.Description = dto.Description;
-            entity.CustomerName = dto.CustomerName;
-            entity.CustomerEmail = dto.CustomerEmail;
-            entity.CustomerPhone = dto.CustomerPhone;
-            entity.CustomerRequirement = dto.CustomerRequirement;
-            entity.Status = dto.Status;
-            entity.ProjectType = dto.ProjectType;
-            entity.Priority = dto.Priority;
-            entity.StartDate = dto.StartDate;
-            entity.CompletedDate = dto.CompletedDate;
-            entity.DueDate = dto.DueDate;
-            entity.EstimatedHours = dto.EstimatedHours;
-            entity.ActualHours = dto.ActualHours;
-            entity.HourlyRate = dto.HourlyRate;
-            entity.Configuration = dto.Configuration;
-            entity.ProjectContext = dto.ProjectContext;
-            entity.Notes = dto.Notes;
             entity.UpdatedAt = DateTime.UtcNow;
         }
+
+        public ProjectListDto ToListDto(Project entity)
+        {
+            return new ProjectListDto
+            {
+                Id = entity.Id,
+                Name = entity.Name,
+                CustomerName = entity.CustomerName ?? string.Empty,
+                CustomerRequirement = entity.CustomerRequirement ?? string.Empty,
+                Status = entity.Status,
+                Priority = entity.Priority,
+                StartDate = entity.StartDate,
+                DueDate = entity.DueDate,
+                Progress = CalculateProgress(entity),
+                ActiveWorkflows = entity.Workflows?.Count(w => w.IsActive) ?? 0,
+                TotalExecutions = entity.Executions?.Count ?? 0,
+                SuccessRate = entity.Executions?.Any() == true 
+                    ? (decimal)(entity.Executions.Count(e => e.Status == ExecutionStatus.Completed) * 100) / entity.Executions.Count 
+                    : 0,
+                CreatedAt = entity.CreatedAt,
+                UpdatedAt = entity.UpdatedAt
+            };
+        }
+
+        private decimal? CalculateProgress(Project entity)
+        {
+            // Calculate progress based on completed executions or other metrics
+            if (entity.Status == ProjectStatus.Completed)
+                return 100;
+            
+            if (entity.Status == ProjectStatus.Draft)
+                return 0;
+            
+            // Calculate based on date if available
+            if (entity.StartDate.HasValue && entity.DueDate.HasValue)
+            {
+                var totalDays = (entity.DueDate.Value - entity.StartDate.Value).TotalDays;
+                var elapsedDays = (DateTime.Now - entity.StartDate.Value).TotalDays;
+                
+                if (totalDays > 0)
+                {
+                    var progress = (decimal)(elapsedDays / totalDays * 100);
+                    return Math.Min(Math.Max(progress, 0), 100);
+                }
+            }
+            
+            // Default progress based on status
+            return entity.Status switch
+            {
+                ProjectStatus.Active => 50,
+                ProjectStatus.Paused => 25,
+                _ => null
+            };
+        }
+    }
+
+    public interface IProjectMapper : IMapper<Project, ProjectDto>
+    {
+        Project ToEntity(CreateProjectDto dto);
+        void UpdateEntity(Project entity, UpdateProjectDto dto);
+        ProjectListDto ToListDto(Project entity);
     }
 }

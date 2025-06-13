@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Vytvořit projekt";
     var workflowTypes = ViewBag.WorkflowTypes as IEnumerable<OAI.Core.DTOs.WorkflowTypeDto> ?? new List<OAI.Core.DTOs.WorkflowTypeDto>();
+    var customers = ViewBag.Customers as IEnumerable<OAI.Core.DTOs.Customers.CustomerListDto> ?? new List<OAI.Core.DTOs.Customers.CustomerListDto>();
 }
 
 <section class="content-header">
@@ -25,16 +26,17 @@
 
 <section class="content">
     <div class="container-fluid">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-plus-circle"></i> Nový projekt
-                        </h3>
-                    </div>
-                    
-                    <form asp-action="Create" method="post" id="createProjectForm">
+        <form asp-action="Create" method="post" id="createProjectForm">
+            <div class="row">
+                <!-- Main form -->
+                <div class="col-lg-8">
+                    <div class="card card-primary">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-info-circle"></i> Základní informace
+                            </h3>
+                        </div>
+                        
                         <div class="card-body">
                             @if (ViewData.ModelState.ErrorCount > 0)
                             {
@@ -47,22 +49,23 @@
                                 </div>
                             }
                             
+                            <!-- Project Name & Type -->
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-8">
                                     <div class="form-group">
                                         <label asp-for="Name">Název projektu <span class="text-danger">*</span></label>
-                                        <input asp-for="Name" class="form-control" placeholder="např. E-commerce vyhledávač">
+                                        <input asp-for="Name" class="form-control form-control-lg" placeholder="např. E-commerce vyhledávač" autofocus>
                                         <span asp-validation-for="Name" class="text-danger"></span>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="form-group">
                                         <label asp-for="WorkflowType">Typ workflow <span class="text-danger">*</span></label>
                                         <select asp-for="WorkflowType" class="form-control">
-                                            <option value="">-- Vyberte typ --</option>
+                                            <option value="">-- Vyberte --</option>
                                             @foreach (var type in workflowTypes)
                                             {
-                                                <option value="@type.Value">
+                                                <option value="@type.Value" data-icon="@type.Icon" data-description="@type.Description">
                                                     @type.Name
                                                 </option>
                                             }
@@ -72,129 +75,160 @@
                                 </div>
                             </div>
                             
+                            <!-- Description -->
                             <div class="form-group">
                                 <label asp-for="Description">Popis projektu</label>
-                                <textarea asp-for="Description" class="form-control" rows="3" 
-                                          placeholder="Stručný popis účelu workflow..."></textarea>
+                                <textarea asp-for="Description" class="form-control" rows="2" 
+                                          placeholder="Stručný popis účelu a cíle projektu..."></textarea>
                                 <span asp-validation-for="Description" class="text-danger"></span>
                             </div>
                             
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="CustomerName">Zákazník</label>
-                                        <input asp-for="CustomerName" class="form-control" placeholder="Název zákazníka">
-                                        <span asp-validation-for="CustomerName" class="text-danger"></span>
-                                    </div>
+                            <!-- Customer Selection -->
+                            <div class="card card-outline card-info">
+                                <div class="card-header">
+                                    <h3 class="card-title">
+                                        <i class="fas fa-user"></i> Zákazník
+                                    </h3>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="card-body">
                                     <div class="form-group">
-                                        <label asp-for="CustomerEmail">Email zákazníka</label>
-                                        <input asp-for="CustomerEmail" type="email" class="form-control" placeholder="email@example.com">
-                                        <span asp-validation-for="CustomerEmail" class="text-danger"></span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="Priority">Priorita</label>
-                                        <select asp-for="Priority" class="form-control">
-                                            <option value="Normal">Normální</option>
-                                            <option value="High">Vysoká</option>
-                                            <option value="Low">Nízká</option>
-                                            <option value="Critical">Kritická</option>
+                                        <label>Vyberte zákazníka</label>
+                                        <select asp-for="CustomerId" class="form-control select2" id="customerSelect">
+                                            <option value="">-- Vyberte možnost --</option>
+                                            <option value="" data-internal="true">🏢 Interní projekt (bez zákazníka)</option>
+                                            <option value="new">➕ Nový zákazník (vyplňte údaje níže)</option>
+                                            <optgroup label="Existující zákazníci">
+                                                @foreach (var customer in customers)
+                                                {
+                                                    <option value="@customer.Id" 
+                                                            data-name="@customer.Name" 
+                                                            data-company="@customer.CompanyName">
+                                                        @customer.Name
+                                                        @if (!string.IsNullOrEmpty(customer.CompanyName))
+                                                        {
+                                                            <text> (@customer.CompanyName)</text>
+                                                        }
+                                                    </option>
+                                                }
+                                            </optgroup>
                                         </select>
-                                        <span asp-validation-for="Priority" class="text-danger"></span>
                                     </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label asp-for="TriggerType">Spouštění</label>
-                                        <select asp-for="TriggerType" class="form-control">
-                                            <option value="Manual">Manuální</option>
-                                            <option value="Schedule">Plánované</option>
-                                            <option value="Event">Události</option>
-                                        </select>
-                                        <span asp-validation-for="TriggerType" class="text-danger"></span>
+                                    
+                                    <div id="customerDetails">
+                                        <div class="form-group">
+                                            <label asp-for="CustomerName">Jméno zákazníka</label>
+                                            <input asp-for="CustomerName" class="form-control" placeholder="Jan Novák">
+                                            <span asp-validation-for="CustomerName" class="text-danger"></span>
+                                        </div>
+                                        <input asp-for="CustomerEmail" type="hidden" />
                                     </div>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group" id="cronGroup" style="display: none;">
-                                <label asp-for="CronExpression">Cron výraz</label>
-                                <input asp-for="CronExpression" class="form-control" placeholder="0 9 * * *">
-                                <small class="form-text text-muted">Příklad: "0 9 * * *" = každý den v 9:00</small>
-                                <span asp-validation-for="CronExpression" class="text-danger"></span>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>Co chcete dělat po vytvoření?</label>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="nextAction" id="actionDesigner" value="designer" checked>
-                                    <label class="form-check-label" for="actionDesigner">
-                                        <i class="fas fa-pen-fancy"></i> Přejít na workflow designer
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="nextAction" id="actionList" value="list">
-                                    <label class="form-check-label" for="actionList">
-                                        <i class="fas fa-list"></i> Vrátit se na seznam projektů
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="nextAction" id="actionDetail" value="detail">
-                                    <label class="form-check-label" for="actionDetail">
-                                        <i class="fas fa-eye"></i> Zobrazit detail projektu
-                                    </label>
+                                    
+                                    <div class="alert alert-info" id="customerAlert" style="display: none;">
+                                        <i class="fas fa-info-circle"></i> Údaje zákazníka byly automaticky vyplněny.
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="card-footer">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <a href="@Url.Action("Index")" class="btn btn-secondary">
-                                        <i class="fas fa-arrow-left"></i> Zpět na seznam
-                                    </a>
-                                </div>
-                                <div class="col-md-6 text-right">
-                                    <button type="submit" class="btn btn-primary btn-lg">
-                                        <i class="fas fa-plus-circle"></i> Vytvořit projekt
-                                    </button>
-                                </div>
-                            </div>
+                    </div>
+                </div>
+                
+                <!-- Sidebar with actions -->
+                <div class="col-lg-4">
+                    <!-- Actions -->
+                    <div class="card">
+                        <div class="card-body">
+                            <button type="submit" class="btn btn-primary btn-lg btn-block mb-2">
+                                <i class="fas fa-plus-circle"></i> Vytvořit projekt
+                            </button>
+                            <a href="@Url.Action("Index")" class="btn btn-outline-secondary btn-block">
+                                <i class="fas fa-times"></i> Zrušit
+                            </a>
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
-        </div>
+        </form>
     </div>
 </section>
 
+@section Styles {
+    <link rel="stylesheet" href="~/plugins/select2/css/select2.min.css">
+    <link rel="stylesheet" href="~/plugins/select2-bootstrap4-theme/select2-bootstrap4.min.css">
+}
+
 @section Scripts {
+    <script src="~/plugins/select2/js/select2.full.min.js"></script>
     <script>
         $(document).ready(function() {
-            // Show/hide cron expression based on trigger type
-            $('#TriggerType').on('change', function() {
-                if ($(this).val() === 'Schedule') {
-                    $('#cronGroup').show();
+            // Initialize Select2
+            $('.select2').select2({
+                theme: 'bootstrap4',
+                placeholder: '-- Vyberte zákazníka --',
+                allowClear: true
+            });
+            
+            // Handle customer selection
+            $('#customerSelect').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
+                const selectedValue = $(this).val();
+                
+                if (selectedOption.data('internal') === true) {
+                    // Internal project - hide customer details
+                    $('#customerDetails').slideUp();
+                    $('#customerAlert').html('<i class="fas fa-info-circle"></i> Interní projekt - bez zákazníka').slideDown();
+                    $('#CustomerName').val('Interní projekt');
+                    $('#CustomerEmail').val('');
+                    // Clear the CustomerId by setting a hidden field
+                    $('<input>').attr({
+                        type: 'hidden',
+                        name: 'InternalProject',
+                        value: 'true'
+                    }).appendTo('#createProjectForm');
+                } else if (selectedValue === 'new') {
+                    // New customer - will be created automatically
+                    $('#customerDetails').slideDown();
+                    $('#CustomerName').val('').prop('readonly', false);
+                    $('#CustomerEmail').val('');
+                    // Don't send 'new' as CustomerId - it should be null
+                    $(this).val(''); // Clear the select to send null CustomerId
+                    $('#customerDetails').removeClass('bg-light');
+                    $('#customerAlert').html('<i class="fas fa-info-circle"></i> Nový zákazník bude automaticky vytvořen při založení projektu.').slideDown();
+                    $('input[name="InternalProject"]').remove();
+                } else if (selectedValue === '') {
+                    // Nothing selected
+                    $('#customerDetails').slideUp();
+                    $('#customerAlert').slideUp();
+                    $('input[name="InternalProject"]').remove();
                 } else {
-                    $('#cronGroup').hide();
+                    // Existing customer selected
+                    const name = selectedOption.data('name');
+                    
+                    $('#customerDetails').slideDown();
+                    $('#CustomerName').val(name).prop('readonly', true);
+                    $('#CustomerEmail').val('');
+                    $('#customerDetails').addClass('bg-light');
+                    $('#customerAlert').html('<i class="fas fa-info-circle"></i> Údaje zákazníka byly automaticky vyplněny.').slideDown();
+                    $('input[name="InternalProject"]').remove();
                 }
             });
             
-            // Handle form submission with next action
-            $('#createProjectForm').on('submit', function(e) {
-                // Form will submit normally, but we'll handle redirection in controller
-                const nextAction = $('input[name="nextAction"]:checked').val();
-                $('<input>').attr({
-                    type: 'hidden',
-                    name: 'NextAction',
-                    value: nextAction
-                }).appendTo($(this));
+            // Show workflow type description
+            $('#WorkflowType').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
+                const description = selectedOption.data('description');
+                
+                if (description && $(this).val()) {
+                    if (!$('#workflowDescription').length) {
+                        $(this).after('<small id="workflowDescription" class="form-text text-muted"></small>');
+                    }
+                    $('#workflowDescription').text(description).fadeIn();
+                } else {
+                    $('#workflowDescription').fadeOut();
+                }
             });
+            
+            // Focus on name field
+            $('#Name').focus();
         });
     </script>
 }

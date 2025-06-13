@@ -1,0 +1,137 @@
+@model OAI.Core.DTOs.ProjectDto
+
+@{
+    ViewData["Title"] = "Detail projektu";
+}
+
+<div class="content-wrapper">
+    <div class="content-header">
+        <div class="container-fluid">
+            <div class="row mb-2">
+                <div class="col-sm-6">
+                    <h1>Detail projektu</h1>
+                </div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="/Projects">Projekty</a></li>
+                        <li class="breadcrumb-item active">Detail</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            @if (Model == null)
+            {
+                <div class="alert alert-warning">
+                    <h4><i class="icon fa fa-warning"></i> Pozor!</h4>
+                    Projekt nebyl nalezen nebo služba není dostupná.
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Demo informace</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Tato stránka zobrazuje detail projektu. V současné době je služba ProjectService ve vývoji.</p>
+                        
+                        @if (ViewBag.Executions != null)
+                        {
+                            <h4>Dostupná spuštění:</h4>
+                            <ul>
+                                @foreach (var execution in (IEnumerable<dynamic>)ViewBag.Executions)
+                                {
+                                    <li>Spuštění: @execution.Id</li>
+                                }
+                            </ul>
+                        }
+                        
+                        @if (ViewBag.Files != null)
+                        {
+                            <h4>Dostupné soubory:</h4>
+                            <ul>
+                                @foreach (var file in (IEnumerable<dynamic>)ViewBag.Files)
+                                {
+                                    <li>Soubor: @file.FileName</li>
+                                }
+                            </ul>
+                        }
+                        
+                        @if (ViewBag.WorkflowTypes != null)
+                        {
+                            <h4>Dostupné typy workflow:</h4>
+                            <ul>
+                                @foreach (var type in (IEnumerable<dynamic>)ViewBag.WorkflowTypes)
+                                {
+                                    <li>@type.Name - @type.Description</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">@Model.Name</h3>
+                                <div class="card-tools">
+                                    <span class="badge badge-@(Model.Status == "Active" ? "success" : Model.Status == "Draft" ? "warning" : "secondary")">
+                                        @Model.Status
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Popis:</strong> @Model.Description</p>
+                                <p><strong>Zákazník:</strong> @Model.CustomerName (@Model.CustomerEmail)</p>
+                                <p><strong>Typ triggeru:</strong> @Model.TriggerType</p>
+                                <p><strong>Typ workflow:</strong> @Model.WorkflowType</p>
+                                <p><strong>Priorita:</strong> @Model.Priority</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Statistiky</h3>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Celkem spuštění:</strong> @Model.TotalRuns</p>
+                                <p><strong>Úspěšnost:</strong> @Model.SuccessRate%</p>
+                                <p><strong>Počet etap:</strong> @Model.StageCount</p>
+                                @if (Model.LastRun.HasValue)
+                                {
+                                    <p><strong>Poslední spuštění:</strong> @Model.LastRun.Value.ToString("dd.MM.yyyy HH:mm")</p>
+                                    <p><strong>Úspěšné:</strong> @(Model.LastRunSuccess ? "Ano" : "Ne")</p>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            
+            <div class="row mt-3">
+                <div class="col-12">
+                    <a href="/Projects" class="btn btn-default">
+                        <i class="fas fa-arrow-left"></i> Zpět na seznam
+                    </a>
+                    @if (Model != null)
+                    {
+                        <a href="/Projects/Edit/@Model.Id" class="btn btn-primary">
+                            <i class="fas fa-edit"></i> Upravit
+                        </a>
+                        <a href="/WorkflowDesigner?projectId=@Model.Id" class="btn btn-success">
+                            <i class="fas fa-cogs"></i> Workflow Designer
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+</div>

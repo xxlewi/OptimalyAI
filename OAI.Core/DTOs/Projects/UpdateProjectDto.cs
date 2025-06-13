@@ -9,34 +9,33 @@ namespace OAI.Core.DTOs.Projects
     /// </summary>
     public class UpdateProjectDto : UpdateDtoBase
     {
-        [Required(ErrorMessage = "Název projektu je povinný")]
+        public Guid? CustomerId { get; set; }
+
         [MaxLength(200)]
-        public string Name { get; set; }
+        public string? Name { get; set; }
 
         [MaxLength(500)]
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
-        [Required(ErrorMessage = "Jméno zákazníka je povinné")]
         [MaxLength(200)]
-        public string CustomerName { get; set; }
+        public string? CustomerName { get; set; }
 
         [EmailAddress(ErrorMessage = "Neplatný formát emailu")]
         [MaxLength(100)]
-        public string CustomerEmail { get; set; }
+        public string? CustomerEmail { get; set; }
 
         [Phone(ErrorMessage = "Neplatný formát telefonu")]
         [MaxLength(50)]
-        public string CustomerPhone { get; set; }
+        public string? CustomerPhone { get; set; }
 
-        [Required(ErrorMessage = "Požadavek zákazníka je povinný")]
-        public string CustomerRequirement { get; set; }
+        public string? CustomerRequirement { get; set; }
 
-        public ProjectStatus Status { get; set; }
+        public ProjectStatus? Status { get; set; }
 
         [MaxLength(50)]
-        public string ProjectType { get; set; }
+        public string? ProjectType { get; set; }
 
-        public ProjectPriority Priority { get; set; }
+        public ProjectPriority? Priority { get; set; }
 
         public DateTime? StartDate { get; set; }
 
@@ -53,11 +52,21 @@ namespace OAI.Core.DTOs.Projects
         [Range(0, 100000, ErrorMessage = "Hodinová sazba musí být mezi 0 a 100000")]
         public decimal? HourlyRate { get; set; }
 
-        public string Configuration { get; set; }
+        public string? Configuration { get; set; }
 
-        public string ProjectContext { get; set; }
+        public string? ProjectContext { get; set; }
 
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
+        
+        public bool? IsTemplate { get; set; }
+        
+        public Guid? TemplateId { get; set; }
+        
+        [MaxLength(50)]
+        public string? TriggerType { get; set; }
+        
+        [MaxLength(200)]
+        public string? Schedule { get; set; }
     }
 
     /// <summary>

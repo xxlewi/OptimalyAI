@@ -51,7 +51,7 @@ namespace OAI.Core.DTOs.Customers
         // Kolekce
         public List<CustomerContactDto> Contacts { get; set; } = new();
         public List<CustomerRequestListDto> RecentRequests { get; set; } = new();
-        public List<Projects.ProjectListDto> RecentProjects { get; set; } = new();
+        public List<OAI.Core.DTOs.ProjectDto> RecentProjects { get; set; } = new();
     }
 
     public class CustomerListDto : BaseGuidDto

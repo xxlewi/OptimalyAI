@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using OAI.Core.DTOs;
 using OAI.Core.DTOs.Customers;
-using OAI.Core.DTOs.Projects;
 using OAI.ServiceLayer.Services.Customers;
 using System;
 using System.Threading.Tasks;

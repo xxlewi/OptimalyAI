@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration;
-using OAI.Core.DTOs.Projects;
+using OAI.Core.DTOs;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;

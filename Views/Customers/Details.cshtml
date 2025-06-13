@@ -349,9 +349,9 @@
                                                 </td>
                                                 <td>@project.CreatedAt.ToString("dd.MM.yyyy")</td>
                                                 <td>
-                                                    @if (project.DueDate.HasValue)
+                                                    @if (project.LastRun.HasValue)
                                                     {
-                                                        @project.DueDate.Value.ToString("dd.MM.yyyy")
+                                                        @project.LastRun.Value.ToString("dd.MM.yyyy")
                                                     }
                                                     else
                                                     {

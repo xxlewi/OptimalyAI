@@ -1,386 +1,221 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Linq.Expressions;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Projects;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
 using OAI.Core.Interfaces;
-using OAI.ServiceLayer.Interfaces;
+using OAI.Core.Interfaces.Projects;
 using OAI.ServiceLayer.Mapping.Projects;
 
 namespace OAI.ServiceLayer.Services.Projects
 {
-    public interface IProjectStageService : IBaseGuidService<ProjectStage>
+    public class ProjectStageService : IProjectStageService
     {
-        Task<ProjectStageDto> GetStageAsync(Guid stageId);
-        Task<IEnumerable<ProjectStageDto>> GetProjectStagesAsync(Guid projectId);
-        Task<ProjectStageDto> CreateStageAsync(CreateProjectStageDto dto);
-        Task<ProjectStageDto> UpdateStageAsync(Guid stageId, UpdateProjectStageDto dto);
-        Task DeleteStageAsync(Guid stageId);
-        Task<bool> ReorderStagesAsync(Guid projectId, List<Guid> stageIds);
-        Task<ProjectStageDto> DuplicateStageAsync(Guid stageId);
-        Task<bool> AddToolToStageAsync(Guid stageId, CreateProjectStageToolDto toolDto);
-        Task<bool> RemoveToolFromStageAsync(Guid stageId, Guid toolId);
-        Task<bool> UpdateStageToolAsync(Guid stageId, Guid toolId, UpdateProjectStageToolDto dto);
-        Task<bool> ReorderStageToolsAsync(Guid stageId, List<Guid> toolIds);
-    }
-
-    public class ProjectStageService : BaseGuidService<ProjectStage>, IProjectStageService
-    {
+        private readonly IGuidRepository<ProjectStage> _stageRepository;
+        private readonly IGuidRepository<ProjectStageTool> _stageToolRepository;
+        private readonly IGuidRepository<Project> _projectRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IProjectStageMapper _stageMapper;
-        private readonly IProjectStageToolMapper _toolMapper;
         private readonly ILogger<ProjectStageService> _logger;
 
         public ProjectStageService(
-            IUnitOfWork unitOfWork, 
+            IGuidRepository<ProjectStage> stageRepository,
+            IGuidRepository<ProjectStageTool> stageToolRepository,
+            IGuidRepository<Project> projectRepository,
+            IUnitOfWork unitOfWork,
             IProjectStageMapper stageMapper,
-            IProjectStageToolMapper toolMapper,
-            ILogger<ProjectStageService> logger) 
-            : base(unitOfWork)
+            ILogger<ProjectStageService> logger)
         {
-            _stageMapper = stageMapper ?? throw new ArgumentNullException(nameof(stageMapper));
-            _toolMapper = toolMapper ?? throw new ArgumentNullException(nameof(toolMapper));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _stageRepository = stageRepository;
+            _stageToolRepository = stageToolRepository;
+            _projectRepository = projectRepository;
+            _unitOfWork = unitOfWork;
+            _stageMapper = stageMapper;
+            _logger = logger;
         }
 
-        public async Task<ProjectStageDto> GetStageAsync(Guid stageId)
+        public async Task<IEnumerable<ProjectStageDto>> GetProjectStagesAsync(Guid projectId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Getting stage with ID {StageId}", stageId);
-            
-            var stage = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetByIdAsync(stageId, q => q.Include(s => s.StageTools));
-                
-            if (stage == null)
-            {
-                throw new NotFoundException(nameof(ProjectStage), stageId);
-            }
+            var stages = await _stageRepository.GetAsync(
+                filter: s => s.ProjectId == projectId,
+                orderBy: q => q.OrderBy(s => s.Order),
+                include: query => query.Include(s => s.StageTools)
+            );
 
-            return _stageMapper.ToDto(stage);
+            var stageList = stages.ToList();
+            return stageList.Select(s => _stageMapper.ToDto(s));
         }
 
-        public async Task<IEnumerable<ProjectStageDto>> GetProjectStagesAsync(Guid projectId)
+        public async Task<ProjectStageDto?> GetStageByIdAsync(Guid stageId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Getting stages for project {ProjectId}", projectId);
-            
-            var stages = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetAsync(
-                    filter: s => s.ProjectId == projectId,
-                    orderBy: q => q.OrderBy(s => s.Order),
-                    include: q => q.Include(s => s.StageTools)
-                );
+            var stages = await _stageRepository.GetAsync(
+                filter: s => s.Id == stageId,
+                include: query => query.Include(s => s.StageTools)
+            );
+            var stage = stages.FirstOrDefault();
 
-            return stages.Select(_stageMapper.ToDto);
+            return stage != null ? _stageMapper.ToDto(stage) : null;
         }
 
-        public async Task<ProjectStageDto> CreateStageAsync(CreateProjectStageDto dto)
+        public async Task<ProjectStageDto> CreateStageAsync(Guid projectId, CreateProjectStageDto createDto, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Creating new stage for project {ProjectId}", dto.ProjectId);
-            
+            _logger.LogInformation("Creating new stage for project: {ProjectId}", projectId);
+
             // Verify project exists
-            var projectExists = await _unitOfWork.GetGuidRepository<Project>()
-                .ExistsAsync(p => p.Id == dto.ProjectId);
-                
-            if (!projectExists)
-            {
-                throw new NotFoundException(nameof(Project), dto.ProjectId);
-            }
+            var project = await _projectRepository.GetByIdAsync(projectId);
+            if (project == null)
+                throw new NotFoundException("Project", projectId);
 
-            // Get next order number
-            var existingStages = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetAsync(filter: s => s.ProjectId == dto.ProjectId);
-                
+            // Get current max order
+            var existingStages = await _stageRepository.GetAsync(s => s.ProjectId == projectId);
             var maxOrder = existingStages.Any() ? existingStages.Max(s => s.Order) : 0;
-            
-            var stage = _stageMapper.ToEntity(dto);
+
+            var stage = _stageMapper.ToEntity(createDto);
+            stage.ProjectId = projectId;
             stage.Order = maxOrder + 1;
-            
-            await _unitOfWork.GetGuidRepository<ProjectStage>().AddAsync(stage);
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Created stage {StageId} for project {ProjectId}", stage.Id, dto.ProjectId);
-            
+            stage.CreatedAt = DateTime.UtcNow;
+            stage.UpdatedAt = DateTime.UtcNow;
+
+            await _stageRepository.CreateAsync(stage);
+            await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Stage created successfully with ID: {Id}", stage.Id);
             return _stageMapper.ToDto(stage);
         }
 
-        public async Task<ProjectStageDto> UpdateStageAsync(Guid stageId, UpdateProjectStageDto dto)
+        public async Task<ProjectStageDto> UpdateStageAsync(Guid stageId, UpdateProjectStageDto updateDto, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating stage {StageId}", stageId);
-            
-            var stage = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetByIdAsync(stageId, q => q.Include(s => s.StageTools));
-                
-            if (stage == null)
-            {
-                throw new NotFoundException(nameof(ProjectStage), stageId);
-            }
+            var stages = await _stageRepository.GetAsync(
+                filter: s => s.Id == stageId,
+                include: query => query.Include(s => s.StageTools));
+            var stage = stages.FirstOrDefault();
 
-            _stageMapper.UpdateEntity(stage, dto);
-            
-            _unitOfWork.GetGuidRepository<ProjectStage>().Update(stage);
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Updated stage {StageId}", stageId);
-            
+            if (stage == null)
+                throw new NotFoundException("ProjectStage", stageId);
+
+            _stageMapper.UpdateEntity(stage, updateDto);
+            stage.UpdatedAt = DateTime.UtcNow;
+
+            await _stageRepository.UpdateAsync(stage);
+            await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Stage {Id} updated successfully", stageId);
             return _stageMapper.ToDto(stage);
         }
 
-        public async Task DeleteStageAsync(Guid stageId)
+        public async Task<bool> DeleteStageAsync(Guid stageId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Deleting stage {StageId}", stageId);
-            
-            var stage = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetByIdAsync(stageId, q => q.Include(s => s.StageTools));
-                
+            var stage = await _stageRepository.GetByIdAsync(stageId);
             if (stage == null)
-            {
-                throw new NotFoundException(nameof(ProjectStage), stageId);
-            }
+                return false;
 
-            var projectId = stage.ProjectId;
-            var deletedOrder = stage.Order;
-            
-            // Delete stage and its tools (cascade delete)
-            _unitOfWork.GetGuidRepository<ProjectStage>().Delete(stage);
-            
             // Reorder remaining stages
-            var remainingStages = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetAsync(filter: s => s.ProjectId == projectId && s.Order > deletedOrder);
-                
+            var remainingStages = await _stageRepository.GetAsync(
+                filter: s => s.ProjectId == stage.ProjectId && s.Order > stage.Order,
+                orderBy: q => q.OrderBy(s => s.Order)
+            );
+
             foreach (var remainingStage in remainingStages)
             {
                 remainingStage.Order--;
-                _unitOfWork.GetGuidRepository<ProjectStage>().Update(remainingStage);
+                await _stageRepository.UpdateAsync(remainingStage);
             }
-            
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Deleted stage {StageId} and reordered remaining stages", stageId);
-        }
 
-        public async Task<bool> ReorderStagesAsync(Guid projectId, List<Guid> stageIds)
-        {
-            _logger.LogInformation("Reordering stages for project {ProjectId}", projectId);
-            
-            var stages = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetAsync(filter: s => s.ProjectId == projectId);
-                
-            var stageDict = stages.ToDictionary(s => s.Id);
-            
-            // Verify all stage IDs belong to the project
-            if (!stageIds.All(id => stageDict.ContainsKey(id)))
-            {
-                throw new BusinessException("Některé stage ID nepatří k projektu");
-            }
-            
-            // Update order
-            for (int i = 0; i < stageIds.Count; i++)
-            {
-                var stage = stageDict[stageIds[i]];
-                stage.Order = i + 1;
-                _unitOfWork.GetGuidRepository<ProjectStage>().Update(stage);
-            }
-            
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Reordered {Count} stages for project {ProjectId}", stageIds.Count, projectId);
-            
+            await _stageRepository.DeleteAsync(stage.Id);
+            await _unitOfWork.SaveChangesAsync();
+
             return true;
         }
 
-        public async Task<ProjectStageDto> DuplicateStageAsync(Guid stageId)
+        public async Task<bool> ReorderStagesAsync(Guid projectId, IEnumerable<Guid> orderedStageIds, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Duplicating stage {StageId}", stageId);
-            
-            var originalStage = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetByIdAsync(stageId, q => q.Include(s => s.StageTools));
-                
-            if (originalStage == null)
+            var stageIds = orderedStageIds.ToList();
+            var stages = await _stageRepository.GetAsync(s => s.ProjectId == projectId);
+            var stagesList = stages.ToList();
+
+            if (stagesList.Count != stageIds.Count)
+                throw new BusinessException("Stage count mismatch");
+
+            int order = 1;
+            foreach (var stageId in stageIds)
             {
-                throw new NotFoundException(nameof(ProjectStage), stageId);
+                var stage = stagesList.FirstOrDefault(s => s.Id == stageId);
+                if (stage == null)
+                    throw new NotFoundException("ProjectStage", stageId);
+
+                stage.Order = order++;
+                stage.UpdatedAt = DateTime.UtcNow;
+                await _stageRepository.UpdateAsync(stage);
             }
-            
-            // Create new stage
-            var newStage = new ProjectStage
+
+            await _unitOfWork.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> AddToolToStageAsync(Guid stageId, string toolId, object? configuration = null, CancellationToken cancellationToken = default)
+        {
+            var stage = await _stageRepository.GetByIdAsync(stageId);
+            if (stage == null)
+                throw new NotFoundException("ProjectStage", stageId);
+
+            // Check if tool already exists in stage
+            var existingTools = await _stageToolRepository.GetAsync(
+                st => st.ProjectStageId == stageId && st.ToolId == toolId
+            );
+            var existingTool = existingTools.FirstOrDefault();
+
+            if (existingTool != null)
+                throw new BusinessException($"Tool {toolId} already exists in stage");
+
+            var stageTool = new ProjectStageTool
             {
-                Id = Guid.NewGuid(),
-                ProjectId = originalStage.ProjectId,
-                Name = $"{originalStage.Name} (kopie)",
-                Description = originalStage.Description,
-                Type = originalStage.Type,
-                OrchestratorType = originalStage.OrchestratorType,
-                OrchestratorConfiguration = originalStage.OrchestratorConfiguration,
-                ReActAgentType = originalStage.ReActAgentType,
-                ReActAgentConfiguration = originalStage.ReActAgentConfiguration,
-                ExecutionStrategy = originalStage.ExecutionStrategy,
-                ContinueCondition = originalStage.ContinueCondition,
-                ErrorHandling = originalStage.ErrorHandling,
-                MaxRetries = originalStage.MaxRetries,
-                TimeoutSeconds = originalStage.TimeoutSeconds,
-                IsActive = originalStage.IsActive,
-                Metadata = originalStage.Metadata,
-                Order = originalStage.Order + 1,
+                ProjectStageId = stageId,
+                ToolId = toolId,
+                Configuration = configuration != null ? JsonSerializer.Serialize(configuration) : null,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-            
-            // Duplicate tools
-            foreach (var tool in originalStage.StageTools)
-            {
-                var newTool = new ProjectStageTool
-                {
-                    Id = Guid.NewGuid(),
-                    ProjectStageId = newStage.Id,
-                    ToolId = tool.ToolId,
-                    ToolName = tool.ToolName,
-                    Order = tool.Order,
-                    Configuration = tool.Configuration,
-                    InputMapping = tool.InputMapping,
-                    OutputMapping = tool.OutputMapping,
-                    IsRequired = tool.IsRequired,
-                    ExecutionCondition = tool.ExecutionCondition,
-                    MaxRetries = tool.MaxRetries,
-                    TimeoutSeconds = tool.TimeoutSeconds,
-                    IsActive = tool.IsActive,
-                    ExpectedOutputFormat = tool.ExpectedOutputFormat,
-                    Metadata = tool.Metadata,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                newStage.StageTools.Add(newTool);
-            }
-            
-            // Reorder stages after the insertion point
-            var stagesToReorder = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetAsync(filter: s => s.ProjectId == originalStage.ProjectId && s.Order > originalStage.Order);
-                
-            foreach (var stage in stagesToReorder)
-            {
-                stage.Order++;
-                _unitOfWork.GetGuidRepository<ProjectStage>().Update(stage);
-            }
-            
-            await _unitOfWork.GetGuidRepository<ProjectStage>().AddAsync(newStage);
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Duplicated stage {OriginalId} to {NewId}", stageId, newStage.Id);
-            
-            return _stageMapper.ToDto(newStage);
-        }
 
-        public async Task<bool> AddToolToStageAsync(Guid stageId, CreateProjectStageToolDto toolDto)
-        {
-            _logger.LogInformation("Adding tool {ToolId} to stage {StageId}", toolDto.ToolId, stageId);
-            
-            var stage = await _unitOfWork.GetGuidRepository<ProjectStage>()
-                .GetByIdAsync(stageId, q => q.Include(s => s.StageTools));
-                
-            if (stage == null)
-            {
-                throw new NotFoundException(nameof(ProjectStage), stageId);
-            }
-            
-            // Check if tool already exists in stage
-            if (stage.StageTools.Any(t => t.ToolId == toolDto.ToolId))
-            {
-                throw new BusinessException($"Tool {toolDto.ToolId} již existuje v této stage");
-            }
-            
-            var tool = _toolMapper.ToEntity(toolDto, stageId);
-            tool.Order = stage.StageTools.Count + 1;
-            
-            await _unitOfWork.GetGuidRepository<ProjectStageTool>().AddAsync(tool);
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Added tool {ToolId} to stage {StageId}", toolDto.ToolId, stageId);
-            
+            await _stageToolRepository.CreateAsync(stageTool);
+            await _unitOfWork.SaveChangesAsync();
+
             return true;
         }
 
-        public async Task<bool> RemoveToolFromStageAsync(Guid stageId, Guid toolId)
+        public async Task<bool> RemoveToolFromStageAsync(Guid stageId, string toolId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Removing tool {ToolId} from stage {StageId}", toolId, stageId);
-            
-            var tool = await _unitOfWork.GetGuidRepository<ProjectStageTool>()
-                .GetByIdAsync(toolId);
-                
-            if (tool == null || tool.ProjectStageId != stageId)
-            {
-                throw new NotFoundException(nameof(ProjectStageTool), toolId);
-            }
-            
-            var deletedOrder = tool.Order;
-            
-            _unitOfWork.GetGuidRepository<ProjectStageTool>().Delete(tool);
-            
-            // Reorder remaining tools
-            var remainingTools = await _unitOfWork.GetGuidRepository<ProjectStageTool>()
-                .GetAsync(filter: t => t.ProjectStageId == stageId && t.Order > deletedOrder);
-                
-            foreach (var remainingTool in remainingTools)
-            {
-                remainingTool.Order--;
-                _unitOfWork.GetGuidRepository<ProjectStageTool>().Update(remainingTool);
-            }
-            
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Removed tool {ToolId} from stage {StageId}", toolId, stageId);
-            
+            var stageTools = await _stageToolRepository.GetAsync(
+                st => st.ProjectStageId == stageId && st.ToolId == toolId
+            );
+            var stageTool = stageTools.FirstOrDefault();
+
+            if (stageTool == null)
+                return false;
+
+            await _stageToolRepository.DeleteAsync(stageTool.Id);
+            await _unitOfWork.SaveChangesAsync();
+
             return true;
         }
 
-        public async Task<bool> UpdateStageToolAsync(Guid stageId, Guid toolId, UpdateProjectStageToolDto dto)
+        public async Task<bool> UpdateStageToolConfigurationAsync(Guid stageId, string toolId, object configuration, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating tool {ToolId} in stage {StageId}", toolId, stageId);
-            
-            var tool = await _unitOfWork.GetGuidRepository<ProjectStageTool>()
-                .GetByIdAsync(toolId);
-                
-            if (tool == null || tool.ProjectStageId != stageId)
-            {
-                throw new NotFoundException(nameof(ProjectStageTool), toolId);
-            }
-            
-            _toolMapper.UpdateEntity(tool, dto);
-            
-            _unitOfWork.GetGuidRepository<ProjectStageTool>().Update(tool);
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Updated tool {ToolId} in stage {StageId}", toolId, stageId);
-            
-            return true;
-        }
+            var stageTools = await _stageToolRepository.GetAsync(
+                st => st.ProjectStageId == stageId && st.ToolId == toolId
+            );
+            var stageTool = stageTools.FirstOrDefault();
 
-        public async Task<bool> ReorderStageToolsAsync(Guid stageId, List<Guid> toolIds)
-        {
-            _logger.LogInformation("Reordering tools in stage {StageId}", stageId);
-            
-            var tools = await _unitOfWork.GetGuidRepository<ProjectStageTool>()
-                .GetAsync(filter: t => t.ProjectStageId == stageId);
-                
-            var toolDict = tools.ToDictionary(t => t.Id);
-            
-            // Verify all tool IDs belong to the stage
-            if (!toolIds.All(id => toolDict.ContainsKey(id)))
-            {
-                throw new BusinessException("Některé tool ID nepatří k této stage");
-            }
-            
-            // Update order
-            for (int i = 0; i < toolIds.Count; i++)
-            {
-                var tool = toolDict[toolIds[i]];
-                tool.Order = i + 1;
-                _unitOfWork.GetGuidRepository<ProjectStageTool>().Update(tool);
-            }
-            
-            await _unitOfWork.CommitAsync();
-            
-            _logger.LogInformation("Reordered {Count} tools in stage {StageId}", toolIds.Count, stageId);
-            
+            if (stageTool == null)
+                throw new NotFoundException($"Tool {toolId} not found in stage {stageId}");
+
+            stageTool.Configuration = JsonSerializer.Serialize(configuration);
+            stageTool.UpdatedAt = DateTime.UtcNow;
+
+            await _stageToolRepository.UpdateAsync(stageTool);
+            await _unitOfWork.SaveChangesAsync();
+
             return true;
         }
     }

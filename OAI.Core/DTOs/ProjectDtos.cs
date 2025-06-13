@@ -14,8 +14,9 @@ namespace OAI.Core.DTOs
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public Guid? CustomerId { get; set; }
         public string CustomerName { get; set; } = string.Empty;
-        public string CustomerEmail { get; set; } = string.Empty;
+        public string? CustomerEmail { get; set; }
         public string TriggerType { get; set; } = string.Empty;
         public string CronExpression { get; set; } = string.Empty;
         public DateTime? NextRun { get; set; }
@@ -40,11 +41,13 @@ namespace OAI.Core.DTOs
         [MaxLength(1000)]
         public string Description { get; set; } = string.Empty;
         
+        public Guid? CustomerId { get; set; }
+        
         [MaxLength(200)]
         public string CustomerName { get; set; } = string.Empty;
         
         [MaxLength(200)]
-        public string CustomerEmail { get; set; } = string.Empty;
+        public string? CustomerEmail { get; set; }
         
         [Required]
         [MaxLength(50)]
@@ -153,17 +156,35 @@ namespace OAI.Core.DTOs
     public class ProjectExecutionStepDto : BaseGuidDto
     {
         public Guid ProjectExecutionId { get; set; }
-        public string StepId { get; set; } = string.Empty;
-        public string StepName { get; set; } = string.Empty;
+        public int StepIndex { get; set; }
         public string StepType { get; set; } = string.Empty;
+        public string StepName { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
-        public DateTime StartedAt { get; set; }
+        public DateTime? StartedAt { get; set; }
         public DateTime? CompletedAt { get; set; }
-        public TimeSpan Duration { get; set; }
-        public int Order { get; set; }
+        public TimeSpan? Duration { get; set; }
         public string? ErrorMessage { get; set; }
         public object? Input { get; set; }
         public object? Output { get; set; }
+        public object? Configuration { get; set; }
+    }
+
+    public class CreateProjectExecutionStepDto : CreateGuidDtoBase
+    {
+        [Required]
+        public Guid ProjectExecutionId { get; set; }
+        
+        [Required]
+        public int StepIndex { get; set; }
+        
+        [Required]
+        [MaxLength(100)]
+        public string StepType { get; set; } = string.Empty;
+        
+        [Required]
+        [MaxLength(200)]
+        public string StepName { get; set; } = string.Empty;
+        
         public object? Configuration { get; set; }
     }
 

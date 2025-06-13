@@ -55,5 +55,13 @@ namespace OAI.Core.DTOs.Projects
         public string? Notes { get; set; }
 
         public bool IsTemplate { get; set; } = false;
+        
+        public Guid? TemplateId { get; set; }
+        
+        [MaxLength(50)]
+        public string? TriggerType { get; set; } = "Manual";
+        
+        [MaxLength(200)]
+        public string? Schedule { get; set; }
     }
 }

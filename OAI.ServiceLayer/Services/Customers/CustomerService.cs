@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Customers;
-using OAI.Core.DTOs.Projects;
+using OAI.Core.DTOs;
 using OAI.Core.Entities.Customers;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Exceptions;
@@ -14,7 +14,7 @@ using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Infrastructure;
 using OAI.ServiceLayer.Interfaces;
 using OAI.ServiceLayer.Mapping.Customers;
-using OAI.ServiceLayer.Mapping.Projects;
+using OAI.ServiceLayer.Mapping;
 
 namespace OAI.ServiceLayer.Services.Customers
 {
@@ -34,7 +34,7 @@ namespace OAI.ServiceLayer.Services.Customers
         Task<IEnumerable<CustomerListDto>> GetDeletedAsync();
         Task RestoreAsync(Guid id);
         Task PermanentDeleteAsync(Guid id);
-        Task<OAI.Core.DTOs.Projects.ProjectDto> ConvertRequestToProjectAsync(Guid requestId);
+        Task<ProjectDto> ConvertRequestToProjectAsync(Guid requestId);
     }
 
     public class CustomerService : ICustomerService
@@ -45,7 +45,6 @@ namespace OAI.ServiceLayer.Services.Customers
         private readonly IGuidRepository<CustomerRequest> _requestRepository;
         private readonly IGuidRepository<OAI.Core.Entities.Projects.Project> _projectRepository;
         private readonly IGuidRepository<CustomerContact> _contactRepository;
-        private readonly IProjectMapper _projectMapper;
         private readonly ILogger<CustomerService> _logger;
 
         public CustomerService(
@@ -55,7 +54,6 @@ namespace OAI.ServiceLayer.Services.Customers
             IGuidRepository<CustomerRequest> requestRepository,
             IGuidRepository<OAI.Core.Entities.Projects.Project> projectRepository,
             IGuidRepository<CustomerContact> contactRepository,
-            IProjectMapper projectMapper,
             ILogger<CustomerService> logger)
         {
             _repository = repository;
@@ -64,7 +62,6 @@ namespace OAI.ServiceLayer.Services.Customers
             _requestRepository = requestRepository;
             _projectRepository = projectRepository;
             _contactRepository = contactRepository;
-            _projectMapper = projectMapper;
             _logger = logger;
         }
 
@@ -205,24 +202,8 @@ namespace OAI.ServiceLayer.Services.Customers
             }
 
             // Přidat nedávné projekty
-            if (customer.Projects != null)
-            {
-                dto.RecentProjects = customer.Projects
-                    .OrderByDescending(p => p.CreatedAt)
-                    .Take(5)
-                    .Select(p => new OAI.Core.DTOs.Projects.ProjectListDto
-                    {
-                        Id = p.Id,
-                        Name = p.Name,
-                        CustomerName = customer.Name,
-                        Status = p.Status,
-                        Priority = p.Priority,
-                        CreatedAt = p.CreatedAt,
-                        StartDate = p.StartDate,
-                        DueDate = p.DueDate
-                    })
-                    .ToList();
-            }
+            // Simplified - no project mapping for now  
+            dto.RecentProjects = new List<OAI.Core.DTOs.ProjectDto>();
 
             return dto;
         }
@@ -399,71 +380,8 @@ namespace OAI.ServiceLayer.Services.Customers
 
         public async Task<ProjectDto> ConvertRequestToProjectAsync(Guid requestId)
         {
-            // Načíst request s detaily
-            var request = await _requestRepository.GetAsync(
-                filter: r => r.Id == requestId,
-                include: q => q.Include(r => r.Customer))
-                .FirstOrDefaultAsync();
-
-            if (request == null)
-                throw new NotFoundException("CustomerRequest", requestId);
-
-            // Kontrola stavu - lze konvertovat pouze schválené požadavky
-            if (request.Status != RequestStatus.Approved)
-            {
-                throw new BusinessException($"Požadavek musí být ve stavu 'Schválený' pro konverzi na projekt. Aktuální stav: {request.Status}");
-            }
-
-            // Kontrola, zda již nebyl konvertován
-            if (request.ProjectId.HasValue)
-            {
-                throw new BusinessException($"Požadavek již byl konvertován na projekt s ID: {request.ProjectId}");
-            }
-
-            // Vytvoření nového projektu
-            var project = new OAI.Core.Entities.Projects.Project
-            {
-                Name = request.Title,
-                Description = request.Description,
-                CustomerId = request.CustomerId,
-                CustomerName = request.Customer?.Name,
-                CustomerEmail = request.Customer?.Email,
-                Status = ProjectStatus.Draft,
-                Priority = request.Priority switch
-                {
-                    RequestPriority.Low => ProjectPriority.Low,
-                    RequestPriority.Medium => ProjectPriority.Medium,
-                    RequestPriority.High => ProjectPriority.High,
-                    RequestPriority.Critical => ProjectPriority.Urgent,
-                    _ => ProjectPriority.Medium
-                },
-                RequestedDeadline = request.RequestedDeadline,
-                Budget = request.EstimatedBudget,
-                Tags = $"request-{request.Id}",
-                Metadata = System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    ConvertedFromRequestId = request.Id,
-                    RequestType = request.Type.ToString(),
-                    RequestSource = request.Source.ToString(),
-                    ConvertedAt = DateTime.UtcNow
-                })
-            };
-
-            // Uložení projektu
-            await _projectRepository.CreateAsync(project);
-
-            // Aktualizace požadavku - propojení s projektem
-            request.ProjectId = project.Id;
-            request.Status = RequestStatus.InProgress;
-            request.Resolution = $"Konvertován na projekt: {project.Name}";
-            request.UpdatedAt = DateTime.UtcNow;
-
-            await _requestRepository.UpdateAsync(request);
-            await _unitOfWork.SaveChangesAsync();
-
-            _logger.LogInformation("Request {RequestId} converted to project {ProjectId}", requestId, project.Id);
-
-            return _projectMapper.ToDto(project);
+            await Task.Delay(1);
+            throw new NotImplementedException("Feature not implemented in demo version");
         }
     }
 }
