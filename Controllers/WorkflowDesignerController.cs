@@ -95,33 +95,7 @@ namespace OptimalyAI.Controllers
                 }
             };
             
-            // Vytvoř základní start a end uzly
-            var startNode = new WorkflowNode
-            {
-                Id = "start_node",
-                Name = "Začátek",
-                Type = NodeType.Start,
-                Position = new NodePosition { X = 100, Y = 200 },
-                OutputPorts = new List<NodePort>
-                {
-                    new NodePort { Name = "output", DataType = "object" }
-                }
-            };
-            
-            var endNode = new WorkflowNode
-            {
-                Id = "end_node",
-                Name = "Konec",
-                Type = NodeType.End,
-                Position = new NodePosition { X = 800, Y = 200 },
-                InputPorts = new List<NodePort>
-                {
-                    new NodePort { Name = "input", DataType = "object" }
-                }
-            };
-            
-            workflow.Nodes.Add(startNode);
-            workflow.Nodes.Add(endNode);
+            // Prázdné workflow - uživatel si vytvoří vlastní uzly
             
             return workflow;
         }
@@ -298,12 +272,6 @@ namespace OptimalyAI.Controllers
             
             var workflow = _workflows[projectId];
             
-            // Nemůžeme smazat start nebo end uzel
-            if (nodeId == "start_node" || nodeId == "end_node")
-            {
-                return Json(new { success = false, message = "Nelze smazat počáteční nebo koncový uzel" });
-            }
-            
             // Smaž uzel
             workflow.Nodes.RemoveAll(n => n.Id == nodeId);
             
@@ -372,28 +340,21 @@ namespace OptimalyAI.Controllers
             var workflow = _workflows[projectId];
             var errors = new List<string>();
             
-            // Kontrola: musí mít start a end
-            if (!workflow.Nodes.Any(n => n.Type == NodeType.Start))
-                errors.Add("Workflow musí mít počáteční uzel");
+            // Kontrola: musí mít alespoň jeden uzel
+            if (!workflow.Nodes.Any())
+                errors.Add("Workflow musí obsahovat alespoň jeden uzel");
+            
+            // Kontrola: upozornění na nepropojené uzly (ale ne chyba)
+            foreach (var node in workflow.Nodes)
+            {
+                bool hasInput = workflow.Edges.Any(e => e.TargetId == node.Id);
+                bool hasOutput = workflow.Edges.Any(e => e.SourceId == node.Id);
                 
-            if (!workflow.Nodes.Any(n => n.Type == NodeType.End))
-                errors.Add("Workflow musí mít koncový uzel");
-            
-            // Kontrola: všechny uzly kromě start musí mít vstup
-            foreach (var node in workflow.Nodes.Where(n => n.Type != NodeType.Start))
-            {
-                if (!workflow.Edges.Any(e => e.TargetId == node.Id))
+                // Je OK mít uzly bez vstupu (vstupní body) nebo bez výstupu (koncové body)
+                // Ale uzel úplně nepropojený může být problém
+                if (!hasInput && !hasOutput && workflow.Nodes.Count > 1)
                 {
-                    errors.Add($"Uzel '{node.Name}' nemá žádný vstup");
-                }
-            }
-            
-            // Kontrola: všechny uzly kromě end musí mít výstup
-            foreach (var node in workflow.Nodes.Where(n => n.Type != NodeType.End))
-            {
-                if (!workflow.Edges.Any(e => e.SourceId == node.Id))
-                {
-                    errors.Add($"Uzel '{node.Name}' nemá žádný výstup");
+                    errors.Add($"Uzel '{node.Name}' není propojený s ostatními uzly");
                 }
             }
             

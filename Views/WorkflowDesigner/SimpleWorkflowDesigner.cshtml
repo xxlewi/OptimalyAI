@@ -78,22 +78,6 @@
         box-shadow: 0 0 0 3px rgba(255,107,107,0.2);
     }
     
-    .workflow-node.start {
-        background: #28a745;
-        color: white;
-        border-color: #28a745;
-        border-radius: 50px;
-        text-align: center;
-    }
-    
-    .workflow-node.end {
-        background: #dc3545;
-        color: white;
-        border-color: #dc3545;
-        border-radius: 50px;
-        text-align: center;
-    }
-    
     .workflow-node.condition {
         width: 140px;
         height: 140px;
@@ -330,11 +314,6 @@
         transform: translateX(-50%);
     }
     
-    /* Start/End nodes are not used anymore
-    .workflow-node.start .connection-dot.input {
-        display: none;
-    } */
-    
     .connection-dot.input:hover {
         transform: translateX(-50%) scale(1.2);
     }
@@ -344,11 +323,6 @@
         bottom: -8px;
         transform: translateX(-50%);
     }
-    
-    /* Start/End nodes are not used anymore
-    .workflow-node.end .connection-dot.output {
-        display: none;
-    } */
     
     .connection-dot.output:hover {
         transform: translateX(-50%) scale(1.2);
@@ -446,12 +420,6 @@
                 <h5><i class="fas fa-toolbox"></i> Nástroje</h5>
                 
                 <h6>Základní uzly</h6>
-                <div class="tool-item" data-type="start" draggable="true" style="display: none;">
-                    <i class="fas fa-play"></i> Začátek
-                </div>
-                <div class="tool-item" data-type="end" draggable="true" style="display: none;">
-                    <i class="fas fa-stop"></i> Konec
-                </div>
                 <div class="tool-item" data-type="task" draggable="true">
                     <i class="fas fa-square"></i> Proces
                     <small style="display: block; font-size: 10px; color: #666;">Obdélník</small>
@@ -717,8 +685,6 @@
                     
                     // Delete selected node if any
                     if (selectedNode) {
-                        const node = nodes[selectedNode];
-                        // Delete any selected node
                         removeNode(selectedNode);
                     }
                 }
@@ -753,9 +719,6 @@
         if (type === 'condition' || type === 'parallel') {
             adjustedX = x - 70; // Half of diamond width
             adjustedY = y - 70; // Half of diamond height  
-        } else if (type === 'start' || type === 'end') {
-            adjustedX = x - 90; // Approximate half width
-            adjustedY = y - 30; // Approximate half height
         } else {
             adjustedX = x - 90; // Half of normal node width
             adjustedY = y - 30; // Approximate half height
@@ -818,8 +781,8 @@
         
         contentWrapper.append(header);
         
-        // Description - but not for start/end nodes
-        if (node.description && node.type !== 'start' && node.type !== 'end') {
+        // Description
+        if (node.description) {
             const descDiv = $('<div>')
                 .css({
                     fontSize: '12px',
@@ -909,8 +872,6 @@
     // Get node icon
     function getNodeIcon(type) {
         const icons = {
-            'start': 'fas fa-play-circle',
-            'end': 'fas fa-stop-circle',
             'task': 'fas fa-tasks',
             'condition': 'fas fa-question-circle',
             'parallel': 'fas fa-code-branch',
@@ -1528,10 +1489,6 @@ Obrázek</textarea>
         
         // First pass - create steps
         Object.values(nodes).forEach((node, index) => {
-            if (node.type === 'start' || node.type === 'end') {
-                return; // Skip start/end nodes
-            }
-            
             const step = {
                 id: node.id,
                 name: node.name,
@@ -1855,12 +1812,9 @@ Obrázek</textarea>
             $('#workflowOutputType').val(data.output.type);
         }
         
-        // Clear existing (except start/end)
+        // Clear existing
         Object.keys(nodes).forEach(nodeId => {
-            const node = nodes[nodeId];
-            if (node.type !== 'start' && node.type !== 'end') {
-                removeNode(nodeId);
-            }
+            removeNode(nodeId);
         });
         connections = [];
         

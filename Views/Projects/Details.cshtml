@@ -778,10 +778,10 @@
                     `);
                     
                     // Add special classes based on type
-                    if (node.type === 'Start') {
-                        nodeEl.addClass('start');
-                    } else if (node.type === 'End') {
-                        nodeEl.addClass('end');
+                    if (node.type === 'Condition') {
+                        nodeEl.addClass('condition');
+                    } else if (node.type === 'Parallel') {
+                        nodeEl.addClass('parallel');
                     }
                     
                     container.append(nodeEl);
