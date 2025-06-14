@@ -27,8 +27,9 @@
 <div class="content">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-lg-12">
-                <div class="card">
+            <!-- Levý sloupec - Detaily požadavku -->
+            <div class="col-lg-8">
+                <div class="card" style="height: 100%;">
                     <div class="card-header">
                         <h3 class="card-title">Detaily požadavku</h3>
                         <div class="card-tools">
@@ -160,9 +161,11 @@
                         </dl>
                     </div>
                 </div>
-
-                <!-- Rychlá poznámka -->
-                <div class="card">
+            </div>
+            
+            <!-- Pravý sloupec - Rychlá poznámka -->
+            <div class="col-lg-4">
+                <div class="card" style="height: 100%;">
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-sticky-note"></i> Poznámka k požadavku
@@ -173,18 +176,23 @@
                             </button>
                         </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body d-flex flex-column" style="height: calc(100% - 3.5rem);">
                         <textarea id="quickNote" 
-                                  class="form-control" 
-                                  rows="4" 
+                                  class="form-control flex-grow-1" 
                                   placeholder="Sem můžete psát poznámky k tomuto požadavku. Automaticky se uloží při opuštění pole..."
-                                  data-request-id="@Model.Id">@Model.Metadata</textarea>
-                        <small class="text-muted">
+                                  data-request-id="@Model.Id"
+                                  style="resize: none; min-height: 400px;">@Model.Metadata</textarea>
+                        <small class="text-muted mt-2">
                             <i class="fas fa-info-circle"></i> Poznámka se automaticky uloží při opuštění pole
                         </small>
                     </div>
                 </div>
+            </div>
+        </div>
 
+        <!-- Další řádek pro ostatní karty -->
+        <div class="row mt-3">
+            <div class="col-lg-12">
                 <!-- Historie průběhu požadavku -->
                 <div class="card">
                     <div class="card-header">
@@ -298,7 +306,6 @@
                     </div>
                 }
             </div>
-
         </div>
     </div>
 </div>
