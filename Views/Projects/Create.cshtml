@@ -263,8 +263,20 @@
             
             // If we have a preselected customer, set it
             if (preselectedCustomerId) {
-                console.log('Setting preselected customer:', preselectedCustomerId);
-                $('#customerSelect').val(preselectedCustomerId).trigger('change');
+                console.log('=== CUSTOMER PRESELECTION DEBUG ===');
+                console.log('1. Preselected customer ID:', preselectedCustomerId);
+                console.log('2. Current select value before:', $('#customerSelect').val());
+                console.log('3. Available options:', $('#customerSelect option').map(function() {
+                    return $(this).val() + ' - ' + $(this).text();
+                }).get());
+                
+                $('#customerSelect').val(preselectedCustomerId);
+                console.log('4. Select value after setting:', $('#customerSelect').val());
+                
+                $('#customerSelect').trigger('change');
+                console.log('5. Change event triggered');
+                console.log('6. Customer details visible:', $('#customerDetails').is(':visible'));
+                console.log('=== END DEBUG ===');
             }
             
             // Handle internal project checkbox

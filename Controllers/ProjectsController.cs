@@ -241,7 +241,6 @@ namespace OptimalyAI.Controllers
                     dto.CustomerId = customer.Id;
                     dto.CustomerName = customer.Name;
                     dto.CustomerEmail = customer.Email;
-                    dto.CustomerPhone = customer.Phone;
                     _logger.LogInformation("Customer data prefilled: {CustomerName}", customer.Name);
                 }
                 else
