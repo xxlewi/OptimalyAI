@@ -25,6 +25,7 @@ namespace OAI.Core.DTOs.Business
         public List<RequestExecutionDto> Executions { get; set; }
         public List<RequestFileDto> Files { get; set; }
         public List<RequestNoteDto> Notes { get; set; }
+        public string Metadata { get; set; }
     }
 
     public class CreateRequestDto : CreateDtoBase

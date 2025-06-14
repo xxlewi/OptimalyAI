@@ -50,7 +50,8 @@ namespace OAI.ServiceLayer.Mapping.Business
                 WorkflowTemplateName = entity.WorkflowTemplate?.Name,
                 Executions = entity.Executions?.Select(_executionMapper.ToDto).ToList(),
                 Files = entity.Files?.Select(_fileMapper.ToDto).ToList(),
-                Notes = entity.Notes?.Select(_noteMapper.ToDto).ToList()
+                Notes = entity.Notes?.Select(_noteMapper.ToDto).ToList(),
+                Metadata = entity.Metadata
             };
         }
 

@@ -28,6 +28,7 @@ namespace OAI.ServiceLayer.Services.Business
         Task<string> GenerateRequestNumberAsync();
         Task<RequestDto> ChangeStatusAsync(int id, RequestStatus newStatus);
         Task<RequestDto> AddNoteAsync(int id, string content, string author, NoteType type = NoteType.Note, bool isInternal = false);
+        Task UpdateMetadataAsync(int id, string metadata);
     }
 
     public class RequestService : BaseService<Request>, IRequestService
@@ -338,6 +339,20 @@ namespace OAI.ServiceLayer.Services.Business
         {
             // S novými jednoduchem statusy jsou všechny přechody povolené
             return true;
+        }
+
+        public async Task UpdateMetadataAsync(int id, string metadata)
+        {
+            var entity = await GetByIdAsync(id);
+            if (entity == null)
+            {
+                throw new NotFoundException("Request", id);
+            }
+
+            entity.Metadata = metadata;
+            await UpdateAsync(entity);
+            
+            _logger.LogInformation("Updated metadata for request {RequestNumber}", entity.RequestNumber);
         }
     }
 }

@@ -161,10 +161,36 @@
                     </div>
                 </div>
 
-                <!-- Poznámky a vstupy -->
+                <!-- Rychlá poznámka -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Poznámky a vstupy</h3>
+                        <h3 class="card-title">
+                            <i class="fas fa-sticky-note"></i> Poznámka k požadavku
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="maximize">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="quickNote" 
+                                  class="form-control" 
+                                  rows="4" 
+                                  placeholder="Sem můžete psát poznámky k tomuto požadavku. Automaticky se uloží při opuštění pole..."
+                                  data-request-id="@Model.Id">@Model.Metadata</textarea>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> Poznámka se automaticky uloží při opuštění pole
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Historie průběhu požadavku -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-history"></i> Historie průběhu požadavku
+                        </h3>
                     </div>
                     <div class="card-body">
                         <!-- Formulář pro přidání poznámky -->
@@ -284,6 +310,58 @@
             $('#addNoteForm').submit(function(e) {
                 e.preventDefault();
                 addNote();
+            });
+            
+            // Auto-save rychlé poznámky
+            let saveTimeout;
+            let originalNote = $('#quickNote').val();
+            
+            $('#quickNote').on('blur', function() {
+                const currentNote = $(this).val();
+                const requestId = $(this).data('request-id');
+                
+                // Uložit pouze pokud se změnila
+                if (currentNote !== originalNote) {
+                    $.ajax({
+                        url: `/api/requestsapi/${requestId}/metadata`,
+                        method: 'PUT',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ metadata: currentNote }),
+                        success: function() {
+                            toastr.success('Poznámka byla uložena');
+                            originalNote = currentNote;
+                        },
+                        error: function() {
+                            toastr.error('Nepodařilo se uložit poznámku');
+                        }
+                    });
+                }
+            });
+            
+            // Debounce při psaní
+            $('#quickNote').on('input', function() {
+                clearTimeout(saveTimeout);
+                const currentNote = $(this).val();
+                const requestId = $(this).data('request-id');
+                
+                // Uložit po 2 sekundách nečinnosti
+                saveTimeout = setTimeout(function() {
+                    if (currentNote !== originalNote) {
+                        $.ajax({
+                            url: `/api/requestsapi/${requestId}/metadata`,
+                            method: 'PUT',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ metadata: currentNote }),
+                            success: function() {
+                                toastr.success('Poznámka byla uložena');
+                                originalNote = currentNote;
+                            },
+                            error: function() {
+                                toastr.error('Nepodařilo se uložit poznámku');
+                            }
+                        });
+                    }
+                }, 2000);
             });
         });
 
@@ -688,3 +766,4 @@
         _ => "circle"
     };
 }
+

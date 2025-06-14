@@ -287,10 +287,33 @@ namespace OptimalyAI.Controllers
             var executions = await _executionService.GetActiveExecutionsAsync();
             return Ok(executions, "Active executions retrieved successfully");
         }
+
+        /// <summary>
+        /// Update request metadata
+        /// </summary>
+        [HttpPut("{id}/metadata")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), 200)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> UpdateMetadata(int id, [FromBody] UpdateMetadataDto dto)
+        {
+            var request = await _requestService.GetByIdAsync(id);
+            if (request == null)
+            {
+                return NotFound($"Request with ID {id} not found");
+            }
+
+            await _requestService.UpdateMetadataAsync(id, dto.Metadata);
+            return Ok(true, "Metadata updated successfully");
+        }
     }
 
     public class CancelRequestDto
     {
         public string Reason { get; set; }
+    }
+
+    public class UpdateMetadataDto
+    {
+        public string Metadata { get; set; } = "";
     }
 }
