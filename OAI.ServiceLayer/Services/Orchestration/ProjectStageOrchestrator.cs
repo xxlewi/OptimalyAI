@@ -5,6 +5,7 @@ using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
 using OAI.ServiceLayer.Services.Orchestration.Base;
+using OAI.ServiceLayer.Services.Orchestration.Exceptions;
 using System.Text.Json;
 
 namespace OAI.ServiceLayer.Services.Orchestration
@@ -97,7 +98,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                         break;
                         
                     default:
-                        throw new NotSupportedException($"Orchestrator type '{stage.OrchestratorType}' is not supported");
+                        throw new UnsupportedOrchestratorTypeException(stage.Id.ToString(), stage.Name, request.ExecutionId, stage.OrchestratorType);
                 }
 
                 // Execute ReAct agent if configured
@@ -150,10 +151,12 @@ namespace OAI.ServiceLayer.Services.Orchestration
                     : stage.Description
             };
 
-            var conversationResult = await _conversationOrchestrator.ExecuteAsync(
-                conversationRequest, context, cancellationToken);
+            try
+            {
+                var conversationResult = await _conversationOrchestrator.ExecuteAsync(
+                    conversationRequest, context, cancellationToken);
 
-            if (conversationResult.IsSuccess && conversationResult.Data != null)
+                if (conversationResult.IsSuccess && conversationResult.Data != null)
             {
                 response.OutputData["response"] = conversationResult.Data.Response ?? "";
                 response.OutputData["modelId"] = conversationResult.Data.ModelId ?? "";
@@ -178,6 +181,25 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 // Add to parent response
                 response.ToolsUsed.AddRange(conversationResult.Data.ToolsUsed);
             }
+            else
+            {
+                throw new ChildOrchestratorExecutionException(
+                    stage.Id.ToString(), stage.Name, request.ExecutionId, 
+                    "ConversationOrchestrator", conversationRequest.ConversationId, 
+                    conversationResult.Error?.Message ?? "Unknown error");
+            }
+            }
+            catch (ChildOrchestratorExecutionException)
+            {
+                throw; // Re-throw our specific exceptions
+            }
+            catch (Exception ex)
+            {
+                throw new ChildOrchestratorExecutionException(
+                    stage.Id.ToString(), stage.Name, request.ExecutionId, 
+                    "ConversationOrchestrator", conversationRequest.ConversationId, 
+                    ex.Message, ex);
+            }
         }
 
         private async Task ExecuteToolChainOrchestrator(
@@ -193,7 +215,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
             var stageTools = stage.StageTools.OrderBy(t => t.Order).ToList();
             if (!stageTools.Any())
             {
-                throw new InvalidOperationException($"Stage '{stage.Name}' has no tools configured");
+                throw new StageToolsNotConfiguredException(stage.Id.ToString(), stage.Name, request.ExecutionId);
             }
 
             // Build tool chain steps
@@ -226,6 +248,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                     catch (JsonException ex)
                     {
                         _logger.LogWarning(ex, "Failed to parse tool configuration for {ToolId}", stageTool.ToolId);
+                        throw new InvalidToolConfigurationException(stage.Id.ToString(), stage.Name, request.ExecutionId, stageTool.ToolId, "Invalid JSON format in tool configuration", ex);
                     }
                 }
 
@@ -243,6 +266,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                     catch (JsonException ex)
                     {
                         _logger.LogWarning(ex, "Failed to parse input mapping for {ToolId}", stageTool.ToolId);
+                        throw new InvalidInputMappingException(stage.Id.ToString(), stage.Name, request.ExecutionId, stageTool.ToolId, "Invalid JSON format in input mapping", ex);
                     }
                 }
 
@@ -269,10 +293,12 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 TimeoutSeconds = stage.TimeoutSeconds
             };
 
-            var toolChainResult = await _toolChainOrchestrator.ExecuteAsync(
-                toolChainRequest, context, cancellationToken);
+            try
+            {
+                var toolChainResult = await _toolChainOrchestrator.ExecuteAsync(
+                    toolChainRequest, context, cancellationToken);
 
-            if (toolChainResult.IsSuccess && toolChainResult.Data != null)
+                if (toolChainResult.IsSuccess && toolChainResult.Data != null)
             {
                 // Process tool results from orchestrator response
                 if (toolChainResult.Data.ToolsUsed != null)
@@ -298,6 +324,25 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
                 // Add to parent response
                 response.ToolsUsed.AddRange(toolChainResult.Data.ToolsUsed);
+            }
+            else
+            {
+                throw new ChildOrchestratorExecutionException(
+                    stage.Id.ToString(), stage.Name, request.ExecutionId, 
+                    "ToolChainOrchestrator", toolChainRequest.SessionId ?? "unknown", 
+                    toolChainResult.Error?.Message ?? "Unknown error");
+            }
+            }
+            catch (ChildOrchestratorExecutionException)
+            {
+                throw; // Re-throw our specific exceptions
+            }
+            catch (Exception ex)
+            {
+                throw new ChildOrchestratorExecutionException(
+                    stage.Id.ToString(), stage.Name, request.ExecutionId, 
+                    "ToolChainOrchestrator", toolChainRequest.SessionId ?? "unknown", 
+                    ex.Message, ex);
             }
         }
 
@@ -328,9 +373,11 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 ? obj.ToString() 
                 : $"Complete the stage: {stage.Name}";
 
-            var reActResult = await _reActAgent.ExecuteAsync(objective, context, cancellationToken);
+            try
+            {
+                var reActResult = await _reActAgent.ExecuteAsync(objective, context, cancellationToken);
 
-            if (reActResult.IsCompleted)
+                if (reActResult.IsCompleted)
             {
                 response.ReActSummary = reActResult.FinalAnswer;
                 response.OutputData["reActThoughts"] = reActResult.Thoughts.Select(t => t.Content).ToList();
@@ -342,6 +389,25 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 }).ToList();
                 response.OutputData["reActObservations"] = reActResult.Observations.Select(o => o.Content).ToList();
             }
+            else
+            {
+                throw new ReActAgentExecutionException(
+                    stage.Id.ToString(), stage.Name, request.ExecutionId, 
+                    stage.ReActAgentType, objective, 
+                    "ReAct agent did not complete successfully");
+            }
+            }
+            catch (ReActAgentExecutionException)
+            {
+                throw; // Re-throw our specific exceptions
+            }
+            catch (Exception ex)
+            {
+                throw new ReActAgentExecutionException(
+                    stage.Id.ToString(), stage.Name, request.ExecutionId, 
+                    stage.ReActAgentType, objective, 
+                    ex.Message, ex);
+            }
         }
 
         public override async Task<OrchestratorValidationResult> ValidateAsync(ProjectStageOrchestratorRequest request)
@@ -352,30 +418,97 @@ namespace OAI.ServiceLayer.Services.Orchestration
             if (request == null)
             {
                 errors.Add("Request cannot be null");
+                validationResult.IsValid = false;
+                validationResult.Errors = errors;
+                return await Task.FromResult(validationResult);
+            }
+
+            if (request.Stage == null)
+            {
+                errors.Add("Stage cannot be null");
             }
             else
             {
-                if (request.Stage == null)
+                // Validate stage basic properties
+                if (string.IsNullOrEmpty(request.Stage.OrchestratorType))
                 {
-                    errors.Add("Stage cannot be null");
+                    errors.Add("Stage must have an orchestrator type");
                 }
                 else
                 {
-                    if (string.IsNullOrEmpty(request.Stage.OrchestratorType))
+                    // Validate supported orchestrator types
+                    var supportedTypes = new[] { "ConversationOrchestrator", "ToolChainOrchestrator", "CustomOrchestrator" };
+                    if (!supportedTypes.Contains(request.Stage.OrchestratorType))
                     {
-                        errors.Add("Stage must have an orchestrator type");
+                        errors.Add($"Unsupported orchestrator type: {request.Stage.OrchestratorType}");
                     }
-                    if (!request.Stage.StageTools.Any() && string.IsNullOrEmpty(request.Stage.ReActAgentType))
+                }
+
+                // Validate stage has execution strategy
+                if (!request.Stage.StageTools.Any() && string.IsNullOrEmpty(request.Stage.ReActAgentType))
+                {
+                    errors.Add("Stage must have either tools or a ReAct agent");
+                }
+
+                // Validate execution ID
+                if (string.IsNullOrEmpty(request.ExecutionId))
+                {
+                    errors.Add("ExecutionId is required");
+                }
+
+                // Validate stage tools configuration for ToolChainOrchestrator
+                if (request.Stage.OrchestratorType == "ToolChainOrchestrator" && request.Stage.StageTools.Any())
+                {
+                    foreach (var stageTool in request.Stage.StageTools)
                     {
-                        errors.Add("Stage must have either tools or a ReAct agent");
+                        if (string.IsNullOrEmpty(stageTool.ToolId))
+                        {
+                            errors.Add($"Tool at order {stageTool.Order} has empty ToolId");
+                        }
+
+                        // Validate tool configuration JSON
+                        if (!string.IsNullOrEmpty(stageTool.Configuration))
+                        {
+                            try
+                            {
+                                JsonDocument.Parse(stageTool.Configuration);
+                            }
+                            catch (JsonException)
+                            {
+                                errors.Add($"Tool {stageTool.ToolId} has invalid JSON configuration");
+                            }
+                        }
+
+                        // Validate input mapping JSON
+                        if (!string.IsNullOrEmpty(stageTool.InputMapping))
+                        {
+                            try
+                            {
+                                JsonSerializer.Deserialize<Dictionary<string, string>>(stageTool.InputMapping);
+                            }
+                            catch (JsonException)
+                            {
+                                errors.Add($"Tool {stageTool.ToolId} has invalid input mapping JSON");
+                            }
+                        }
                     }
+                }
+
+                // Validate timeout
+                if (request.Stage.TimeoutSeconds <= 0)
+                {
+                    errors.Add("Stage timeout must be greater than 0");
                 }
             }
 
+            // If validation fails, throw specific exception
             if (errors.Any())
             {
-                validationResult.IsValid = false;
-                validationResult.Errors = errors;
+                var stageId = request.Stage?.Id.ToString() ?? "unknown";
+                var stageName = request.Stage?.Name ?? "unknown";
+                var executionId = request.ExecutionId ?? "unknown";
+                
+                throw new StageValidationException(stageId, stageName, executionId, errors);
             }
 
             return await Task.FromResult(validationResult);

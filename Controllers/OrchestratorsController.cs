@@ -39,50 +39,17 @@ namespace OptimalyAI.Controllers
         {
             var orchestrators = new List<OrchestratorViewModel>();
             
-            // Try to get ConversationOrchestrator directly from DI
-            var conversationOrchestrator = _serviceProvider.GetService<IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto>>();
-            if (conversationOrchestrator != null)
-            {
-                _logger.LogInformation("Found ConversationOrchestrator in DI");
-                
-                var orchestratorId = "conversation_orchestrator";
-                var orchestratorName = "Conversation Orchestrator";
-                var orchestratorDescription = "Orchestrates conversations between AI models and tools";
-                
-                if (conversationOrchestrator is OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator concreteOrch)
-                {
-                    orchestratorId = concreteOrch.Id;
-                    orchestratorName = concreteOrch.Name;
-                    orchestratorDescription = concreteOrch.Description;
-                }
-                
-                // Get metrics
-                var summary = await _metrics.GetOrchestratorSummaryAsync(orchestratorId);
-                
-                orchestrators.Add(new OrchestratorViewModel
-                {
-                    Id = orchestratorId,
-                    Name = orchestratorName,
-                    Description = orchestratorDescription,
-                    Type = "ConversationOrchestrator",
-                    IsActive = true,
-                    TotalExecutions = summary?.TotalExecutions ?? 0,
-                    SuccessfulExecutions = summary?.SuccessfulExecutions ?? 0,
-                    FailedExecutions = summary?.FailedExecutions ?? 0,
-                    AverageExecutionTime = summary?.AverageExecutionTime ?? TimeSpan.Zero,
-                    LastExecutionTime = summary?.LastExecutionTime,
-                    Metrics = summary
-                });
-            }
-            else
-            {
-                _logger.LogWarning("ConversationOrchestrator not found in DI");
-            }
+            // This was causing duplicate ConversationOrchestrator entries - removed
+            // All orchestrators will be loaded via reflection below
             
             // Get all registered orchestrators
             var orchestratorTypes = GetAllOrchestratorTypes();
             
             _logger.LogInformation("Found {Count} orchestrator types via reflection", orchestratorTypes.Count);
+            foreach(var type in orchestratorTypes)
+            {
+                _logger.LogInformation("Found orchestrator type: {Type}", type.FullName);
+            }
             
             foreach (var orchestratorType in orchestratorTypes)
             {
@@ -103,8 +70,8 @@ namespace OptimalyAI.Controllers
                     string orchestratorName = "Unknown";
                     string orchestratorDescription = "";
                     
-                    // Check if it's ConversationOrchestrator
-                    if (orchestrator is OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator conversationOrch)
+                    // Check if it's RefactoredConversationOrchestrator
+                    if (orchestrator is OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator conversationOrch)
                     {
                         orchestratorId = conversationOrch.Id;
                         orchestratorName = conversationOrch.Name;
@@ -291,6 +258,10 @@ namespace OptimalyAI.Controllers
             else if (orchestratorType.Name.Contains("Project"))
             {
                 return View("~/Views/Orchestrators/TestProject.cshtml");
+            }
+            else if (orchestratorType.Name.Contains("WebScraping"))
+            {
+                return View("~/Views/Orchestrators/TestToolChain.cshtml"); // Use ToolChain test view for now
             }
             
             // Default test view
