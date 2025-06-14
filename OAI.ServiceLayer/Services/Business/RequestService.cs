@@ -176,7 +176,26 @@ namespace OAI.ServiceLayer.Services.Business
                 throw new NotFoundException("Request", id);
             }
 
-            return _mapper.ToDto(entity);
+            var dto = _mapper.ToDto(entity);
+            
+            // Load customer name if ClientId exists
+            if (!string.IsNullOrEmpty(dto.ClientId))
+            {
+                try
+                {
+                    var customer = await _customerService.GetByIdAsync(Guid.Parse(dto.ClientId));
+                    if (customer != null)
+                    {
+                        dto.ClientName = customer.Name;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load customer name for request {RequestId} with ClientId {ClientId}", id, dto.ClientId);
+                }
+            }
+
+            return dto;
         }
 
         public async Task<IEnumerable<RequestDto>> GetRequestsByStatusAsync(RequestStatus status)
