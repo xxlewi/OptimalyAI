@@ -14,30 +14,25 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
     /// <summary>
     /// Jina Reader tool for converting web pages to markdown
     /// </summary>
-    public class JinaReaderTool : ITool
+    public class JinaReaderTool : WebToolBase
     {
-        private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
-        private readonly ILogger<JinaReaderTool> _logger;
-        private readonly List<IToolParameter> _parameters;
         private readonly string _readerUrl;
         private readonly string _searchUrl;
 
-        public string Id => "jina_reader";
-        public string Name => "Jina AI Reader";
-        public string Description => "Converts any webpage or PDF into clean, LLM-ready markdown format using Jina AI Reader API";
-        public string Version => "1.0.0";
-        public string Category => "Data Extraction";
-        public bool IsEnabled => true;
-        public IReadOnlyList<IToolParameter> Parameters => _parameters.AsReadOnly();
+        public override string Id => "jina_reader";
+        public override string Name => "Jina AI Reader";
+        public override string Description => "Converts any webpage or PDF into clean, LLM-ready markdown format using Jina AI Reader API";
+        public override string Version => "1.0.0";
+        public override string Category => "Data Extraction";
+        public override bool IsEnabled => true;
 
         public JinaReaderTool(
             ILogger<JinaReaderTool> logger,
             HttpClient httpClient,
             IConfiguration configuration)
+            : base(logger, httpClient)
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             
             _readerUrl = configuration["WebScrapingSettings:JinaReader:ReaderUrl"] 
@@ -45,28 +40,15 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
             _searchUrl = configuration["WebScrapingSettings:JinaReader:SearchUrl"] 
                 ?? "https://s.jina.ai/";
             
-            _parameters = new List<IToolParameter>();
             InitializeParameters();
         }
 
         private void InitializeParameters()
         {
-            _parameters.Add(new SimpleToolParameter
-            {
-                Name = "url",
-                DisplayName = "URL",
-                Description = "The URL to convert to markdown",
-                Type = ToolParameterType.String,
-                IsRequired = true,
-                UIHints = new ParameterUIHints
-                {
-                    InputType = ParameterInputType.Text,
-                    Placeholder = "https://example.com",
-                    HelpText = "Enter the URL you want to convert"
-                }
-            });
+            AddParameter(CreateUrlParameter(
+                "url", "URL", "The URL to convert to markdown", true, "https://example.com"));
 
-            _parameters.Add(new SimpleToolParameter
+            AddParameter(new SimpleToolParameter
             {
                 Name = "mode",
                 DisplayName = "Mode",
@@ -85,7 +67,7 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                 }
             });
 
-            _parameters.Add(new SimpleToolParameter
+            AddParameter(new SimpleToolParameter
             {
                 Name = "format",
                 DisplayName = "Output Format",
@@ -103,201 +85,217 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                     HelpText = "Choose the output format"
                 }
             });
+
+            AddParameter(new SimpleToolParameter
+            {
+                Name = "includeImages",
+                DisplayName = "Include Images",
+                Description = "Whether to include image descriptions in the output",
+                Type = ToolParameterType.Boolean,
+                IsRequired = false,
+                DefaultValue = true,
+                UIHints = new ParameterUIHints
+                {
+                    InputType = ParameterInputType.Checkbox,
+                    HelpText = "Include descriptions of images found on the page"
+                }
+            });
         }
 
-        public async Task<ToolValidationResult> ValidateParametersAsync(Dictionary<string, object> parameters)
+        protected override async Task PerformCustomWebValidationAsync(
+            Dictionary<string, object> parameters, 
+            ToolValidationResult result)
         {
-            var result = new ToolValidationResult { IsValid = true };
-
-            // Validate required parameters
-            if (!parameters.ContainsKey("url") || string.IsNullOrWhiteSpace(parameters["url"]?.ToString()))
+            // Validate mode parameter
+            var mode = GetParameter<string>(parameters, "mode", "reader");
+            if (!ToolParameterValidators.ValidateAllowedValues(
+                mode, "mode", new[] { "reader", "search" }, out var modeError))
             {
                 result.IsValid = false;
-                result.Errors.Add("URL is required");
-                result.FieldErrors["url"] = "URL is required and cannot be empty";
-            }
-            else if (parameters["mode"]?.ToString() == "reader")
-            {
-                var url = parameters["url"].ToString();
-                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || 
-                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                {
-                    result.IsValid = false;
-                    result.Errors.Add("Invalid URL format");
-                    result.FieldErrors["url"] = "Please provide a valid HTTP or HTTPS URL";
-                }
+                result.Errors.Add(modeError);
+                result.FieldErrors["mode"] = modeError;
             }
 
-            // Validate mode
-            if (parameters.ContainsKey("mode"))
+            // Validate format parameter
+            var format = GetParameter<string>(parameters, "format", "markdown");
+            if (!ToolParameterValidators.ValidateAllowedValues(
+                format, "format", new[] { "markdown", "html", "text" }, out var formatError))
             {
-                var mode = parameters["mode"].ToString();
-                if (mode != "reader" && mode != "search")
-                {
-                    result.IsValid = false;
-                    result.Errors.Add("Invalid mode value");
-                    result.FieldErrors["mode"] = "Mode must be either 'reader' or 'search'";
-                }
+                result.IsValid = false;
+                result.Errors.Add(formatError);
+                result.FieldErrors["format"] = formatError;
             }
 
-            return result;
+            await Task.CompletedTask;
         }
 
-        public async Task<IToolResult> ExecuteAsync(Dictionary<string, object> parameters, CancellationToken cancellationToken = default)
+        protected override async Task<IToolResult> ExecuteWebOperationAsync(
+            Dictionary<string, object> parameters, 
+            CancellationToken cancellationToken)
         {
             var executionId = Guid.NewGuid().ToString();
             var startTime = DateTime.UtcNow;
 
+            // Extract parameters
+            var url = GetParameter<string>(parameters, "url");
+            var mode = GetParameter<string>(parameters, "mode", "reader");
+            var format = GetParameter<string>(parameters, "format", "markdown");
+            var includeImages = GetParameter<bool>(parameters, "includeImages", true);
+
+            Logger.LogInformation(
+                "Processing URL with Jina AI {Mode}: {Url} in {Format} format",
+                mode, url, format);
+
             try
             {
-                // Validate parameters
-                var validationResult = await ValidateParametersAsync(parameters);
-                if (!validationResult.IsValid)
-                {
-                    return new ToolResult
-                    {
-                        ExecutionId = executionId,
-                        ToolId = Id,
-                        IsSuccess = false,
-                        Error = new ToolError
-                        {
-                            Code = "ValidationError",
-                            Message = string.Join("; ", validationResult.Errors),
-                            Type = ToolErrorType.ValidationError
-                        },
-                        StartedAt = startTime,
-                        CompletedAt = DateTime.UtcNow,
-                        Duration = DateTime.UtcNow - startTime,
-                        ExecutionParameters = parameters
-                    };
-                }
+                IToolResult result;
 
-                var url = parameters["url"].ToString();
-                var mode = parameters.ContainsKey("mode") ? parameters["mode"].ToString() : "reader";
-                var format = parameters.ContainsKey("format") ? parameters["format"].ToString() : "markdown";
-
-                _logger.LogInformation($"Processing URL with Jina: {url} in {mode} mode");
-
-                string endpoint;
                 if (mode == "search")
                 {
-                    endpoint = $"{_searchUrl}{Uri.EscapeDataString(url)}";
+                    result = await ProcessSearchMode(url, format, includeImages, executionId, startTime, parameters, cancellationToken);
                 }
                 else
                 {
-                    endpoint = $"{_readerUrl}{url}";
+                    result = await ProcessReaderMode(url, format, includeImages, executionId, startTime, parameters, cancellationToken);
                 }
 
-                // Add headers for format
-                var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
-                if (format == "html")
-                {
-                    request.Headers.Add("Accept", "text/html");
-                }
-                else if (format == "text")
-                {
-                    request.Headers.Add("Accept", "text/plain");
-                }
-                // Default is markdown, no special header needed
-
-                var response = await _httpClient.SendAsync(request, cancellationToken);
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    var content = await response.Content.ReadAsStringAsync();
-                    
-                    return new ToolResult
-                    {
-                        ExecutionId = executionId,
-                        ToolId = Id,
-                        IsSuccess = true,
-                        Data = new
-                        {
-                            url = url,
-                            content = content,
-                            format = format,
-                            mode = mode,
-                            contentLength = content.Length,
-                            timestamp = DateTime.UtcNow
-                        },
-                        StartedAt = startTime,
-                        CompletedAt = DateTime.UtcNow,
-                        Duration = DateTime.UtcNow - startTime,
-                        ExecutionParameters = parameters,
-                        Metadata = new Dictionary<string, object>
-                        {
-                            ["processed_url"] = url,
-                            ["output_format"] = format,
-                            ["processing_mode"] = mode,
-                            ["content_length"] = content.Length
-                        }
-                    };
-                }
-
-                var errorContent = await response.Content.ReadAsStringAsync();
-                return new ToolResult
-                {
-                    ExecutionId = executionId,
-                    ToolId = Id,
-                    IsSuccess = false,
-                    Error = new ToolError
-                    {
-                        Code = "ProcessingFailed",
-                        Message = $"Failed to process URL: {response.StatusCode}",
-                        Details = errorContent,
-                        Type = ToolErrorType.ExternalServiceError
-                    },
-                    StartedAt = startTime,
-                    CompletedAt = DateTime.UtcNow,
-                    Duration = DateTime.UtcNow - startTime,
-                    ExecutionParameters = parameters
-                };
+                return result;
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "HTTP error during Jina processing");
-                return new ToolResult
-                {
-                    ExecutionId = executionId,
-                    ToolId = Id,
-                    IsSuccess = false,
-                    Error = new ToolError
-                    {
-                        Code = "NetworkError",
-                        Message = $"Network error: {ex.Message}",
-                        Type = ToolErrorType.ExternalServiceError,
-                        Exception = ex
-                    },
-                    StartedAt = startTime,
-                    CompletedAt = DateTime.UtcNow,
-                    Duration = DateTime.UtcNow - startTime,
-                    ExecutionParameters = parameters
-                };
+                Logger.LogError(ex, "HTTP error during Jina AI operation");
+                return ToolResultFactory.CreateExceptionError(
+                    Id, executionId, startTime, ex, parameters, ToolErrorCodes.NetworkError);
             }
-            catch (Exception ex)
+            catch (TaskCanceledException ex)
             {
-                _logger.LogError(ex, "Error during Jina processing");
-                return new ToolResult
-                {
-                    ExecutionId = executionId,
-                    ToolId = Id,
-                    IsSuccess = false,
-                    Error = new ToolError
-                    {
-                        Code = "ExecutionError",
-                        Message = $"Processing failed: {ex.Message}",
-                        Type = ToolErrorType.InternalError,
-                        Exception = ex
-                    },
-                    StartedAt = startTime,
-                    CompletedAt = DateTime.UtcNow,
-                    Duration = DateTime.UtcNow - startTime,
-                    ExecutionParameters = parameters
-                };
+                Logger.LogWarning("Jina AI operation was cancelled or timed out");
+                return ToolResultFactory.CreateExceptionError(
+                    Id, executionId, startTime, ex, parameters, ToolErrorCodes.TimeoutError);
             }
         }
 
-        public ToolCapabilities GetCapabilities()
+        private async Task<IToolResult> ProcessReaderMode(
+            string url, string format, bool includeImages, string executionId, DateTime startTime,
+            Dictionary<string, object> parameters, CancellationToken cancellationToken)
+        {
+            // Build the Jina Reader URL
+            var jinaUrl = BuildJinaReaderUrl(url, format, includeImages);
+
+            Logger.LogDebug("Calling Jina Reader API: {JinaUrl}", jinaUrl);
+
+            var response = await HttpClient.GetAsync(jinaUrl, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                return ToolResultFactory.CreateCustomError(
+                    Id, executionId, startTime,
+                    ToolErrorCodes.ExecutionError,
+                    "Jina Reader processing failed",
+                    $"HTTP {response.StatusCode}: {errorContent}",
+                    parameters);
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+
+            var result = new
+            {
+                originalUrl = url,
+                processedUrl = jinaUrl,
+                mode = "reader",
+                format = format,
+                includeImages = includeImages,
+                content = content,
+                contentLength = content.Length,
+                metadata = new
+                {
+                    processingTime = DateTime.UtcNow - startTime,
+                    provider = "Jina AI Reader",
+                    responseHeaders = response.Headers.ToDictionary(h => h.Key, h => string.Join(", ", h.Value))
+                }
+            };
+
+            Logger.LogInformation("Jina Reader processing completed for {Url}. Content length: {Length} characters", 
+                url, content.Length);
+
+            return ToolResultFactory.CreateSuccess(Id, executionId, startTime, result, parameters);
+        }
+
+        private async Task<IToolResult> ProcessSearchMode(
+            string url, string format, bool includeImages, string executionId, DateTime startTime,
+            Dictionary<string, object> parameters, CancellationToken cancellationToken)
+        {
+            // For search mode, we treat the URL as a search query
+            var searchQuery = Uri.EscapeDataString(url);
+            var jinaSearchUrl = $"{_searchUrl}{searchQuery}";
+
+            Logger.LogDebug("Calling Jina Search API: {JinaSearchUrl}", jinaSearchUrl);
+
+            var response = await HttpClient.GetAsync(jinaSearchUrl, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                return ToolResultFactory.CreateCustomError(
+                    Id, executionId, startTime,
+                    ToolErrorCodes.ExecutionError,
+                    "Jina Search processing failed",
+                    $"HTTP {response.StatusCode}: {errorContent}",
+                    parameters);
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+
+            var result = new
+            {
+                searchQuery = url,
+                processedUrl = jinaSearchUrl,
+                mode = "search",
+                format = format,
+                content = content,
+                contentLength = content.Length,
+                metadata = new
+                {
+                    processingTime = DateTime.UtcNow - startTime,
+                    provider = "Jina AI Search",
+                    responseHeaders = response.Headers.ToDictionary(h => h.Key, h => string.Join(", ", h.Value))
+                }
+            };
+
+            Logger.LogInformation("Jina Search processing completed for query: {Query}. Content length: {Length} characters", 
+                url, content.Length);
+
+            return ToolResultFactory.CreateSuccess(Id, executionId, startTime, result, parameters);
+        }
+
+        private string BuildJinaReaderUrl(string url, string format, bool includeImages)
+        {
+            var jinaUrl = _readerUrl + Uri.EscapeDataString(url);
+
+            var queryParams = new List<string>();
+
+            // Add format parameter if not markdown (default)
+            if (format != "markdown")
+            {
+                queryParams.Add($"format={format}");
+            }
+
+            // Add image processing parameter
+            if (!includeImages)
+            {
+                queryParams.Add("no-images=true");
+            }
+
+            if (queryParams.Any())
+            {
+                jinaUrl += "?" + string.Join("&", queryParams);
+            }
+
+            return jinaUrl;
+        }
+
+        public override ToolCapabilities GetCapabilities()
         {
             return new ToolCapabilities
             {
@@ -305,59 +303,52 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                 SupportsCancel = true,
                 RequiresAuthentication = false,
                 MaxExecutionTimeSeconds = 60,
-                MaxInputSizeBytes = 10 * 1024, // 10 KB for URL
+                MaxInputSizeBytes = 2048, // 2 KB for URL
                 MaxOutputSizeBytes = 5 * 1024 * 1024, // 5 MB for content
                 SupportedFormats = new List<string> { "markdown", "html", "text" },
                 CustomCapabilities = new Dictionary<string, object>
                 {
-                    ["supports_pdf"] = true,
-                    ["supports_javascript_rendering"] = true,
-                    ["supports_web_search"] = true,
-                    ["free_api"] = true,
-                    ["no_api_key_required"] = true
+                    ["supports_pdf_conversion"] = true,
+                    ["supports_webpage_conversion"] = true,
+                    ["supports_image_descriptions"] = true,
+                    ["supports_search_mode"] = true,
+                    ["output_formats"] = new[] { "markdown", "html", "text" }
                 }
             };
         }
 
-        public async Task<ToolHealthStatus> GetHealthStatusAsync()
+        protected override async Task PerformWebSpecificHealthCheckAsync()
         {
+            // Test Reader API
+            var testUrl = "https://example.com";
+            var jinaUrl = BuildJinaReaderUrl(testUrl, "text", false);
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            
             try
             {
-                // Try a simple HEAD request to check connectivity
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var response = await _httpClient.SendAsync(
-                    new HttpRequestMessage(HttpMethod.Head, $"{_readerUrl}https://example.com"), 
-                    cts.Token);
-                
-                return new ToolHealthStatus
+                var response = await HttpClient.GetAsync(jinaUrl, cts.Token);
+                if (!response.IsSuccessStatusCode)
                 {
-                    State = response.IsSuccessStatusCode ? HealthState.Healthy : HealthState.Degraded,
-                    Message = response.IsSuccessStatusCode 
-                        ? "Jina AI Reader is accessible" 
-                        : $"Jina AI returned status {response.StatusCode}",
-                    LastChecked = DateTime.UtcNow,
-                    Details = new Dictionary<string, object>
-                    {
-                        ["statusCode"] = (int)response.StatusCode,
-                        ["readerUrl"] = _readerUrl,
-                        ["searchUrl"] = _searchUrl
-                    }
-                };
+                    throw new InvalidOperationException($"Jina Reader API is not accessible: {response.StatusCode}");
+                }
             }
-            catch (Exception ex)
+            catch (TaskCanceledException)
             {
-                _logger.LogError(ex, "Error checking Jina AI health");
-                return new ToolHealthStatus
-                {
-                    State = HealthState.Unhealthy,
-                    Message = $"Health check failed: {ex.Message}",
-                    LastChecked = DateTime.UtcNow,
-                    Details = new Dictionary<string, object>
-                    {
-                        ["error"] = ex.Message,
-                        ["type"] = ex.GetType().Name
-                    }
-                };
+                throw new InvalidOperationException("Jina Reader API health check timed out");
+            }
+
+            // Test Search API
+            var searchUrl = $"{_searchUrl}test";
+            try
+            {
+                using var searchCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var searchResponse = await HttpClient.GetAsync(searchUrl, searchCts.Token);
+                // Search API may return different status codes, so we just check if it's reachable
+            }
+            catch (TaskCanceledException)
+            {
+                throw new InvalidOperationException("Jina Search API health check timed out");
             }
         }
     }

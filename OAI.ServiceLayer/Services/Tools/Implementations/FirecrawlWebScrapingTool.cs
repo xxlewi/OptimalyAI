@@ -16,31 +16,26 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
     /// <summary>
     /// Advanced web scraping tool using Firecrawl API
     /// </summary>
-    public class FirecrawlWebScrapingTool : ITool
+    public class FirecrawlWebScrapingTool : WebToolBase
     {
-        private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
-        private readonly ILogger<FirecrawlWebScrapingTool> _logger;
         private readonly string _firecrawlApiKey;
         private readonly string _firecrawlApiUrl;
-        private readonly List<IToolParameter> _parameters;
 
-        public string Id => "firecrawl_web_scraping";
-        public string Name => "Flexible Web Scraping 🕷️";
-        public string Description => "Advanced web scraping tool that can extract any content based on natural language instructions using Firecrawl API";
-        public string Version => "1.0.0";
-        public string Category => "Data Extraction";
-        public bool IsEnabled => true;
-        public IReadOnlyList<IToolParameter> Parameters => _parameters.AsReadOnly();
+        public override string Id => "firecrawl_web_scraping";
+        public override string Name => "Flexible Web Scraping 🕷️";
+        public override string Description => "Advanced web scraping tool that can extract any content based on natural language instructions using Firecrawl API";
+        public override string Version => "1.0.0";
+        public override string Category => "Data Extraction";
+        public override bool IsEnabled => true;
 
         public FirecrawlWebScrapingTool(
             ILogger<FirecrawlWebScrapingTool> logger,
             HttpClient httpClient,
             IConfiguration configuration)
+            : base(logger, httpClient)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             
             _firecrawlApiKey = configuration["WebScrapingSettings:Firecrawl:ApiKey"] 
                 ?? configuration["FirecrawlApiKey"] 
@@ -48,43 +43,20 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
             _firecrawlApiUrl = configuration["WebScrapingSettings:Firecrawl:ApiUrl"] 
                 ?? "https://api.firecrawl.dev/v0";
             
-            _parameters = new List<IToolParameter>();
             InitializeParameters();
         }
 
         private void InitializeParameters()
         {
-            _parameters.Add(new SimpleToolParameter
-            {
-                Name = "url",
-                DisplayName = "URL",
-                Description = "The URL to scrape",
-                Type = ToolParameterType.String,
-                IsRequired = true,
-                UIHints = new ParameterUIHints
-                {
-                    InputType = ParameterInputType.Text,
-                    Placeholder = "https://example.com",
-                    HelpText = "Enter the URL you want to scrape"
-                }
-            });
+            AddParameter(CreateUrlParameter(
+                "url", "URL", "The URL to scrape", true, "https://example.com"));
 
-            _parameters.Add(new SimpleToolParameter
-            {
-                Name = "instruction",
-                DisplayName = "Extraction Instruction",
-                Description = "Natural language instruction describing what to extract (e.g., 'find all product prices', 'extract contact information', 'get all images')",
-                Type = ToolParameterType.String,
-                IsRequired = true,
-                UIHints = new ParameterUIHints
-                {
-                    InputType = ParameterInputType.TextArea,
-                    Placeholder = "Extract all product prices and their descriptions",
-                    HelpText = "Describe what information you want to extract from the webpage"
-                }
-            });
+            AddParameter(CreateInstructionParameter(
+                "instruction", "Extraction Instruction", 
+                "Natural language instruction describing what to extract (e.g., 'find all product prices', 'extract contact information', 'get all images')",
+                true));
 
-            _parameters.Add(new SimpleToolParameter
+            AddParameter(new SimpleToolParameter
             {
                 Name = "mode",
                 DisplayName = "Scraping Mode",
@@ -103,7 +75,7 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                 }
             });
 
-            _parameters.Add(new SimpleToolParameter
+            AddParameter(new SimpleToolParameter
             {
                 Name = "outputFormat",
                 DisplayName = "Output Format",
@@ -118,18 +90,18 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                 UIHints = new ParameterUIHints
                 {
                     InputType = ParameterInputType.Select,
-                    HelpText = "Choose how you want the extracted data to be formatted"
+                    HelpText = "Choose the format for extracted data"
                 }
             });
 
-            _parameters.Add(new SimpleToolParameter
+            AddParameter(new SimpleToolParameter
             {
                 Name = "maxPages",
-                DisplayName = "Maximum Pages",
-                Description = "Maximum number of pages to crawl (only for crawl mode)",
+                DisplayName = "Max Pages",
+                Description = "Maximum number of pages to crawl (only applies to crawl mode)",
                 Type = ToolParameterType.Integer,
                 IsRequired = false,
-                DefaultValue = 10,
+                DefaultValue = 5,
                 Validation = new SimpleParameterValidation
                 {
                     MinValue = 1,
@@ -138,124 +110,87 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                 UIHints = new ParameterUIHints
                 {
                     InputType = ParameterInputType.Number,
-                    HelpText = "Limit the number of pages to crawl (1-100)"
+                    Placeholder = "1-100",
+                    HelpText = "Limit the number of pages to crawl"
                 }
             });
         }
 
-        public async Task<ToolValidationResult> ValidateParametersAsync(Dictionary<string, object> parameters)
+        protected override async Task PerformCustomWebValidationAsync(
+            Dictionary<string, object> parameters, 
+            ToolValidationResult result)
         {
-            var result = new ToolValidationResult { IsValid = true };
-
-            // Validate required parameters
-            if (!parameters.ContainsKey("url") || string.IsNullOrWhiteSpace(parameters["url"]?.ToString()))
+            // Validate API key
+            if (string.IsNullOrEmpty(_firecrawlApiKey))
             {
                 result.IsValid = false;
-                result.Errors.Add("URL is required");
-                result.FieldErrors["url"] = "URL is required and cannot be empty";
-            }
-            else
-            {
-                var url = parameters["url"].ToString();
-                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || 
-                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                {
-                    result.IsValid = false;
-                    result.Errors.Add("Invalid URL format");
-                    result.FieldErrors["url"] = "Please provide a valid HTTP or HTTPS URL";
-                }
+                result.Errors.Add("Firecrawl API key is not configured");
             }
 
-            if (!parameters.ContainsKey("instruction") || string.IsNullOrWhiteSpace(parameters["instruction"]?.ToString()))
+            // Validate instruction parameter
+            if (!ToolParameterValidators.ValidateRequiredString(
+                GetParameter<string>(parameters, "instruction"), "instruction", out var instructionError))
             {
                 result.IsValid = false;
-                result.Errors.Add("Extraction instruction is required");
-                result.FieldErrors["instruction"] = "Extraction instruction is required and cannot be empty";
+                result.Errors.Add(instructionError);
+                result.FieldErrors["instruction"] = instructionError;
             }
 
-            // Validate optional parameters
-            if (parameters.ContainsKey("mode"))
+            // Validate mode parameter
+            var mode = GetParameter<string>(parameters, "mode", "single");
+            if (!ToolParameterValidators.ValidateAllowedValues(
+                mode, "mode", new[] { "single", "crawl" }, out var modeError))
             {
-                var mode = parameters["mode"].ToString();
-                if (mode != "single" && mode != "crawl")
-                {
-                    result.IsValid = false;
-                    result.Errors.Add("Invalid mode value");
-                    result.FieldErrors["mode"] = "Mode must be either 'single' or 'crawl'";
-                }
+                result.IsValid = false;
+                result.Errors.Add(modeError);
+                result.FieldErrors["mode"] = modeError;
             }
 
-            if (parameters.ContainsKey("maxPages"))
+            // Validate output format
+            var outputFormat = GetParameter<string>(parameters, "outputFormat", "markdown");
+            if (!ToolParameterValidators.ValidateAllowedValues(
+                outputFormat, "outputFormat", new[] { "markdown", "json", "structured", "screenshots" }, out var formatError))
             {
-                if (!int.TryParse(parameters["maxPages"].ToString(), out var maxPages) || maxPages < 1 || maxPages > 100)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add("Invalid maxPages value");
-                    result.FieldErrors["maxPages"] = "Max pages must be between 1 and 100";
-                }
+                result.IsValid = false;
+                result.Errors.Add(formatError);
+                result.FieldErrors["outputFormat"] = formatError;
             }
 
-            return result;
+            // Validate max pages
+            var maxPages = GetParameter<int>(parameters, "maxPages", 5);
+            if (!ToolParameterValidators.ValidateIntegerRange(
+                maxPages, "maxPages", 1, 100, out var maxPagesError))
+            {
+                result.IsValid = false;
+                result.Errors.Add(maxPagesError);
+                result.FieldErrors["maxPages"] = maxPagesError;
+            }
+
+            await Task.CompletedTask;
         }
 
-        public async Task<IToolResult> ExecuteAsync(Dictionary<string, object> parameters, CancellationToken cancellationToken = default)
+        protected override async Task<IToolResult> ExecuteWebOperationAsync(
+            Dictionary<string, object> parameters, 
+            CancellationToken cancellationToken)
         {
             var executionId = Guid.NewGuid().ToString();
             var startTime = DateTime.UtcNow;
 
+            // Extract parameters
+            var url = GetParameter<string>(parameters, "url");
+            var instruction = GetParameter<string>(parameters, "instruction");
+            var mode = GetParameter<string>(parameters, "mode", "single");
+            var outputFormat = GetParameter<string>(parameters, "outputFormat", "markdown");
+            var maxPages = GetParameter<int>(parameters, "maxPages", 5);
+
+            Logger.LogInformation(
+                "Starting Firecrawl {Mode} operation for URL: {Url} with instruction: {Instruction}",
+                mode, url, instruction);
+
             try
             {
-                // Validate parameters
-                var validationResult = await ValidateParametersAsync(parameters);
-                if (!validationResult.IsValid)
-                {
-                    return new ToolResult
-                    {
-                        ExecutionId = executionId,
-                        ToolId = Id,
-                        IsSuccess = false,
-                        Error = new ToolError
-                        {
-                            Code = "ValidationError",
-                            Message = string.Join("; ", validationResult.Errors),
-                            Type = ToolErrorType.ValidationError
-                        },
-                        StartedAt = startTime,
-                        CompletedAt = DateTime.UtcNow,
-                        Duration = DateTime.UtcNow - startTime,
-                        ExecutionParameters = parameters
-                    };
-                }
-
-                var url = parameters["url"].ToString();
-                var instruction = parameters["instruction"].ToString();
-                var mode = parameters.ContainsKey("mode") ? parameters["mode"].ToString() : "single";
-                var outputFormat = parameters.ContainsKey("outputFormat") ? parameters["outputFormat"].ToString() : "markdown";
-                var maxPages = parameters.ContainsKey("maxPages") ? Convert.ToInt32(parameters["maxPages"]) : 10;
-
-                if (string.IsNullOrEmpty(_firecrawlApiKey))
-                {
-                    return new ToolResult
-                    {
-                        ExecutionId = executionId,
-                        ToolId = Id,
-                        IsSuccess = false,
-                        Error = new ToolError
-                        {
-                            Code = "ConfigurationError",
-                            Message = "Firecrawl API key is not configured. Please add FirecrawlApiKey to appsettings.json",
-                            Type = ToolErrorType.ConfigurationError
-                        },
-                        StartedAt = startTime,
-                        CompletedAt = DateTime.UtcNow,
-                        Duration = DateTime.UtcNow - startTime,
-                        ExecutionParameters = parameters
-                    };
-                }
-
-                _logger.LogInformation($"Starting web scraping for URL: {url} with instruction: {instruction}");
-
                 IToolResult result;
+
                 if (mode == "crawl")
                 {
                     result = await CrawlWebsiteAsync(url, instruction, outputFormat, maxPages, executionId, cancellationToken);
@@ -265,340 +200,245 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                     result = await ScrapePageAsync(url, instruction, outputFormat, executionId, cancellationToken);
                 }
 
-                // Update timing information
-                if (result is ToolResult toolResult)
-                {
-                    toolResult.StartedAt = startTime;
-                    toolResult.CompletedAt = DateTime.UtcNow;
-                    toolResult.Duration = toolResult.CompletedAt - toolResult.StartedAt;
-                    toolResult.ExecutionParameters = parameters;
-                }
-                
                 return result;
             }
-            catch (Exception ex)
+            catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "Error during web scraping");
-                return new ToolResult
-                {
-                    ExecutionId = executionId,
-                    ToolId = Id,
-                    IsSuccess = false,
-                    Error = new ToolError
-                    {
-                        Code = "ExecutionError",
-                        Message = $"Web scraping failed: {ex.Message}",
-                        Type = ToolErrorType.InternalError,
-                        Exception = ex
-                    },
-                    StartedAt = startTime,
-                    CompletedAt = DateTime.UtcNow,
-                    Duration = DateTime.UtcNow - startTime,
-                    ExecutionParameters = parameters
-                };
+                Logger.LogError(ex, "HTTP error during Firecrawl operation");
+                return ToolResultFactory.CreateExceptionError(
+                    Id, executionId, startTime, ex, parameters, ToolErrorCodes.NetworkError);
+            }
+            catch (TaskCanceledException ex)
+            {
+                Logger.LogWarning("Firecrawl operation was cancelled or timed out");
+                return ToolResultFactory.CreateExceptionError(
+                    Id, executionId, startTime, ex, parameters, ToolErrorCodes.TimeoutError);
             }
         }
 
         private async Task<IToolResult> ScrapePageAsync(
-            string url, 
-            string instruction, 
-            string outputFormat,
-            string executionId,
-            CancellationToken cancellationToken)
+            string url, string instruction, string outputFormat, string executionId, CancellationToken cancellationToken)
         {
-            var endpoint = $"{_firecrawlApiUrl}/scrape";
-            
-            var requestBody = new
+            var startTime = DateTime.UtcNow;
+
+            var requestPayload = new
             {
                 url = url,
-                pageOptions = new
+                formats = new[] { outputFormat },
+                extract = new
                 {
-                    onlyMainContent = true,
-                    includeHtml = outputFormat == "structured",
-                    screenshot = outputFormat == "screenshots"
-                },
-                extractorOptions = new
-                {
-                    mode = "llm-extraction",
-                    extractionPrompt = instruction,
-                    extractionSchema = outputFormat == "json" ? GetExtractionSchema(instruction) : null
+                    schema = new
+                    {
+                        type = "object",
+                        properties = new
+                        {
+                            extractedData = new
+                            {
+                                type = "string",
+                                description = instruction
+                            }
+                        }
+                    }
                 }
             };
 
-            var response = await SendFirecrawlRequestAsync(endpoint, requestBody, cancellationToken);
-            
-            if (response.IsSuccessStatusCode)
+            var jsonContent = JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{_firecrawlApiUrl}/scrape")
             {
-                var content = await response.Content.ReadAsStringAsync();
-                var resultData = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
-                
-                return new ToolResult
-                {
-                    ExecutionId = executionId,
-                    ToolId = Id,
-                    IsSuccess = true,
-                    Data = new
-                    {
-                        url = url,
-                        extractedData = resultData?["data"] ?? content,
-                        format = outputFormat,
-                        timestamp = DateTime.UtcNow
-                    },
-                    Metadata = new Dictionary<string, object>
-                    {
-                        ["scraped_url"] = url,
-                        ["output_format"] = outputFormat,
-                        ["instruction"] = instruction
-                    }
-                };
+                Content = content
+            };
+            request.Headers.Add("Authorization", $"Bearer {_firecrawlApiKey}");
+
+            var response = await HttpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                return ToolResultFactory.CreateCustomError(
+                    Id, executionId, startTime,
+                    ToolErrorCodes.ExecutionError,
+                    "Firecrawl scraping failed",
+                    $"HTTP {response.StatusCode}: {errorContent}",
+                    new Dictionary<string, object> { ["url"] = url, ["instruction"] = instruction });
             }
 
-            var errorContent = await response.Content.ReadAsStringAsync();
-            return new ToolResult
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var responseData = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+            var result = new
             {
-                ExecutionId = executionId,
-                ToolId = Id,
-                IsSuccess = false,
-                Error = new ToolError
+                url = url,
+                instruction = instruction,
+                outputFormat = outputFormat,
+                success = responseData.GetProperty("success").GetBoolean(),
+                data = responseData.GetProperty("data"),
+                metadata = new
                 {
-                    Code = "ScrapingFailed",
-                    Message = $"Failed to scrape page: {response.StatusCode}",
-                    Details = errorContent,
-                    Type = ToolErrorType.ExternalServiceError
+                    processingTime = DateTime.UtcNow - startTime,
+                    provider = "Firecrawl",
+                    mode = "single"
                 }
             };
+
+            Logger.LogInformation("Firecrawl page scraping completed successfully for {Url}", url);
+
+            return ToolResultFactory.CreateSuccess(Id, executionId, startTime, result, 
+                new Dictionary<string, object> { ["url"] = url, ["instruction"] = instruction });
         }
 
         private async Task<IToolResult> CrawlWebsiteAsync(
-            string url, 
-            string instruction, 
-            string outputFormat, 
-            int maxPages,
-            string executionId,
-            CancellationToken cancellationToken)
+            string url, string instruction, string outputFormat, int maxPages, string executionId, CancellationToken cancellationToken)
         {
-            var endpoint = $"{_firecrawlApiUrl}/crawl";
-            
-            var requestBody = new
+            var startTime = DateTime.UtcNow;
+
+            // Start the crawl job
+            var requestPayload = new
             {
                 url = url,
-                crawlerOptions = new
+                limit = maxPages,
+                scrapeOptions = new
                 {
-                    includes = new[] { "/*" },
-                    maxCrawledLinks = maxPages,
-                    returnOnlyUrls = false
-                },
-                pageOptions = new
-                {
-                    onlyMainContent = true,
-                    includeHtml = false
-                },
-                extractorOptions = new
-                {
-                    mode = "llm-extraction",
-                    extractionPrompt = instruction
+                    formats = new[] { outputFormat },
+                    extract = new
+                    {
+                        schema = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                extractedData = new
+                                {
+                                    type = "string", 
+                                    description = instruction
+                                }
+                            }
+                        }
+                    }
                 }
             };
 
-            var response = await SendFirecrawlRequestAsync(endpoint, requestBody, cancellationToken);
-            
-            if (response.IsSuccessStatusCode)
+            var jsonContent = JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{_firecrawlApiUrl}/crawl")
             {
-                var content = await response.Content.ReadAsStringAsync();
-                var crawlData = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
-                
-                // Poll for crawl completion
-                if (crawlData?.ContainsKey("jobId") == true)
-                {
-                    var jobId = crawlData["jobId"].ToString();
-                    return await PollCrawlJobAsync(jobId, instruction, executionId, cancellationToken);
-                }
-                
-                return new ToolResult
-                {
-                    ExecutionId = executionId,
-                    ToolId = Id,
-                    IsSuccess = true,
-                    Data = new
-                    {
-                        url = url,
-                        crawledData = crawlData,
-                        format = outputFormat,
-                        pagesProcessed = maxPages,
-                        timestamp = DateTime.UtcNow
-                    },
-                    Metadata = new Dictionary<string, object>
-                    {
-                        ["crawled_url"] = url,
-                        ["max_pages"] = maxPages,
-                        ["output_format"] = outputFormat,
-                        ["instruction"] = instruction
-                    }
-                };
+                Content = content
+            };
+            request.Headers.Add("Authorization", $"Bearer {_firecrawlApiKey}");
+
+            var response = await HttpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                return ToolResultFactory.CreateCustomError(
+                    Id, executionId, startTime,
+                    ToolErrorCodes.ExecutionError,
+                    "Firecrawl crawl initiation failed",
+                    $"HTTP {response.StatusCode}: {errorContent}",
+                    new Dictionary<string, object> { ["url"] = url, ["instruction"] = instruction });
             }
 
-            var errorContent = await response.Content.ReadAsStringAsync();
-            return new ToolResult
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var responseData = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+            if (!responseData.GetProperty("success").GetBoolean())
             {
-                ExecutionId = executionId,
-                ToolId = Id,
-                IsSuccess = false,
-                Error = new ToolError
-                {
-                    Code = "CrawlFailed",
-                    Message = $"Failed to start crawl: {response.StatusCode}",
-                    Details = errorContent,
-                    Type = ToolErrorType.ExternalServiceError
-                }
-            };
+                return ToolResultFactory.CreateCustomError(
+                    Id, executionId, startTime,
+                    ToolErrorCodes.ExecutionError,
+                    "Firecrawl crawl failed",
+                    "Crawl job could not be started",
+                    new Dictionary<string, object> { ["url"] = url, ["instruction"] = instruction });
+            }
+
+            var jobId = responseData.GetProperty("jobId").GetString();
+            Logger.LogInformation("Firecrawl crawl job started with ID: {JobId}", jobId);
+
+            // Poll for results
+            return await PollCrawlJobAsync(jobId, instruction, executionId, cancellationToken);
         }
 
         private async Task<IToolResult> PollCrawlJobAsync(
-            string jobId, 
-            string instruction,
-            string executionId,
-            CancellationToken cancellationToken)
+            string jobId, string instruction, string executionId, CancellationToken cancellationToken)
         {
-            var endpoint = $"{_firecrawlApiUrl}/crawl/status/{jobId}";
+            var startTime = DateTime.UtcNow;
             var maxAttempts = 30;
-            var attempt = 0;
-            
-            while (attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
+            var delayBetweenAttempts = TimeSpan.FromSeconds(5);
+
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
             {
-                var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return ToolResultFactory.CreateCancellationError(Id, executionId, startTime,
+                        new Dictionary<string, object> { ["jobId"] = jobId });
+                }
+
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{_firecrawlApiUrl}/crawl/status/{jobId}");
+                request.Headers.Add("Authorization", $"Bearer {_firecrawlApiKey}");
+
+                var response = await HttpClient.SendAsync(request, cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Logger.LogWarning("Failed to check crawl status. Attempt {Attempt}/{MaxAttempts}", attempt + 1, maxAttempts);
+                    await Task.Delay(delayBetweenAttempts, cancellationToken);
+                    continue;
+                }
+
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var statusData = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+                var status = statusData.GetProperty("status").GetString();
                 
-                if (response.IsSuccessStatusCode)
+                if (status == "completed")
                 {
-                    var content = await response.Content.ReadAsStringAsync();
-                    var statusData = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
-                    
-                    var status = statusData?["status"]?.ToString();
-                    
-                    if (status == "completed")
+                    var result = new
                     {
-                        return new ToolResult
+                        jobId = jobId,
+                        instruction = instruction,
+                        status = "completed",
+                        data = statusData.GetProperty("data"),
+                        metadata = new
                         {
-                            ExecutionId = executionId,
-                            ToolId = Id,
-                            IsSuccess = true,
-                            Data = new
-                            {
-                                jobId = jobId,
-                                data = statusData?["data"] ?? new object(),
-                                pagesProcessed = statusData?["total"] ?? 0,
-                                instruction = instruction,
-                                timestamp = DateTime.UtcNow
-                            },
-                            Metadata = new Dictionary<string, object>
-                            {
-                                ["job_id"] = jobId,
-                                ["pages_processed"] = statusData?["total"] ?? 0,
-                                ["instruction"] = instruction
-                            }
-                        };
-                    }
-                    else if (status == "failed")
-                    {
-                        return new ToolResult
-                        {
-                            ExecutionId = executionId,
-                            ToolId = Id,
-                            IsSuccess = false,
-                            Error = new ToolError
-                            {
-                                Code = "CrawlJobFailed",
-                                Message = $"Crawl job failed: {statusData?["error"]}",
-                                Type = ToolErrorType.ExternalServiceError
-                            }
-                        };
-                    }
+                            processingTime = DateTime.UtcNow - startTime,
+                            provider = "Firecrawl",
+                            mode = "crawl",
+                            attempts = attempt + 1
+                        }
+                    };
+
+                    Logger.LogInformation("Firecrawl crawl job {JobId} completed successfully after {Attempts} attempts", 
+                        jobId, attempt + 1);
+
+                    return ToolResultFactory.CreateSuccess(Id, executionId, startTime, result,
+                        new Dictionary<string, object> { ["jobId"] = jobId, ["instruction"] = instruction });
                 }
-                
-                await Task.Delay(2000, cancellationToken);
-                attempt++;
-            }
-            
-            return new ToolResult
-            {
-                ExecutionId = executionId,
-                ToolId = Id,
-                IsSuccess = false,
-                Error = new ToolError
+                else if (status == "failed")
                 {
-                    Code = "CrawlTimeout",
-                    Message = "Crawl job timed out after 60 seconds",
-                    Type = ToolErrorType.Timeout
+                    return ToolResultFactory.CreateCustomError(
+                        Id, executionId, startTime,
+                        ToolErrorCodes.ExecutionError,
+                        "Firecrawl crawl job failed",
+                        $"Crawl job {jobId} failed",
+                        new Dictionary<string, object> { ["jobId"] = jobId });
                 }
-            };
+
+                Logger.LogDebug("Crawl job {JobId} status: {Status}. Waiting before next check...", jobId, status);
+                await Task.Delay(delayBetweenAttempts, cancellationToken);
+            }
+
+            return ToolResultFactory.CreateCustomError(
+                Id, executionId, startTime,
+                ToolErrorCodes.TimeoutError,
+                "Firecrawl crawl job timeout",
+                $"Crawl job {jobId} did not complete within the expected time",
+                new Dictionary<string, object> { ["jobId"] = jobId });
         }
 
-        private async Task<HttpResponseMessage> SendFirecrawlRequestAsync(
-            string endpoint, 
-            object requestBody,
-            CancellationToken cancellationToken)
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
-            request.Headers.Add("Authorization", $"Bearer {_firecrawlApiKey}");
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(requestBody),
-                Encoding.UTF8,
-                "application/json"
-            );
-            
-            return await _httpClient.SendAsync(request, cancellationToken);
-        }
-
-        private object GetExtractionSchema(string instruction)
-        {
-            // Dynamically generate schema based on instruction
-            if (instruction.ToLower().Contains("price"))
-            {
-                return new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        prices = new { type = "array", items = new { type = "object", properties = new { value = new { type = "string" }, currency = new { type = "string" } } } }
-                    }
-                };
-            }
-            else if (instruction.ToLower().Contains("contact"))
-            {
-                return new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        emails = new { type = "array", items = new { type = "string" } },
-                        phones = new { type = "array", items = new { type = "string" } },
-                        addresses = new { type = "array", items = new { type = "string" } }
-                    }
-                };
-            }
-            else if (instruction.ToLower().Contains("image"))
-            {
-                return new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        images = new { type = "array", items = new { type = "object", properties = new { url = new { type = "string" }, alt = new { type = "string" } } } }
-                    }
-                };
-            }
-            
-            // Default generic schema
-            return new
-            {
-                type = "object",
-                properties = new
-                {
-                    extractedData = new { type = "array", items = new { type = "object" } }
-                }
-            };
-        }
-
-        public ToolCapabilities GetCapabilities()
+        public override ToolCapabilities GetCapabilities()
         {
             return new ToolCapabilities
             {
@@ -606,74 +446,37 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                 SupportsCancel = true,
                 RequiresAuthentication = true,
                 MaxExecutionTimeSeconds = 300, // 5 minutes for crawling
-                MaxInputSizeBytes = 10 * 1024, // 10 KB for parameters
-                MaxOutputSizeBytes = 10 * 1024 * 1024, // 10 MB for scraped content
-                SupportedFormats = new List<string> { "markdown", "json", "structured", "screenshots" },
+                MaxInputSizeBytes = 10 * 1024, // 10 KB
+                MaxOutputSizeBytes = 10 * 1024 * 1024, // 10 MB
+                SupportedFormats = new List<string> { "json", "markdown", "structured" },
                 CustomCapabilities = new Dictionary<string, object>
                 {
-                    ["supports_crawling"] = true,
-                    ["supports_llm_extraction"] = true,
-                    ["supports_screenshots"] = true,
-                    ["max_crawl_pages"] = 100,
-                    ["supports_javascript_rendering"] = true
+                    ["supports_single_page"] = true,
+                    ["supports_website_crawl"] = true,
+                    ["supports_structured_extraction"] = true,
+                    ["supports_natural_language_instructions"] = true,
+                    ["max_crawl_pages"] = 100
                 }
             };
         }
 
-        public async Task<ToolHealthStatus> GetHealthStatusAsync()
+        protected override async Task PerformWebSpecificHealthCheckAsync()
         {
-            try
+            if (string.IsNullOrEmpty(_firecrawlApiKey))
             {
-                if (string.IsNullOrEmpty(_firecrawlApiKey))
-                {
-                    // Allow registration but mark as Degraded
-                    return new ToolHealthStatus
-                    {
-                        State = HealthState.Degraded,
-                        Message = "Firecrawl API key is not configured - tool will not work without it",
-                        LastChecked = DateTime.UtcNow,
-                        Details = new Dictionary<string, object>
-                        {
-                            ["error"] = "Missing API key",
-                            ["configured"] = false,
-                            ["note"] = "Add FirecrawlApiKey to appsettings.json to enable this tool"
-                        }
-                    };
-                }
-
-                // Try a simple API call to check connectivity
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var response = await _httpClient.GetAsync($"{_firecrawlApiUrl}/health", cts.Token);
-                
-                return new ToolHealthStatus
-                {
-                    State = response.IsSuccessStatusCode ? HealthState.Healthy : HealthState.Degraded,
-                    Message = response.IsSuccessStatusCode 
-                        ? "Firecrawl API is accessible" 
-                        : $"Firecrawl API returned status {response.StatusCode}",
-                    LastChecked = DateTime.UtcNow,
-                    Details = new Dictionary<string, object>
-                    {
-                        ["statusCode"] = (int)response.StatusCode,
-                        ["apiUrl"] = _firecrawlApiUrl,
-                        ["configured"] = true
-                    }
-                };
+                throw new InvalidOperationException("Firecrawl API key is not configured");
             }
-            catch (Exception ex)
+
+            // Test API connectivity
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_firecrawlApiUrl}/");
+            request.Headers.Add("Authorization", $"Bearer {_firecrawlApiKey}");
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var response = await HttpClient.SendAsync(request, cts.Token);
+            
+            if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError(ex, "Error checking Firecrawl API health");
-                return new ToolHealthStatus
-                {
-                    State = HealthState.Unhealthy,
-                    Message = $"Health check failed: {ex.Message}",
-                    LastChecked = DateTime.UtcNow,
-                    Details = new Dictionary<string, object>
-                    {
-                        ["error"] = ex.Message,
-                        ["type"] = ex.GetType().Name
-                    }
-                };
+                throw new InvalidOperationException($"Firecrawl API is not accessible: {response.StatusCode}");
             }
         }
     }
