@@ -236,13 +236,13 @@ namespace OptimalyAI.ViewModels
     {
         Start,          // Entry point
         End,            // Exit point
-        Task,           // Regular task/tool execution
+        Tool,           // Tool execution
         Condition,      // Conditional branching
         Parallel,       // Parallel split
         Join,           // Parallel join
         Loop,           // Loop construct
         Wait,           // Wait for event/time
-        SubWorkflow     // Nested workflow
+        Transform       // Data transformation
     }
     
     // Represents a node in the workflow graph
@@ -254,16 +254,15 @@ namespace OptimalyAI.ViewModels
         public NodeType Type { get; set; }
         public NodePosition Position { get; set; } = new(); // For visual editor
         
-        // Task-specific properties
-        public List<string> Tools { get; set; } = new();
+        // Tool-specific properties
+        public string ToolId { get; set; } // ID of the tool to execute
+        public Dictionary<string, object> ToolParameters { get; set; } = new(); // Tool-specific parameters
         public bool UseReAct { get; set; }
-        public string Orchestrator { get; set; } // ConversationOrchestrator, ToolChainOrchestrator, etc.
         
-        // AI/LLM Configuration
-        public string SystemPrompt { get; set; } // System prompt for AI tasks
-        public string Model { get; set; } // Model override (e.g., "llama3.1:70b")
-        public double? Temperature { get; set; } // Temperature override
-        public int? MaxTokens { get; set; } // Max tokens override
+        // Execution configuration
+        public int? TimeoutSeconds { get; set; } = 300; // Timeout for tool execution
+        public int? RetryCount { get; set; } = 3; // Number of retries on failure
+        public string RetryStrategy { get; set; } = "exponential"; // linear, exponential, fixed
         
         // Context & Memory
         public List<string> InputVariables { get; set; } = new(); // Variables to read from context
@@ -391,9 +390,9 @@ namespace OptimalyAI.ViewModels
         public string DefaultSystemPrompt { get; set; } = "You are a helpful AI assistant.";
         public bool EnableReActByDefault { get; set; } = false;
         
-        // Memory settings
-        public string MemoryType { get; set; } = "sliding_window"; // none, sliding_window, summary
-        public int MemoryWindowSize { get; set; } = 10;
-        public bool PersistMemory { get; set; } = true;
+        // Context settings
+        public bool ShareContextBetweenNodes { get; set; } = true;
+        public int MaxContextSize { get; set; } = 10000; // Max size of context in characters
+        public string ContextPersistence { get; set; } = "workflow"; // none, workflow, project
     }
 }

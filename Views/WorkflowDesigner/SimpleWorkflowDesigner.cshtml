@@ -464,11 +464,22 @@
                 <hr>
                 
                 <h6>AI Nástroje</h6>
-                @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                @if (ViewBag.ToolsByCategory != null)
                 {
-                    <div class="tool-item" data-type="ai-tool" data-tool="@tool" draggable="true">
-                        <i class="fas fa-robot"></i> @tool.Replace("_", " ")
-                    </div>
+                    var toolsByCategory = ViewBag.ToolsByCategory as Dictionary<string, List<OAI.Core.Interfaces.Tools.ITool>>;
+                    if (toolsByCategory != null)
+                    {
+                        @foreach(var category in toolsByCategory)
+                        {
+                            <h6 style="font-size: 0.9em; margin-top: 10px;">@category.Key</h6>
+                            @foreach(var tool in category.Value)
+                            {
+                                <div class="tool-item" data-type="tool" data-tool="@tool.Id" draggable="true" title="@tool.Description">
+                                    <i class="fas fa-robot"></i> @tool.Name
+                                </div>
+                            }
+                        }
+                    }
                 }
             </div>
             }
@@ -580,55 +591,51 @@
                     <label>Popis</label>
                     <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
                 </div>
-                <div class="form-group" id="toolsSection">
-                    <label>AI Nástroje</label>
-                    <select multiple class="form-control" id="nodeTools" size="5">
-                        @foreach(var tool in ViewBag.AvailableTools ?? new List<string>())
+                <div class="form-group" id="toolSection">
+                    <label>Nástroj</label>
+                    <select class="form-control" id="nodeToolSelect">
+                        <option value="">-- Vyberte nástroj --</option>
+                        @if (ViewBag.RegisteredTools != null)
                         {
-                            <option value="@tool">@tool.Replace("_", " ")</option>
+                            var registeredTools = ViewBag.RegisteredTools as List<OAI.Core.Interfaces.Tools.ITool>;
+                            if (registeredTools != null)
+                            {
+                                @foreach(var tool in registeredTools)
+                                {
+                                    <option value="@tool.Id">@tool.Name</option>
+                                }
+                            }
                         }
                     </select>
-                    <small class="text-muted">Držte Ctrl pro výběr více nástrojů</small>
                 </div>
-                <div class="form-group" id="orchestratorSection">
+                <div class="form-group" id="executionSection">
                     <div class="custom-control custom-switch mb-3">
                         <input type="checkbox" class="custom-control-input" id="nodeUseReAct">
                         <label class="custom-control-label" for="nodeUseReAct">
                             <i class="fas fa-brain"></i> Použít ReAct pattern
                         </label>
                     </div>
-                    <label>Orchestrátor (volitelné)</label>
-                    <select class="form-control" id="nodeOrchestrator">
-                        <option value="">-- Použít výchozí --</option>
-                        @foreach(var orchestrator in ViewBag.Orchestrators ?? new List<string>())
-                        {
-                            <option value="@orchestrator">@orchestrator</option>
-                        }
-                    </select>
-                    <small class="text-muted">Přepíše výchozí orchestrátor pro tento uzel</small>
-                </div>
-                <div class="form-group" id="advancedSection" style="display: none;">
-                    <button type="button" class="btn btn-sm btn-link" onclick="toggleAdvancedSettings()">
-                        <i class="fas fa-cog"></i> Pokročilá nastavení
-                    </button>
-                    <div id="advancedSettingsContent" style="display: none;">
-                        <div class="form-group">
-                            <label>Model (volitelné)</label>
-                            <input type="text" class="form-control" id="nodeModel" placeholder="např. llama3.1:70b">
-                        </div>
-                        <div class="form-group">
-                            <label>Temperature (volitelné)</label>
-                            <input type="number" class="form-control" id="nodeTemperature" min="0" max="2" step="0.1" placeholder="0.7">
-                        </div>
-                        <div class="form-group">
-                            <label>System Prompt (volitelné)</label>
-                            <textarea class="form-control" id="nodeSystemPrompt" rows="2" placeholder="Specifický prompt pro tento uzel"></textarea>
-                        </div>
+                    <div class="form-group">
+                        <label>Timeout (sekundy)</label>
+                        <input type="number" class="form-control" id="nodeTimeout" min="10" max="600" value="300">
+                    </div>
+                    <div class="form-group">
+                        <label>Počet pokusů při selhání</label>
+                        <input type="number" class="form-control" id="nodeRetryCount" min="0" max="5" value="3">
                     </div>
                 </div>
                 <div class="form-group" id="conditionSection" style="display: none;">
                     <label>Podmínka</label>
                     <input type="text" class="form-control" id="nodeCondition" placeholder="result > 0">
+                </div>
+                <div class="form-group" id="parametersSection">
+                    <label><i class="fas fa-sliders-h"></i> Parametry nástroje</label>
+                    <div id="dynamicParameters">
+                        <!-- Parametry se načtou dynamicky podle vybraného nástroje -->
+                        <div class="text-muted text-center py-3">
+                            <i class="fas fa-info-circle"></i> Vyberte nástroj pro zobrazení parametrů
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -662,6 +669,7 @@
         initializeDragAndDrop();
         initializeCanvas();
         initializeKeyboardShortcuts();
+        initializeToolParameterLoading();
         
         // Start with 100% zoom
         currentZoom = 1.0;
@@ -670,6 +678,113 @@
         // Try to load saved workflow, or create default
         loadWorkflowFromServer();
     });
+    
+    // Initialize tool parameter loading
+    function initializeToolParameterLoading() {
+        // Při výběru nástroje aktualizovat název a načíst parametry
+        $('#nodeToolSelect').on('change', function() {
+            const selectedTool = $(this).val();
+            if (selectedTool) {
+                const toolName = $(this).find('option:selected').text();
+                $('#nodeName').val(toolName);
+                loadToolParameters(selectedTool);
+            } else {
+                $('#dynamicParameters').html(`
+                    <div class="text-muted text-center py-3">
+                        <i class="fas fa-info-circle"></i> Vyberte nástroj pro zobrazení parametrů
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    // Funkce pro načtení parametrů nástroje
+    function loadToolParameters(toolId) {
+        $('#dynamicParameters').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Načítám parametry...</div>');
+        
+        $.ajax({
+            url: '/api/tools/' + toolId + '/parameters',
+            method: 'GET',
+            success: function(parameters) {
+                renderToolParameters(parameters);
+            },
+            error: function() {
+                $('#dynamicParameters').html('<div class="alert alert-warning">Nepodařilo se načíst parametry nástroje</div>');
+            }
+        });
+    }
+    
+    // Funkce pro vykreslení parametrů
+    function renderToolParameters(parameters) {
+        if (!parameters || parameters.length === 0) {
+            $('#dynamicParameters').html('<div class="text-muted">Tento nástroj nemá žádné parametry</div>');
+            return;
+        }
+        
+        let html = '';
+        parameters.forEach(param => {
+            html += renderParameter(param);
+        });
+        
+        $('#dynamicParameters').html(html);
+    }
+    
+    // Funkce pro vykreslení jednotlivého parametru
+    function renderParameter(param) {
+        let html = '<div class="form-group">';
+        html += `<label>${param.displayName || param.name}`;
+        if (param.isRequired) html += ' <span class="text-danger">*</span>';
+        html += '</label>';
+        
+        // Podle typu parametru vykreslit správný input
+        switch(param.type) {
+            case 'String':
+                if (param.validation?.allowedValues) {
+                    // Select pro allowed values
+                    html += `<select class="form-control" data-param="${param.name}">`;
+                    param.validation.allowedValues.forEach(val => {
+                        html += `<option value="${val}"${val === param.defaultValue ? ' selected' : ''}>${val}</option>`;
+                    });
+                    html += '</select>';
+                } else {
+                    // Textový input
+                    html += `<input type="text" class="form-control" data-param="${param.name}" 
+                             value="${param.defaultValue || ''}" placeholder="${param.example || ''}"/>`;
+                }
+                break;
+                
+            case 'Boolean':
+                html += `<div class="custom-control custom-switch">`;
+                html += `<input type="checkbox" class="custom-control-input" id="param_${param.name}" 
+                         data-param="${param.name}"${param.defaultValue ? ' checked' : ''}>`;
+                html += `<label class="custom-control-label" for="param_${param.name}">Ano</label>`;
+                html += '</div>';
+                break;
+                
+            case 'Integer':
+                html += `<input type="number" class="form-control" data-param="${param.name}" 
+                         value="${param.defaultValue || ''}" 
+                         ${param.validation?.min ? 'min="' + param.validation.min + '"' : ''}
+                         ${param.validation?.max ? 'max="' + param.validation.max + '"' : ''}/>`;
+                break;
+                
+            case 'Decimal':
+                html += `<input type="number" step="0.01" class="form-control" data-param="${param.name}" 
+                         value="${param.defaultValue || ''}"/>`;
+                break;
+                
+            default:
+                html += `<input type="text" class="form-control" data-param="${param.name}" 
+                         value="${param.defaultValue || ''}"/>`;
+        }
+        
+        if (param.description) {
+            html += `<small class="form-text text-muted">${param.description}</small>`;
+        }
+        
+        html += '</div>';
+        return html;
+    }
     
     // Initialize drag and drop
     function initializeDragAndDrop() {
@@ -778,11 +893,12 @@
         const node = {
             id: nodeId,
             type: type,
-            name: tool ? tool.replace(/_/g, ' ') : getNodeTypeName(type),
+            name: tool ? $('#nodeToolSelect option[value="' + tool + '"]').text() || tool : getNodeTypeName(type),
             x: adjustedX,
             y: adjustedY,
-            tools: tool ? [tool] : [],
-            description: defaultDescriptions[type] || ''
+            tool: tool || null,
+            description: defaultDescriptions[type] || '',
+            configuration: {}
         };
         
         nodes[nodeId] = node;
@@ -795,7 +911,7 @@
             'task': 'Proces',
             'condition': 'Rozhodnutí',
             'parallel': 'Paralelní brána',
-            'ai-tool': 'AI Nástroj'
+            'tool': 'Nástroj'
         };
         return names[type] || type;
     }
@@ -845,13 +961,12 @@
             contentWrapper.append(descDiv);
         }
         
-        // Tools
-        if (node.tools && node.tools.length > 0) {
-            const toolsDiv = $('<div>').addClass('node-tools');
-            node.tools.forEach(tool => {
-                toolsDiv.append($('<span>').addClass('tool-badge').text(tool.replace(/_/g, ' ')));
-            });
-            contentWrapper.append(toolsDiv);
+        // Tool
+        if (node.tool) {
+            const toolDiv = $('<div>').addClass('node-tools');
+            const toolName = $('#nodeToolSelect option[value="' + node.tool + '"]').text() || node.tool;
+            toolDiv.append($('<span>').addClass('tool-badge').text(toolName));
+            contentWrapper.append(toolDiv);
         }
         
         // ReAct badge
@@ -910,7 +1025,7 @@
             'task': 'fas fa-tasks',
             'condition': 'fas fa-question-circle',
             'parallel': 'fas fa-code-branch',
-            'ai-tool': 'fas fa-robot'
+            'tool': 'fas fa-robot'
         };
         return icons[type] || 'fas fa-circle';
     }
@@ -1212,30 +1327,65 @@
         $('#nodeName').val(node.name);
         $('#nodeDescription').val(node.description || '');
         
+        // Load configuration parameters
+        if (node.configuration) {
+            $('#nodeUrl').val(node.configuration.url || '');
+            $('#nodeExtractImages').prop('checked', node.configuration.extractImages !== false);
+            $('#nodeDownloadImages').prop('checked', node.configuration.downloadImages !== false);
+            $('#nodeMaxImages').val(node.configuration.maxImages || 10);
+        } else {
+            // Default values
+            $('#nodeUrl').val('');
+            $('#nodeExtractImages').prop('checked', true);
+            $('#nodeDownloadImages').prop('checked', true);
+            $('#nodeMaxImages').val(10);
+        }
+        
         // Show/hide sections based on type
         if (node.type === 'condition' || node.type === 'parallel') {
-            $('#toolsSection').hide();
-            $('#orchestratorSection').hide();
-            $('#advancedSection').hide();
+            $('#toolSection').hide();
+            $('#executionSection').hide();
+            $('#parametersSection').hide();
             $('#conditionSection').toggle(node.type === 'condition');
             if (node.type === 'condition') {
                 $('#nodeCondition').val(node.condition || '');
             }
-        } else {
-            $('#toolsSection').show();
-            $('#orchestratorSection').show();
-            $('#advancedSection').show();
+        } else if (node.type === 'tool') {
+            $('#toolSection').show();
+            $('#executionSection').show();
+            $('#parametersSection').show();
             $('#conditionSection').hide();
             
-            // Set selected tools
-            $('#nodeTools').val(node.tools || []);
+            // Set selected tool
+            $('#nodeToolSelect').val(node.tool || '');
             
-            // Set orchestrator settings
+            // Load tool parameters if tool is selected
+            if (node.tool) {
+                loadToolParameters(node.tool);
+                // Wait for parameters to load then fill values
+                setTimeout(() => {
+                    if (node.configuration) {
+                        Object.entries(node.configuration).forEach(([key, value]) => {
+                            const input = $(`#dynamicParameters [data-param="${key}"]`);
+                            if (input.attr('type') === 'checkbox') {
+                                input.prop('checked', value);
+                            } else {
+                                input.val(value);
+                            }
+                        });
+                    }
+                }, 500);
+            }
+            
+            // Set execution settings
             $('#nodeUseReAct').prop('checked', node.useReAct || false);
-            $('#nodeOrchestrator').val(node.orchestrator || '');
-            $('#nodeModel').val(node.model || '');
-            $('#nodeTemperature').val(node.temperature || '');
-            $('#nodeSystemPrompt').val(node.systemPrompt || '');
+            $('#nodeTimeout').val(node.timeoutSeconds || 300);
+            $('#nodeRetryCount').val(node.retryCount || 3);
+        } else {
+            $('#toolSection').hide();
+            $('#executionSection').show();
+            $('#parametersSection').hide();
+            $('#conditionSection').hide();
         }
         
         // Reset advanced settings visibility
@@ -1255,15 +1405,30 @@
         
         if (node.type === 'condition') {
             node.condition = $('#nodeCondition').val();
-        } else {
-            node.tools = $('#nodeTools').val() || [];
+        } else if (node.type === 'tool') {
+            node.tool = $('#nodeToolSelect').val() || null;
             
-            // Save orchestrator settings
+            // Save execution settings
             node.useReAct = $('#nodeUseReAct').is(':checked');
-            node.orchestrator = $('#nodeOrchestrator').val() || null;
-            node.model = $('#nodeModel').val() || null;
-            node.temperature = $('#nodeTemperature').val() ? parseFloat($('#nodeTemperature').val()) : null;
-            node.systemPrompt = $('#nodeSystemPrompt').val() || null;
+            node.timeoutSeconds = parseInt($('#nodeTimeout').val()) || 300;
+            node.retryCount = parseInt($('#nodeRetryCount').val()) || 3;
+            
+            // Collect parameters dynamically
+            node.configuration = {};
+            $('#dynamicParameters [data-param]').each(function() {
+                const paramName = $(this).data('param');
+                let value;
+                
+                if ($(this).attr('type') === 'checkbox') {
+                    value = $(this).is(':checked');
+                } else if ($(this).attr('type') === 'number') {
+                    value = parseFloat($(this).val()) || 0;
+                } else {
+                    value = $(this).val();
+                }
+                
+                node.configuration[paramName] = value;
+            });
         }
         
         // Re-render node
@@ -1581,14 +1746,13 @@ Obrázek</textarea>
             };
             
             // Add type-specific properties
-            if (node.type === 'task' || node.type === 'ai-tool') {
-                step.tools = node.tools || [];
+            if (node.type === 'tool') {
+                step.tool = node.tool || null;
                 step.useReAct = node.useReAct || false;
-                // Add orchestrator-specific properties
-                step.orchestrator = node.orchestrator || null;
-                step.systemPrompt = node.systemPrompt || null;
-                step.model = node.model || null;
-                step.temperature = node.temperature || null;
+                step.timeoutSeconds = node.timeoutSeconds || 300;
+                step.retryCount = node.retryCount || 3;
+                // Add configuration parameters
+                step.configuration = node.configuration || {};
             } else if (node.type === 'condition') {
                 step.condition = node.condition || 'true';
                 step.branches = {
@@ -1682,7 +1846,7 @@ Obrázek</textarea>
     function mapNodeTypeToStepType(nodeType) {
         const typeMap = {
             'task': 'process',
-            'ai-tool': 'ai-tool',
+            'tool': 'tool',
             'condition': 'decision',
             'parallel': 'parallel-gateway'
         };
@@ -1915,7 +2079,7 @@ Obrázek</textarea>
             let nodeType = 'task';
             if (step.type === 'decision') nodeType = 'condition';
             else if (step.type === 'parallel-gateway') nodeType = 'parallel';
-            else if (step.type === 'ai-tool') nodeType = 'ai-tool';
+            else if (step.type === 'tool') nodeType = 'tool';
             
             // Create the node
             const nodeId = step.id;
@@ -1925,14 +2089,13 @@ Obrázek</textarea>
                 name: step.name,
                 x: pos.x,
                 y: pos.y,
-                tools: step.tools || [],
+                tool: step.tool || null,
                 description: step.description || '',
                 condition: step.condition,
                 useReAct: step.useReAct,
-                orchestrator: step.orchestrator,
-                systemPrompt: step.systemPrompt,
-                model: step.model,
-                temperature: step.temperature
+                timeoutSeconds: step.timeoutSeconds,
+                retryCount: step.retryCount,
+                configuration: step.configuration || {}
             };
             renderNode(nodes[nodeId]);
         });

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OAI.Core.Interfaces;
+using OAI.Core.Interfaces.Tools;
 using OAI.Core.Entities.Projects;
 using System.Threading.Tasks;
 using System.Text.Json;
@@ -18,14 +19,16 @@ namespace OptimalyAI.Controllers
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<WorkflowDesignerController> _logger;
+        private readonly IToolRegistry _toolRegistry;
         
         // In-memory storage pro rychlý přístup (cache)
         private static Dictionary<Guid, WorkflowGraphViewModel> _workflows = new();
         
-        public WorkflowDesignerController(IUnitOfWork unitOfWork, ILogger<WorkflowDesignerController> logger)
+        public WorkflowDesignerController(IUnitOfWork unitOfWork, ILogger<WorkflowDesignerController> logger, IToolRegistry toolRegistry)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _toolRegistry = toolRegistry;
         }
         
         [HttpGet]
@@ -41,18 +44,57 @@ namespace OptimalyAI.Controllers
             
             ViewBag.ProjectId = projectId;
             ViewBag.ReadOnly = readOnly;
-            ViewBag.AvailableTools = WorkflowPrototypeData.GetAvailableTools();
-            ViewBag.ToolsByCategory = WorkflowPrototypeData.GetToolsByCategory();
+            
+            // Get real tools from ToolRegistry
+            var registeredTools = await _toolRegistry.GetAllToolsAsync();
+            var availableTools = registeredTools.Select(t => t.Id).ToList();
+            
+            // Group tools by category
+            var toolsByCategory = registeredTools
+                .GroupBy(t => t.Category)
+                .ToDictionary(g => g.Key, g => g.Select(t => t.Id).ToList());
+            
+            ViewBag.AvailableTools = availableTools;
+            ViewBag.ToolsByCategory = toolsByCategory;
+            ViewBag.RegisteredTools = registeredTools; // Pass full tool info for UI
+            
             ViewBag.Orchestrators = new List<string> 
             { 
                 "ConversationOrchestrator", 
                 "ToolChainOrchestrator", 
                 "ReActOrchestrator",
-                "CustomOrchestrator" 
+                "WebScrapingOrchestrator" 
             };
             
             // Použít Simple Workflow Designer - vlastní implementace
             return View("SimpleWorkflowDesigner", workflow);
+        }
+        
+        [HttpGet]
+        public async Task<IActionResult> SimpleWorkflowDesigner(Guid projectId)
+        {
+            // Načíst dostupné nástroje z registru
+            var registeredTools = await _toolRegistry.GetAllToolsAsync();
+            
+            // Seskupit nástroje podle kategorie
+            var toolsByCategory = registeredTools
+                .GroupBy(t => t.Category)
+                .ToDictionary(g => g.Key, g => g.ToList());
+            
+            // Zatím prázdný model
+            var model = new WorkflowGraphViewModel
+            {
+                ProjectId = projectId,
+                ProjectName = "Test Project"
+            };
+
+            ViewBag.ProjectId = projectId;
+            ViewBag.RegisteredTools = registeredTools;
+            ViewBag.ToolsByCategory = toolsByCategory;
+            ViewBag.NodeTypes = Enum.GetNames(typeof(NodeType)).ToList();
+            ViewBag.TriggerTypes = new[] { "Manual", "Scheduled", "Event", "API" };
+            
+            return View(model);
         }
         
         [HttpGet]
@@ -495,9 +537,9 @@ namespace OptimalyAI.Controllers
             existingNode.Name = node.Name;
             existingNode.Description = node.Description;
             existingNode.Position = node.Position;
-            existingNode.Tools = node.Tools;
+            existingNode.ToolId = node.ToolId;
+            existingNode.ToolParameters = node.ToolParameters;
             existingNode.UseReAct = node.UseReAct;
-            existingNode.Orchestrator = node.Orchestrator;
             existingNode.ConditionExpression = node.ConditionExpression;
             existingNode.LoopCondition = node.LoopCondition;
             existingNode.MaxIterations = node.MaxIterations;
