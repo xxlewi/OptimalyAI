@@ -372,9 +372,6 @@ namespace OAI.ServiceLayer.Services.Customers
             if (customer == null)
                 throw new NotFoundException("Customer", id);
 
-            if (!customer.IsDeleted)
-                throw new BusinessException("Zákazník musí být nejprve archivován před trvalým smazáním.");
-
             // Kontrola projektů - nesmí mít žádné projekty
             var hasProjects = await _projectRepository.ExistsAsync(p => p.CustomerId == id);
             if (hasProjects)

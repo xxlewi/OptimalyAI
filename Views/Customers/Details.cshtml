@@ -365,6 +365,9 @@
                                                     <a asp-controller="Projects" asp-action="Details" asp-route-id="@project.Id" class="btn btn-info btn-sm">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
+                                                    <button class="btn btn-danger btn-sm delete-project" data-project-id="@project.Id" data-project-name="@project.Name">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         }
@@ -473,8 +476,11 @@
                                                 </td>
                                                 <td>
                                                     <a href="/Requests/@request.Id" class="btn btn-info btn-sm">
-                                                        <i class="fas fa-eye"></i> Detail
+                                                        <i class="fas fa-eye"></i>
                                                     </a>
+                                                    <button class="btn btn-danger btn-sm delete-request" data-request-id="@request.Id" data-request-number="@request.RequestNumber">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         }
@@ -654,6 +660,46 @@
                 error: function(xhr) {
                     const errorMessage = xhr.responseJSON?.message || xhr.responseText || 'Nastala chyba při mazání zákazníka';
                     toastr.error(errorMessage);
+                }
+            });
+        });
+
+        // Smazání projektu
+        $('.delete-project').click(function() {
+            var projectId = $(this).data('project-id');
+            var projectName = $(this).data('project-name');
+            
+            $.ajax({
+                url: '/api/projects/' + projectId,
+                type: 'DELETE',
+                success: function() {
+                    toastr.success(`Projekt "${projectName}" byl smazán`);
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                },
+                error: function(xhr) {
+                    toastr.error('Nepodařilo se smazat projekt');
+                }
+            });
+        });
+
+        // Smazání požadavku
+        $('.delete-request').click(function() {
+            var requestId = $(this).data('request-id');
+            var requestNumber = $(this).data('request-number');
+            
+            $.ajax({
+                url: '/api/requestsapi/' + requestId,
+                type: 'DELETE',
+                success: function() {
+                    toastr.success(`Požadavek ${requestNumber} byl smazán`);
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                },
+                error: function(xhr) {
+                    toastr.error('Nepodařilo se smazat požadavek');
                 }
             });
         });
