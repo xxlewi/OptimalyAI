@@ -252,12 +252,20 @@
     <script src="~/plugins/select2/js/select2.full.min.js"></script>
     <script>
         $(document).ready(function() {
-            // Initialize Select2
-            $('.select2').select2({
+            // Initialize Select2 with preselected value if exists
+            var preselectedCustomerId = @Html.Raw(Model.CustomerId.HasValue ? $"'{Model.CustomerId}'" : "null");
+            
+            $('#customerSelect').select2({
                 theme: 'bootstrap4',
                 placeholder: '-- Vyberte zákazníka --',
                 allowClear: true
             });
+            
+            // If we have a preselected customer, set it
+            if (preselectedCustomerId) {
+                console.log('Setting preselected customer:', preselectedCustomerId);
+                $('#customerSelect').val(preselectedCustomerId).trigger('change');
+            }
             
             // Handle internal project checkbox
             $('#internalProject').on('change', function() {
@@ -328,14 +336,6 @@
             
             // Focus on name field
             $('#Name').focus();
-            
-            // If customer is already selected (from URL parameter), trigger change event
-            @if (Model.CustomerId.HasValue)
-            {
-                <text>
-                $('#customerSelect').val('@Model.CustomerId').trigger('change');
-                </text>
-            }
             
             // Handle form submission
             $('#createProjectForm').on('submit', function(e) {

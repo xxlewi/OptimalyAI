@@ -220,6 +220,8 @@ namespace OptimalyAI.Controllers
         [HttpGet("create")]
         public async Task<IActionResult> Create(Guid? customerId = null)
         {
+            _logger.LogInformation("Create called with customerId: {CustomerId}", customerId);
+            
             var workflowTypes = await _projectService.GetWorkflowTypesAsync();
             ViewBag.WorkflowTypes = workflowTypes;
             
@@ -232,6 +234,7 @@ namespace OptimalyAI.Controllers
             // If customerId is provided, prefill the customer data
             if (customerId.HasValue)
             {
+                _logger.LogInformation("Loading customer {CustomerId} for prefill", customerId.Value);
                 var customer = await _customerService.GetByIdAsync(customerId.Value);
                 if (customer != null)
                 {
@@ -239,6 +242,11 @@ namespace OptimalyAI.Controllers
                     dto.CustomerName = customer.Name;
                     dto.CustomerEmail = customer.Email;
                     dto.CustomerPhone = customer.Phone;
+                    _logger.LogInformation("Customer data prefilled: {CustomerName}", customer.Name);
+                }
+                else
+                {
+                    _logger.LogWarning("Customer {CustomerId} not found", customerId.Value);
                 }
             }
             
