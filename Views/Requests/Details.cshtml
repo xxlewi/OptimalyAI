@@ -28,7 +28,7 @@
     <div class="container-fluid">
         <div class="row">
             <!-- Levý sloupec - Detaily požadavku -->
-            <div class="col-lg-8">
+            <div class="col-lg-4">
                 <div class="card" style="height: 100%;">
                     <div class="card-header">
                         <h3 class="card-title">Detaily požadavku</h3>
@@ -87,20 +87,20 @@
                     </div>
                     <div class="card-body">
                         <dl class="row">
-                            <dt class="col-sm-3">Číslo požadavku:</dt>
-                            <dd class="col-sm-9">@Model.RequestNumber</dd>
+                            <dt class="col-sm-5">Číslo požadavku:</dt>
+                            <dd class="col-sm-7">@Model.RequestNumber</dd>
                             
-                            <dt class="col-sm-3">Typ požadavku:</dt>
-                            <dd class="col-sm-9">@GetRequestTypeText(Model.RequestType)</dd>
+                            <dt class="col-sm-5">Typ požadavku:</dt>
+                            <dd class="col-sm-7">@GetRequestTypeText(Model.RequestType)</dd>
                             
-                            <dt class="col-sm-3">Název:</dt>
-                            <dd class="col-sm-9">@Model.Title</dd>
+                            <dt class="col-sm-5">Název:</dt>
+                            <dd class="col-sm-7">@Model.Title</dd>
                             
-                            <dt class="col-sm-3">Popis:</dt>
-                            <dd class="col-sm-9">@Model.Description</dd>
+                            <dt class="col-sm-5">Popis:</dt>
+                            <dd class="col-sm-7">@Model.Description</dd>
                             
-                            <dt class="col-sm-3">Klient:</dt>
-                            <dd class="col-sm-9">
+                            <dt class="col-sm-5">Klient:</dt>
+                            <dd class="col-sm-7">
                                 @if (!string.IsNullOrEmpty(Model.ClientId) && !string.IsNullOrEmpty(Model.ClientName))
                                 {
                                     <a href="/Customers/Details/@Model.ClientId" class="text-primary">
@@ -117,8 +117,8 @@
                                 }
                             </dd>
 
-                            <dt class="col-sm-3">Projekt:</dt>
-                            <dd class="col-sm-9">
+                            <dt class="col-sm-5">Projekt:</dt>
+                            <dd class="col-sm-7">
                                 @if (Model.ProjectId.HasValue && !string.IsNullOrEmpty(Model.ProjectName))
                                 {
                                     <a href="/Projects/@Model.ProjectId" class="text-primary">
@@ -134,37 +134,37 @@
                                 }
                             </dd>
                             
-                            <dt class="col-sm-3">Priorita:</dt>
-                            <dd class="col-sm-9">
+                            <dt class="col-sm-5">Priorita:</dt>
+                            <dd class="col-sm-7">
                                 <span class="badge badge-@GetPriorityBadgeClass(Model.Priority)">
                                     @GetPriorityText(Model.Priority)
                                 </span>
                             </dd>
                             
-                            <dt class="col-sm-3">Deadline:</dt>
-                            <dd class="col-sm-9">@(Model.Deadline?.ToString("dd.MM.yyyy HH:mm") ?? "Není stanoveno")</dd>
+                            <dt class="col-sm-5">Deadline:</dt>
+                            <dd class="col-sm-7">@(Model.Deadline?.ToString("dd.MM.yyyy HH:mm") ?? "Není stanoveno")</dd>
                             
-                            <dt class="col-sm-3">Odhadovaná cena:</dt>
-                            <dd class="col-sm-9">@(Model.EstimatedCost?.ToString("C") ?? "Není stanoveno")</dd>
+                            <dt class="col-sm-5">Odhadovaná cena:</dt>
+                            <dd class="col-sm-7">@(Model.EstimatedCost?.ToString("C") ?? "Není stanoveno")</dd>
                             
-                            <dt class="col-sm-3">Skutečná cena:</dt>
-                            <dd class="col-sm-9">@(Model.ActualCost?.ToString("C") ?? "Zatím neznámá")</dd>
+                            <dt class="col-sm-5">Skutečná cena:</dt>
+                            <dd class="col-sm-7">@(Model.ActualCost?.ToString("C") ?? "Zatím neznámá")</dd>
                             
-                            <dt class="col-sm-3">Workflow:</dt>
-                            <dd class="col-sm-9">@(Model.WorkflowTemplateName ?? "Není přiřazeno")</dd>
+                            <dt class="col-sm-5">Workflow:</dt>
+                            <dd class="col-sm-7">@(Model.WorkflowTemplateName ?? "Není přiřazeno")</dd>
                             
-                            <dt class="col-sm-3">Vytvořeno:</dt>
-                            <dd class="col-sm-9">@(Model.CreatedAt.ToString("dd.MM.yyyy HH:mm"))</dd>
+                            <dt class="col-sm-5">Vytvořeno:</dt>
+                            <dd class="col-sm-7">@(Model.CreatedAt.ToString("dd.MM.yyyy HH:mm"))</dd>
                             
-                            <dt class="col-sm-3">Naposledy upraveno:</dt>
-                            <dd class="col-sm-9">@(Model.UpdatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "Neznámý")</dd>
+                            <dt class="col-sm-5">Naposledy upraveno:</dt>
+                            <dd class="col-sm-7">@(Model.UpdatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "Neznámý")</dd>
                         </dl>
                     </div>
                 </div>
             </div>
             
             <!-- Pravý sloupec - Rychlá poznámka -->
-            <div class="col-lg-4">
+            <div class="col-lg-8">
                 <div class="card" style="height: 100%;">
                     <div class="card-header">
                         <h3 class="card-title">
