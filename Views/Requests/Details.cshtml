@@ -38,7 +38,7 @@
                                 @{
                                     var currentStatus = Model.Status.ToString();
                                 }
-                                <select class="form-control form-control-sm" id="statusSelect" onchange="changeStatusDirect(@Model.Id, this.value)">
+                                <select class="form-control form-control-sm" id="statusSelect" onchange="changeStatusDirect(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Id)), this.value)">
                                     @if (currentStatus == "New")
                                     {
                                         <option value="New" selected>🆕 Nový</option>
@@ -79,6 +79,9 @@
                             <a href="/Requests/@Model.Id/Edit" class="btn btn-sm btn-secondary">
                                 <i class="fas fa-edit"></i> Upravit
                             </a>
+                            <button onclick="deleteRequest(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Id)))" class="btn btn-sm btn-danger">
+                                <i class="fas fa-trash"></i> Smazat
+                            </button>
                         </div>
                     </div>
                     <div class="card-body">
@@ -284,6 +287,26 @@
             });
         });
 
+        function deleteRequest(requestId) {
+            if (confirm('Opravdu chcete smazat tento požadavek?')) {
+                $.ajax({
+                    url: `/api/requestsapi/${requestId}`,
+                    method: 'DELETE',
+                    success: function() {
+                        toastr.success('Požadavek byl smazán');
+                        window.location.href = '/Requests';
+                    },
+                    error: function(xhr) {
+                        if (xhr.status === 404) {
+                            toastr.error('Požadavek nebyl nalezen');
+                        } else {
+                            toastr.error('Nepodařilo se smazat požadavek');
+                        }
+                    }
+                });
+            }
+        }
+
         function changeStatusDirect(requestId, newStatus) {
             $.ajax({
                 url: `/api/requestsapi/${requestId}/status`,
@@ -298,13 +321,13 @@
                     } else {
                         toastr.error(response.message || 'Nepodařilo se změnit status');
                         // Revert select to original value
-                        $('#statusSelect').val('@(Model.Status.ToString())');
+                        $('#statusSelect').val(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Status.ToString())));
                     }
                 },
                 error: function() {
                     toastr.error('Nepodařilo se komunikovat se serverem');
                     // Revert select to original value
-                    $('#statusSelect').val('@(Model.Status.ToString())');
+                    $('#statusSelect').val(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Status.ToString())));
                 }
             });
         }
@@ -333,7 +356,7 @@
                 return;
             }
 
-            const requestId = @Model.Id;
+            const requestId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Id));
             const author = 'Uživatel'; // TODO: Get from current user
 
             $.ajax({
@@ -390,12 +413,12 @@
         }
 
         function createProjectFromRequest() {
-            const projectName = prompt('Název nového projektu:', '@Model.Title - Projekt');
+            const projectName = prompt('Název nového projektu:', @Html.Raw(System.Text.Json.JsonSerializer.Serialize($"{Model.Title} - Projekt")));
             if (projectName && projectName.trim()) {
                 const projectData = {
                     name: projectName.trim(),
                     description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize($"Projekt vytvořený z požadavku {Model.RequestNumber}: {Model.Title}")),
-                    customerId: '@Model.ClientId',
+                    customerId: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ClientId ?? "")),
                     customerName: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ClientName ?? "")),
                     status: 'Draft',
                     priority: 'Medium',
@@ -418,12 +441,12 @@
                                 data: JSON.stringify({
                                     title: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Title)),
                                     description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Description)),
-                                    requestType: '@Model.RequestType',
-                                    priority: '@Model.Priority.ToString()',
-                                    deadline: @(Model.Deadline.HasValue ? $"'{Model.Deadline.Value.ToString("yyyy-MM-ddTHH:mm")}'" : "null"),
+                                    requestType: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RequestType)),
+                                    priority: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Priority.ToString())),
+                                    deadline: @Html.Raw(Model.Deadline.HasValue ? System.Text.Json.JsonSerializer.Serialize(Model.Deadline.Value.ToString("yyyy-MM-ddTHH:mm")) : "null"),
                                     estimatedCost: @(Model.EstimatedCost ?? 0),
                                     projectId: response.data.id,
-                                    clientId: '@Model.ClientId',
+                                    clientId: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ClientId ?? "")),
                                     clientName: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ClientName ?? ""))
                                 }),
                                 success: function(updateResponse) {
@@ -478,35 +501,6 @@
             });
         }
         
-        function deleteRequest(requestId) {
-            Swal.fire({
-                title: 'Smazat požadavek?',
-                text: 'Tuto akci nelze vrátit zpět!',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                confirmButtonText: 'Ano, smazat',
-                cancelButtonText: 'Zrušit'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: `/api/requestsapi/${requestId}`,
-                        method: 'DELETE',
-                        success: function(response) {
-                            if (response.success) {
-                                Swal.fire('Smazáno!', 'Požadavek byl smazán.', 'success')
-                                    .then(() => window.location.href = '/Requests');
-                            } else {
-                                Swal.fire('Chyba', response.message || 'Nepodařilo se smazat požadavek', 'error');
-                            }
-                        },
-                        error: function() {
-                            Swal.fire('Chyba', 'Nepodařilo se komunikovat se serverem', 'error');
-                        }
-                    });
-                }
-            });
-        }
         
         function returnToDraft(requestId) {
             Swal.fire({
