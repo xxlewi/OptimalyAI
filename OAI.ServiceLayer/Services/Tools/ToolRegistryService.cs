@@ -67,6 +67,10 @@ namespace OAI.ServiceLayer.Services.Tools
                     _logger.LogError("Cannot register unhealthy tool '{ToolId}': {Message}", tool.Id, healthStatus.Message);
                     return false;
                 }
+                else if (healthStatus.State == HealthState.Degraded)
+                {
+                    _logger.LogWarning("Registering degraded tool '{ToolId}': {Message}", tool.Id, healthStatus.Message);
+                }
 
                 // Add to in-memory registry
                 _registeredTools[tool.Id] = tool;

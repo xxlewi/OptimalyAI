@@ -177,11 +177,28 @@
                         </div>
                     </div>
                     <div class="card-body d-flex flex-column" style="height: calc(100% - 3.5rem);">
-                        <textarea id="quickNote" 
-                                  class="form-control flex-grow-1" 
-                                  placeholder="Sem můžete psát poznámky k tomuto požadavku. Automaticky se uloží při opuštění pole..."
-                                  data-request-id="@Model.Id"
-                                  style="resize: none; min-height: 400px;">@Model.Metadata</textarea>
+                        <div class="mb-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="insertCheckbox()">
+                                <i class="fas fa-check-square"></i> Vložit checkbox
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="makeBold()">
+                                <i class="fas fa-bold"></i> Tučně
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="makeItalic()">
+                                <i class="fas fa-italic"></i> Kurzíva
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="makeStrikethrough()">
+                                <i class="fas fa-strikethrough"></i> Přeškrtnuté
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="insertBullet()">
+                                <i class="fas fa-list"></i> Odrážka
+                            </button>
+                        </div>
+                        <div id="quickNote" 
+                             contenteditable="true"
+                             class="form-control flex-grow-1" 
+                             style="resize: none; min-height: 400px; overflow-y: auto; white-space: pre-wrap;"
+                             data-request-id="@Model.Id">@Html.Raw(Model.Metadata ?? "")</div>
                         <small class="text-muted mt-2">
                             <i class="fas fa-info-circle"></i> Poznámka se automaticky uloží při opuštění pole
                         </small>
@@ -311,6 +328,43 @@
 </div>
 
 @section Scripts {
+    <style>
+        #quickNote {
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 15px;
+        }
+        
+        #quickNote:focus {
+            outline: none;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        
+        #quickNote label {
+            margin-bottom: 8px;
+        }
+        
+        #quickNote .task-checkbox {
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        
+        .btn-toolbar .btn {
+            margin-right: 5px;
+        }
+        
+        .task-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 5px;
+        }
+        
+        .task-item .task-text {
+            flex: 1;
+            display: inline-block;
+        }
+    </style>
     <script>
         $(document).ready(function() {
             // Handle add note form
@@ -319,12 +373,24 @@
                 addNote();
             });
             
+            // Obnovíme styly pro existující zaškrtnuté checkboxy
+            $('#quickNote input[type="checkbox"].task-checkbox:checked').each(function() {
+                const container = $(this).closest('.task-item');
+                const textElement = container.find('.task-text');
+                if (textElement.length > 0) {
+                    textElement.css({
+                        'text-decoration': 'line-through',
+                        'opacity': '0.6'
+                    });
+                }
+            });
+            
             // Auto-save rychlé poznámky
             let saveTimeout;
-            let originalNote = $('#quickNote').val();
+            let originalNote = $('#quickNote').html();
             
             $('#quickNote').on('blur', function() {
-                const currentNote = $(this).val();
+                const currentNote = $(this).html();
                 const requestId = $(this).data('request-id');
                 
                 // Uložit pouze pokud se změnila
@@ -348,7 +414,7 @@
             // Debounce při psaní
             $('#quickNote').on('input', function() {
                 clearTimeout(saveTimeout);
-                const currentNote = $(this).val();
+                const currentNote = $(this).html();
                 const requestId = $(this).data('request-id');
                 
                 // Uložit po 2 sekundách nečinnosti
@@ -369,6 +435,99 @@
                         });
                     }
                 }, 2000);
+            });
+            
+            // Checkbox click handler
+            $(document).on('change', 'input[type="checkbox"].task-checkbox', function() {
+                const checkbox = this;
+                const isChecked = $(this).is(':checked');
+                
+                // Nastavíme nebo odebereme atribut checked pro správné uložení
+                if (isChecked) {
+                    $(checkbox).attr('checked', 'checked');
+                } else {
+                    $(checkbox).removeAttr('checked');
+                }
+                
+                // Najdeme parent element checkboxu
+                let container = checkbox.parentElement;
+                
+                // Pokud je checkbox přímo v editoru, vytvoříme pro něj kontejner
+                if (container.id === 'quickNote') {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'task-item';
+                    
+                    // Přesuneme checkbox a následující text do wrapperu
+                    let nextNode = checkbox.nextSibling;
+                    const textNodes = [];
+                    
+                    // Sebereme text až do konce řádku nebo dalšího blokového elementu
+                    while (nextNode && nextNode.nodeType !== Node.ELEMENT_NODE) {
+                        if (nextNode.nodeType === Node.TEXT_NODE) {
+                            const text = nextNode.textContent;
+                            const lineBreak = text.indexOf('\n');
+                            if (lineBreak !== -1) {
+                                // Rozdělíme text na řádku
+                                const beforeBreak = text.substring(0, lineBreak);
+                                const afterBreak = text.substring(lineBreak + 1);
+                                
+                                if (beforeBreak) {
+                                    textNodes.push(document.createTextNode(beforeBreak));
+                                }
+                                
+                                // Vrátíme zbytek textu zpět
+                                if (afterBreak) {
+                                    nextNode.textContent = afterBreak;
+                                } else {
+                                    const temp = nextNode.nextSibling;
+                                    nextNode.remove();
+                                    nextNode = temp;
+                                }
+                                break;
+                            } else {
+                                textNodes.push(nextNode.cloneNode(true));
+                                const temp = nextNode.nextSibling;
+                                nextNode.remove();
+                                nextNode = temp;
+                            }
+                        } else {
+                            nextNode = nextNode.nextSibling;
+                        }
+                    }
+                    
+                    // Vložíme wrapper před checkbox
+                    checkbox.parentNode.insertBefore(wrapper, checkbox);
+                    
+                    // Přesuneme checkbox do wrapperu
+                    wrapper.appendChild(checkbox);
+                    
+                    // Přidáme text do wrapperu
+                    const textSpan = document.createElement('span');
+                    textSpan.className = 'task-text';
+                    textNodes.forEach(node => textSpan.appendChild(node));
+                    wrapper.appendChild(textSpan);
+                    
+                    container = wrapper;
+                }
+                
+                // Najdeme text element
+                const textElement = container.querySelector('.task-text') || container.querySelector('span') || container;
+                
+                // Aplikujeme/odebereme styly
+                if (isChecked) {
+                    $(textElement).css({
+                        'text-decoration': 'line-through',
+                        'opacity': '0.6'
+                    });
+                } else {
+                    $(textElement).css({
+                        'text-decoration': 'none',
+                        'opacity': '1'
+                    });
+                }
+                
+                // Trigger save
+                $('#quickNote').trigger('input');
             });
         });
 
@@ -637,6 +796,88 @@
                     toastr.error('Chyba při komunikaci se serverem');
                 });
             }
+        }
+        
+        // Toolbar funkce
+        function insertCheckbox() {
+            const editor = document.getElementById('quickNote');
+            editor.focus();
+            
+            const selection = window.getSelection();
+            const range = selection.getRangeAt(0);
+            
+            // Ujistíme se, že jsme uvnitř editoru
+            if (!editor.contains(range.commonAncestorContainer)) {
+                // Pokud ne, přesuneme kurzor na konec editoru
+                range.selectNodeContents(editor);
+                range.collapse(false);
+            }
+            
+            // Vytvoříme kontejner pro úkol
+            const taskItem = document.createElement('div');
+            taskItem.className = 'task-item';
+            taskItem.style.marginBottom = '5px';
+            
+            // Vytvoříme checkbox
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'task-checkbox';
+            checkbox.style.marginRight = '8px';
+            checkbox.style.cursor = 'pointer';
+            
+            // Vytvoříme span pro text
+            const textSpan = document.createElement('span');
+            textSpan.className = 'task-text';
+            textSpan.innerHTML = '&nbsp;'; // Prázdný prostor pro začátek psaní
+            
+            taskItem.appendChild(checkbox);
+            taskItem.appendChild(textSpan);
+            
+            range.insertNode(taskItem);
+            
+            // Nastavíme kurzor do textového spanu
+            const textRange = document.createRange();
+            textRange.selectNodeContents(textSpan);
+            textRange.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(textRange);
+            
+            $('#quickNote').trigger('input');
+        }
+        
+        function makeBold() {
+            document.execCommand('bold', false, null);
+            $('#quickNote').trigger('input');
+        }
+        
+        function makeItalic() {
+            document.execCommand('italic', false, null);
+            $('#quickNote').trigger('input');
+        }
+        
+        function makeStrikethrough() {
+            document.execCommand('strikeThrough', false, null);
+            $('#quickNote').trigger('input');
+        }
+        
+        function insertBullet() {
+            const editor = document.getElementById('quickNote');
+            editor.focus();
+            
+            const selection = window.getSelection();
+            const range = selection.getRangeAt(0);
+            
+            // Ujistíme se, že jsme uvnitř editoru
+            if (!editor.contains(range.commonAncestorContainer)) {
+                range.selectNodeContents(editor);
+                range.collapse(false);
+            }
+            
+            const bullet = document.createTextNode('• ');
+            range.insertNode(bullet);
+            range.collapse(false);
+            
+            $('#quickNote').trigger('input');
         }
     </script>
 }

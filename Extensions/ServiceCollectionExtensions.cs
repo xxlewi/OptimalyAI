@@ -247,6 +247,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.SimpleWebSearchTool>();
         services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.LlmTornadoTool>();
         
+        // Register web scraping tools
+        services.AddHttpClient<OAI.ServiceLayer.Services.Tools.Implementations.JinaReaderTool>();
+        services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.JinaReaderTool>();
+        
+        services.AddHttpClient<OAI.ServiceLayer.Services.Tools.Implementations.FirecrawlWebScrapingTool>();
+        services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.FirecrawlWebScrapingTool>();
+        
         return services;
     }
     
