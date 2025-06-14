@@ -22,7 +22,7 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
         private readonly string _firecrawlApiKey;
         private readonly string _firecrawlApiUrl;
 
-        public override string Id => "firecrawl_web_scraping";
+        public override string Id => "firecrawl_scraper";
         public override string Name => "Flexible Web Scraping 🕷️";
         public override string Description => "Advanced web scraping tool that can extract any content based on natural language instructions using Firecrawl API";
         public override string Version => "1.0.0";
@@ -464,7 +464,9 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
         {
             if (string.IsNullOrEmpty(_firecrawlApiKey))
             {
-                throw new InvalidOperationException("Firecrawl API key is not configured");
+                Logger.LogWarning("Firecrawl API key is not configured - tool will not work without it");
+                // Don't throw - allow registration but tool won't work
+                return;
             }
 
             // Test API connectivity
@@ -472,11 +474,19 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
             request.Headers.Add("Authorization", $"Bearer {_firecrawlApiKey}");
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var response = await HttpClient.SendAsync(request, cts.Token);
             
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                throw new InvalidOperationException($"Firecrawl API is not accessible: {response.StatusCode}");
+                var response = await HttpClient.SendAsync(request, cts.Token);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    Logger.LogWarning("Firecrawl API returned {StatusCode} - tool may not work properly", response.StatusCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to connect to Firecrawl API - tool may not work properly");
             }
         }
     }

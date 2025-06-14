@@ -149,22 +149,12 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
 
                 if (!_providerUrls.ContainsKey(provider))
                 {
-                    return new ToolResult
-                    {
-                        ExecutionId = Guid.NewGuid().ToString(),
-                        ToolId = Id,
-                        IsSuccess = false,
-                        StartedAt = DateTime.UtcNow,
-                        CompletedAt = DateTime.UtcNow,
-                        Duration = TimeSpan.Zero,
-                        Error = new ToolError
-                        {
-                            Code = "PROVIDER_NOT_FOUND",
-                            Message = $"Provider '{provider}' is not configured or available",
-                            Type = ToolErrorType.ValidationError
-                        },
-                        ExecutionParameters = new Dictionary<string, object>(parameters)
-                    };
+                    return ToolResultFactory.CreateCustomError(
+                        Id, Guid.NewGuid().ToString(), DateTime.UtcNow,
+                        ToolErrorCodes.ValidationError,
+                        $"Provider '{provider}' is not configured or available",
+                        $"Available providers: {string.Join(", ", _providerUrls.Keys)}",
+                        parameters);
                 }
 
                 Logger.LogDebug("Executing LLM Tornado {Action} with {Provider}", action, provider);
@@ -181,28 +171,13 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                     _ => throw new ArgumentException($"Unknown action: {action}")
                 };
 
-                return CreateSuccessResult(executionId, startTime, result, parameters);
+                return ToolResultFactory.CreateSuccess(Id, executionId, startTime, result, parameters);
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error in LLM Tornado tool");
-                return new ToolResult
-                {
-                    ExecutionId = Guid.NewGuid().ToString(),
-                    ToolId = Id,
-                    IsSuccess = false,
-                    StartedAt = DateTime.UtcNow,
-                    CompletedAt = DateTime.UtcNow,
-                    Duration = TimeSpan.Zero,
-                    Error = new ToolError
-                    {
-                        Code = "EXECUTION_ERROR",
-                        Message = "LLM Tornado error",
-                        Details = ex.Message,
-                        Type = ToolErrorType.InternalError
-                    },
-                    ExecutionParameters = new Dictionary<string, object>(parameters)
-                };
+                return ToolResultFactory.CreateExceptionError(
+                    Id, Guid.NewGuid().ToString(), DateTime.UtcNow, ex, parameters);
             }
         }
 
@@ -350,11 +325,22 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
         protected override async Task PerformCustomValidationAsync(Dictionary<string, object> parameters, ToolValidationResult result)
         {
             var action = GetParameter<string>(parameters, "action", "");
-            if (string.IsNullOrEmpty(action))
+            if (!ToolParameterValidators.ValidateRequiredString(action, "action", out var actionError))
             {
                 result.IsValid = false;
-                result.Errors.Add("Action parameter is required");
+                result.Errors.Add(actionError);
+                result.FieldErrors["action"] = actionError;
                 return;
+            }
+
+            // Validate provider parameter
+            var provider = GetParameter<string>(parameters, "provider", "");
+            if (!ToolParameterValidators.ValidateAllowedValues(
+                provider, "provider", _providerUrls.Keys.ToArray(), out var providerError))
+            {
+                result.IsValid = false;
+                result.Errors.Add(providerError);
+                result.FieldErrors["provider"] = providerError;
             }
 
             // Validate action-specific parameters
@@ -365,6 +351,7 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                     {
                         result.IsValid = false;
                         result.Errors.Add("Messages parameter is required for chat action");
+                        result.FieldErrors["messages"] = "Messages parameter is required for chat action";
                     }
                     break;
                     
@@ -373,6 +360,7 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                     {
                         result.IsValid = false;
                         result.Errors.Add("Prompt parameter is required for completion action");
+                        result.FieldErrors["prompt"] = "Prompt parameter is required for completion action";
                     }
                     break;
                     
@@ -381,6 +369,7 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                     {
                         result.IsValid = false;
                         result.Errors.Add("Schema parameter is required for structured_output action");
+                        result.FieldErrors["schema"] = "Schema parameter is required for structured_output action";
                     }
                     break;
                     
@@ -390,7 +379,9 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
                     
                 default:
                     result.IsValid = false;
-                    result.Errors.Add($"Unknown action: {action}");
+                    var error = $"Unknown action: {action}. Allowed values: chat, completion, structured_output, list_models";
+                    result.Errors.Add(error);
+                    result.FieldErrors["action"] = error;
                     break;
             }
             
