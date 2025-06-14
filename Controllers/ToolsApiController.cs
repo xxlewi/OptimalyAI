@@ -218,6 +218,59 @@ public class ToolsApiController : ControllerBase
     }
     
     /// <summary>
+    /// Get tool parameters
+    /// </summary>
+    [HttpGet("{toolId}/parameters")]
+    public async Task<IActionResult> GetToolParameters(string toolId)
+    {
+        try
+        {
+            var tool = await _toolRegistry.GetToolAsync(toolId);
+            if (tool == null)
+            {
+                return NotFound(new List<object>());
+            }
+
+            var parameters = tool.Parameters.Select(p => new
+            {
+                name = p.Name,
+                displayName = p.DisplayName ?? p.Name,
+                description = p.Description,
+                type = p.Type.ToString(),
+                isRequired = p.IsRequired,
+                defaultValue = p.DefaultValue,
+                example = p.Example,
+                validation = p.Validation != null ? new
+                {
+                    min = p.Validation.MinValue,
+                    max = p.Validation.MaxValue,
+                    pattern = p.Validation.Pattern,
+                    minLength = p.Validation.MinLength,
+                    maxLength = p.Validation.MaxLength,
+                    allowedValues = p.Validation.AllowedValues
+                } : null,
+                uiHints = p.UIHints != null ? new
+                {
+                    inputType = p.UIHints.InputType,
+                    placeholder = p.UIHints.Placeholder,
+                    helpText = p.UIHints.HelpText,
+                    rows = p.UIHints.Rows,
+                    columns = p.UIHints.Columns,
+                    step = p.UIHints.Step
+                } : null
+            }).ToList();
+
+            // Return just the array, not wrapped in ApiResponse
+            return Ok(parameters);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving tool parameters for {ToolId}", toolId);
+            return Ok(new List<object>());
+        }
+    }
+
+    /// <summary>
     /// Get tool categories
     /// </summary>
     [HttpGet("categories")]

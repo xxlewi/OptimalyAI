@@ -15,6 +15,7 @@ namespace OAI.ServiceLayer.Services.Tools.Base
         public ToolParameterType Type { get; set; }
         public bool IsRequired { get; set; }
         public object DefaultValue { get; set; }
+        public string Example { get; set; }
         public IParameterValidation Validation { get; set; }
         public ParameterUIHints UIHints { get; set; }
         public IReadOnlyList<ParameterExample> Examples { get; set; }

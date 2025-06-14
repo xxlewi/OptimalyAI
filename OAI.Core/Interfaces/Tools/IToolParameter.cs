@@ -39,6 +39,11 @@ namespace OAI.Core.Interfaces.Tools
         object DefaultValue { get; }
 
         /// <summary>
+        /// Example value for the parameter
+        /// </summary>
+        string Example { get; }
+
+        /// <summary>
         /// Validation rules for the parameter
         /// </summary>
         IParameterValidation Validation { get; }
@@ -162,6 +167,9 @@ namespace OAI.Core.Interfaces.Tools
         public int? Order { get; set; }
         public bool IsAdvanced { get; set; }
         public bool IsHidden { get; set; }
+        public int? Rows { get; set; }
+        public int? Columns { get; set; }
+        public double? Step { get; set; }
         public Dictionary<string, object> CustomHints { get; set; } = new Dictionary<string, object>();
     }
 

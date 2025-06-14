@@ -49,10 +49,10 @@ namespace OptimalyAI.Controllers
             var registeredTools = await _toolRegistry.GetAllToolsAsync();
             var availableTools = registeredTools.Select(t => t.Id).ToList();
             
-            // Group tools by category
+            // Group tools by category - pass full tool objects, not just IDs
             var toolsByCategory = registeredTools
                 .GroupBy(t => t.Category)
-                .ToDictionary(g => g.Key, g => g.Select(t => t.Id).ToList());
+                .ToDictionary(g => g.Key, g => g.ToList());
             
             ViewBag.AvailableTools = availableTools;
             ViewBag.ToolsByCategory = toolsByCategory;
@@ -169,7 +169,7 @@ namespace OptimalyAI.Controllers
                         name = n.Name,
                         type = n.Type.ToString(),
                         position = n.Position,
-                        tools = n.Tools
+                        tool = n.ToolId
                     }),
                     edges = workflow.Edges.Select(e => new
                     {
@@ -306,14 +306,15 @@ namespace OptimalyAI.Controllers
                                         Position = nodePositions.ContainsKey(nodeId) ? nodePositions[nodeId] : new NodePosition { X = 100, Y = 100 }
                                     };
                                     
-                                    // Add tools if present
-                                    if (step.TryGetProperty("tools", out var tools))
+                                    // Add tool if present
+                                    if (step.TryGetProperty("tool", out var tool))
                                     {
-                                        node.Tools = new List<string>();
-                                        foreach (var tool in tools.EnumerateArray())
-                                        {
-                                            node.Tools.Add(tool.GetString());
-                                        }
+                                        node.ToolId = tool.GetString();
+                                    }
+                                    else if (step.TryGetProperty("tools", out var tools) && tools.GetArrayLength() > 0)
+                                    {
+                                        // Legacy support - take first tool
+                                        node.ToolId = tools[0].GetString();
                                     }
                                     
                                     workflow.Nodes.Add(node);
@@ -460,7 +461,7 @@ namespace OptimalyAI.Controllers
             var workflow = _workflows[projectId];
             
             // Nastav výchozí porty podle typu uzlu
-            if (node.Type == NodeType.Task)
+            if (node.Type == NodeType.Tool)
             {
                 node.InputPorts = new List<NodePort> 
                 { 
@@ -647,11 +648,11 @@ namespace OptimalyAI.Controllers
             }
             
             // Kontrola: task uzly musí mít nástroje nebo orchestrátor
-            foreach (var node in workflow.Nodes.Where(n => n.Type == NodeType.Task))
+            foreach (var node in workflow.Nodes.Where(n => n.Type == NodeType.Tool))
             {
-                if (!node.Tools.Any() && string.IsNullOrEmpty(node.Orchestrator))
+                if (string.IsNullOrEmpty(node.ToolId))
                 {
-                    errors.Add($"Úloha '{node.Name}' musí mít přiřazené nástroje nebo orchestrátor");
+                    errors.Add($"Uzel nástroje '{node.Name}' musí mít přiřazený nástroj");
                 }
             }
             
@@ -701,11 +702,11 @@ namespace OptimalyAI.Controllers
         {
             return stepType switch
             {
-                "process" => NodeType.Task,
-                "ai-tool" => NodeType.Task,
+                "process" => NodeType.Tool,
+                "ai-tool" => NodeType.Tool,
                 "decision" => NodeType.Condition,
                 "parallel-gateway" => NodeType.Parallel,
-                _ => NodeType.Task
+                _ => NodeType.Tool
             };
         }
         
