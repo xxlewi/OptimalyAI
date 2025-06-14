@@ -254,11 +254,17 @@
     <script src="~/plugins/select2/js/select2.full.min.js"></script>
     <script>
         $(document).ready(function() {
-            // Initialize Select2
-            $('.select2').select2({
+            // Initialize Select2 with proper close on select
+            $('#customerSelect').select2({
                 theme: 'bootstrap4',
                 placeholder: '-- Vyberte zákazníka --',
-                allowClear: true
+                allowClear: true,
+                closeOnSelect: true // Explicitly set to close on select
+            });
+            
+            // Force close dropdown on selection
+            $('#customerSelect').on('select2:select', function (e) {
+                $(this).select2('close');
             });
             
             // Handle internal project checkbox
@@ -286,6 +292,7 @@
             // Handle customer selection
             $('#customerSelect').on('change', function() {
                 const selectedValue = $(this).val();
+                const selectedOption = $(this).find('option:selected');
                 
                 if (selectedValue === 'new') {
                     // New customer - will be created automatically

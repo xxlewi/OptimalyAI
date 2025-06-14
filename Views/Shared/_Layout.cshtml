@@ -233,7 +233,34 @@
                             </a>
                         </li>
                         
-
+                        <li class="nav-item">
+                            <a asp-controller="Orchestrators" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-project-diagram"></i>
+                                <p>Orchestrace</p>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a asp-controller="ReActAgents" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-brain"></i>
+                                <p>ReAct Agenti</p>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a asp-controller="Tools" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-toolbox"></i>
+                                <p>Nástroje</p>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a asp-controller="Models" asp-action="Index" class="nav-link">
+                                <i class="nav-icon fas fa-robot"></i>
+                                <p>AI Modely</p>
+                            </a>
+                        </li>
+                        
                         <li class="nav-item has-treeview menu-open" id="chat-menu">
                             <a href="#" class="nav-link">
                                 <i class="nav-icon fas fa-comments"></i>
@@ -262,73 +289,13 @@
                             </ul>
                         </li>
                         
-                        <li class="nav-header">NÁSTROJE</li>
-                        <li class="nav-item">
-                            <a asp-controller="Tools" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-toolbox"></i>
-                                <p>Katalog nástrojů</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Tools" asp-action="Register" class="nav-link">
-                                <i class="nav-icon fas fa-plus"></i>
-                                <p>Registrace nástroje</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Tools" asp-action="Config" class="nav-link">
-                                <i class="nav-icon fas fa-cogs"></i>
-                                <p>Konfigurace</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Tools" asp-action="Usage" class="nav-link">
-                                <i class="nav-icon fas fa-chart-pie"></i>
-                                <p>Využití nástrojů</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-header">ORCHESTRACE</li>
-                        <li class="nav-item">
-                            <a asp-controller="Orchestrators" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-project-diagram"></i>
-                                <p>Aktivní orchestrace</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Orchestrators" asp-action="Metrics" class="nav-link">
-                                <i class="nav-icon fas fa-tachometer-alt"></i>
-                                <p>Metriky</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="Orchestrators" asp-action="Debug" class="nav-link">
-                                <i class="nav-icon fas fa-bug"></i>
-                                <p>Debug & Logs</p>
-                            </a>
-                        </li>
+                        <li class="nav-header">SYSTEM</li>
                         <li class="nav-item">
                             <a asp-controller="Monitoring" asp-action="Dashboard" class="nav-link">
                                 <i class="nav-icon fas fa-tv"></i>
                                 <p>Real-time monitor</p>
                             </a>
                         </li>
-                        
-                        <li class="nav-header">AI MODELY</li>
-                        <li class="nav-item">
-                            <a asp-controller="Models" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-robot"></i>
-                                <p>Správa modelů</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a asp-controller="AITest" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-flask"></i>
-                                <p>Test AI modelů</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-header">SYSTEM</li>
                         <li class="nav-item">
                             <a asp-controller="Logs" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-file-alt"></i>
