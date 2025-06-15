@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Interfaces.Adapters;
@@ -270,5 +271,10 @@ namespace OAI.ServiceLayer.Services.Adapters.Base
 
             return defaultValue;
         }
+        
+        /// <summary>
+        /// Execute adapter - must be implemented by derived classes
+        /// </summary>
+        public abstract Task<IAdapterResult> ExecuteAsync(AdapterExecutionContext context, CancellationToken cancellationToken = default);
     }
 }

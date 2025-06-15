@@ -20,6 +20,17 @@ namespace OAI.ServiceLayer.Services.Adapters.Base
         }
 
         /// <summary>
+        /// Execute adapter in workflow context
+        /// </summary>
+        public async Task<IAdapterResult> ExecuteAsync(
+            AdapterExecutionContext context,
+            CancellationToken cancellationToken = default)
+        {
+            // Use ReadAsync with configuration from context
+            return await ReadAsync(context.Configuration, cancellationToken);
+        }
+        
+        /// <summary>
         /// Read data from source
         /// </summary>
         public async Task<IAdapterResult> ReadAsync(

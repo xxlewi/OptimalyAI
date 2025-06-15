@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Workflow;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces;
+using OAI.Core.Interfaces.Adapters;
 using OAI.Core.Interfaces.Tools;
 using OAI.Core.Interfaces.Workflow;
 
@@ -21,6 +22,7 @@ namespace OAI.ServiceLayer.Services.Workflow
         private readonly IUnitOfWork _unitOfWork;
         private readonly IToolExecutor _toolExecutor;
         private readonly IToolRegistry _toolRegistry;
+        private readonly IAdapterRegistry _adapterRegistry;
         private readonly ILogger<WorkflowExecutor> _logger;
         private readonly Dictionary<Guid, WorkflowExecutionContext> _activeExecutions = new();
 
@@ -35,11 +37,13 @@ namespace OAI.ServiceLayer.Services.Workflow
             IUnitOfWork unitOfWork,
             IToolExecutor toolExecutor,
             IToolRegistry toolRegistry,
+            IAdapterRegistry adapterRegistry,
             ILogger<WorkflowExecutor> logger)
         {
             _unitOfWork = unitOfWork;
             _toolExecutor = toolExecutor;
             _toolRegistry = toolRegistry;
+            _adapterRegistry = adapterRegistry;
             _logger = logger;
         }
 
@@ -283,6 +287,20 @@ namespace OAI.ServiceLayer.Services.Workflow
                         var parallelResult = await ExecuteParallelStepAsync(step, context, cancellationToken);
                         success = parallelResult.All(r => r.IsSuccess);
                         output = parallelResult.Select(r => r.Data).ToList();
+                        break;
+                        
+                    case "input-adapter":
+                        var inputResult = await ExecuteInputAdapterStepAsync(step, context, cancellationToken);
+                        success = inputResult.IsSuccess;
+                        output = inputResult.Data;
+                        errorMessage = inputResult.Error?.Message;
+                        break;
+                        
+                    case "output-adapter":
+                        var outputResult = await ExecuteOutputAdapterStepAsync(step, context, cancellationToken);
+                        success = outputResult.IsSuccess;
+                        output = outputResult.Data;
+                        errorMessage = outputResult.Error?.Message;
                         break;
 
                     default:
@@ -710,6 +728,196 @@ namespace OAI.ServiceLayer.Services.Workflow
                 DurationSeconds = e.DurationSeconds,
                 HasErrors = e.Status == ExecutionStatus.Failed
             });
+        }
+        
+        private async Task<IToolResult> ExecuteInputAdapterStepAsync(
+            WorkflowStep step,
+            WorkflowExecutionContext context,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(step.AdapterId))
+            {
+                return new ToolResult
+                {
+                    IsSuccess = false,
+                    Error = new ToolError { Message = "No adapter specified for input step" }
+                };
+            }
+
+            try
+            {
+                // Get adapter from registry
+                var adapter = await _adapterRegistry.GetAdapterAsync(step.AdapterId);
+                if (adapter == null)
+                {
+                    return new ToolResult
+                    {
+                        IsSuccess = false,
+                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' not found" }
+                    };
+                }
+
+                // Verify it's an input adapter
+                if (adapter.Type != AdapterType.Input && adapter.Type != AdapterType.Bidirectional)
+                {
+                    return new ToolResult
+                    {
+                        IsSuccess = false,
+                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' is not an input adapter" }
+                    };
+                }
+
+                // Get configuration for this adapter
+                var configuration = step.AdapterConfiguration?.GetValueOrDefault(step.AdapterId) ?? new Dictionary<string, object>();
+                
+                // Create adapter context
+                var adapterContext = new AdapterExecutionContext
+                {
+                    Configuration = configuration,
+                    ExecutionId = context.ExecutionId.ToString(),
+                    ProjectId = context.ProjectId.ToString(),
+                    Variables = context.Variables,
+                    Logger = _logger
+                };
+
+                // Execute adapter
+                context.LogMessage($"Executing input adapter: {adapter.Name}", Core.Interfaces.Workflow.LogLevel.Information);
+                var result = await adapter.ExecuteAsync(adapterContext, cancellationToken);
+
+                if (result.IsSuccess)
+                {
+                    // Store adapter output in context
+                    context.SetVariable($"input_{step.Id}", result.Data);
+                    context.ItemsProcessed += result.ItemsProcessed;
+                    
+                    return new ToolResult
+                    {
+                        IsSuccess = true,
+                        Data = result.Data,
+                        ProcessingTime = result.ProcessingTime
+                    };
+                }
+                else
+                {
+                    return new ToolResult
+                    {
+                        IsSuccess = false,
+                        Error = new ToolError { Message = result.ErrorMessage }
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing input adapter step {StepId}", step.Id);
+                return new ToolResult
+                {
+                    IsSuccess = false,
+                    Error = new ToolError { Message = ex.Message, StackTrace = ex.StackTrace }
+                };
+            }
+        }
+        
+        private async Task<IToolResult> ExecuteOutputAdapterStepAsync(
+            WorkflowStep step,
+            WorkflowExecutionContext context,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(step.AdapterId))
+            {
+                return new ToolResult
+                {
+                    IsSuccess = false,
+                    Error = new ToolError { Message = "No adapter specified for output step" }
+                };
+            }
+
+            try
+            {
+                // Get adapter from registry
+                var adapter = await _adapterRegistry.GetAdapterAsync(step.AdapterId);
+                if (adapter == null)
+                {
+                    return new ToolResult
+                    {
+                        IsSuccess = false,
+                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' not found" }
+                    };
+                }
+
+                // Verify it's an output adapter
+                if (adapter.Type != AdapterType.Output && adapter.Type != AdapterType.Bidirectional)
+                {
+                    return new ToolResult
+                    {
+                        IsSuccess = false,
+                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' is not an output adapter" }
+                    };
+                }
+
+                // Get configuration for this adapter
+                var configuration = step.AdapterConfiguration?.GetValueOrDefault(step.AdapterId) ?? new Dictionary<string, object>();
+                
+                // Get input data - can come from previous steps or context variables
+                object inputData = null;
+                
+                // First check if there's a specific input variable
+                var inputKey = configuration.GetValueOrDefault("inputVariable")?.ToString() ?? "workflow_output";
+                inputData = context.GetVariable(inputKey);
+                
+                // If no specific input, use all variables as output
+                if (inputData == null)
+                {
+                    inputData = context.Variables;
+                }
+                
+                // Update configuration with the data to output
+                configuration["data"] = inputData;
+                
+                // Create adapter context
+                var adapterContext = new AdapterExecutionContext
+                {
+                    Configuration = configuration,
+                    ExecutionId = context.ExecutionId.ToString(),
+                    ProjectId = context.ProjectId.ToString(),
+                    Variables = context.Variables,
+                    Logger = _logger
+                };
+
+                // Execute adapter
+                context.LogMessage($"Executing output adapter: {adapter.Name}", Core.Interfaces.Workflow.LogLevel.Information);
+                var result = await adapter.ExecuteAsync(adapterContext, cancellationToken);
+
+                if (result.IsSuccess)
+                {
+                    // Store output result in context
+                    context.SetVariable($"output_{step.Id}_result", result.Data);
+                    context.ItemsProcessed += result.ItemsProcessed;
+                    
+                    return new ToolResult
+                    {
+                        IsSuccess = true,
+                        Data = result.Data,
+                        ProcessingTime = result.ProcessingTime
+                    };
+                }
+                else
+                {
+                    return new ToolResult
+                    {
+                        IsSuccess = false,
+                        Error = new ToolError { Message = result.ErrorMessage }
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing output adapter step {StepId}", step.Id);
+                return new ToolResult
+                {
+                    IsSuccess = false,
+                    Error = new ToolError { Message = ex.Message, StackTrace = ex.StackTrace }
+                };
+            }
         }
     }
 

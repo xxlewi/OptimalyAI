@@ -18,6 +18,25 @@ namespace OAI.ServiceLayer.Services.Adapters.Base
         }
 
         /// <summary>
+        /// Execute adapter in workflow context
+        /// </summary>
+        public async Task<IAdapterResult> ExecuteAsync(
+            AdapterExecutionContext context,
+            CancellationToken cancellationToken = default)
+        {
+            // Get data from context configuration
+            var data = context.Configuration.GetValueOrDefault("data");
+            if (data == null)
+            {
+                // If no data in config, try to get from variables
+                data = context.Variables;
+            }
+            
+            // Use WriteAsync with data and configuration from context
+            return await WriteAsync(data, context.Configuration, cancellationToken);
+        }
+        
+        /// <summary>
         /// Write data to the destination
         /// </summary>
         public async Task<IAdapterResult> WriteAsync(

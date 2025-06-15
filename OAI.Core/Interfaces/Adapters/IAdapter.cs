@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OAI.Core.Interfaces.Adapters
@@ -63,6 +64,11 @@ namespace OAI.Core.Interfaces.Adapters
         /// Check adapter health status
         /// </summary>
         Task<AdapterHealthStatus> GetHealthStatusAsync();
+        
+        /// <summary>
+        /// Execute adapter in workflow context
+        /// </summary>
+        Task<IAdapterResult> ExecuteAsync(AdapterExecutionContext context, CancellationToken cancellationToken = default);
     }
 
     /// <summary>

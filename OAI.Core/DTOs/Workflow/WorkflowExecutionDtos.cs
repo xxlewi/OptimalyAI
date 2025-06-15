@@ -106,7 +106,7 @@ namespace OAI.Core.DTOs.Workflow
     {
         public string Id { get; set; }
         public string Name { get; set; }
-        public string Type { get; set; } // process, tool, decision, parallel-gateway
+        public string Type { get; set; } // process, tool, decision, parallel-gateway, input-adapter, output-adapter
         public string Description { get; set; }
         public int Position { get; set; }
         
@@ -116,6 +116,11 @@ namespace OAI.Core.DTOs.Workflow
         public int TimeoutSeconds { get; set; } = 300;
         public int RetryCount { get; set; } = 3;
         public Dictionary<string, object> Configuration { get; set; } = new();
+        
+        // For adapter steps
+        public string AdapterId { get; set; }
+        public string AdapterType { get; set; } // Input or Output
+        public Dictionary<string, Dictionary<string, object>> AdapterConfiguration { get; set; } = new();
         
         // For decision steps
         public string Condition { get; set; }
