@@ -90,7 +90,7 @@ namespace OAI.ServiceLayer.Services.Adapters
         {
             try
             {
-                var repository = _unitOfWork.GetGuidRepository<AdapterDefinition>();
+                var repository = _unitOfWork.GetRepository<AdapterDefinition>();
                 var definitions = await repository.GetAllAsync();
 
                 foreach (var definition in definitions.Where(d => d.IsActive))
@@ -168,7 +168,7 @@ namespace OAI.ServiceLayer.Services.Adapters
         {
             try
             {
-                var repository = _unitOfWork.GetGuidRepository<AdapterDefinition>();
+                var repository = _unitOfWork.GetRepository<AdapterDefinition>();
                 
                 var existing = (await repository.GetAsync(d => d.AdapterId == adapter.Id))
                     .FirstOrDefault();
@@ -245,7 +245,7 @@ namespace OAI.ServiceLayer.Services.Adapters
                 // Mark as inactive in database
                 try
                 {
-                    var repository = _unitOfWork.GetGuidRepository<AdapterDefinition>();
+                    var repository = _unitOfWork.GetRepository<AdapterDefinition>();
                     var definition = (await repository.GetAsync(d => d.AdapterId == adapterId))
                         .FirstOrDefault();
                     
@@ -355,7 +355,7 @@ namespace OAI.ServiceLayer.Services.Adapters
             // Update in database
             try
             {
-                var repository = _unitOfWork.GetGuidRepository<AdapterDefinition>();
+                var repository = _unitOfWork.GetRepository<AdapterDefinition>();
                 var definition = (await repository.GetAsync(d => d.AdapterId == adapterId))
                     .FirstOrDefault();
                 

@@ -1,5 +1,4 @@
 using System;
-using OAI.Core.Entities.Base;
 using OAI.Core.Interfaces.Adapters;
 
 namespace OAI.Core.Entities.Adapters
@@ -7,7 +6,7 @@ namespace OAI.Core.Entities.Adapters
     /// <summary>
     /// Persisted adapter definition
     /// </summary>
-    public class AdapterDefinition : BaseEntity<Guid>
+    public class AdapterDefinition : BaseEntity
     {
         public string AdapterId { get; set; }
         public string Name { get; set; }

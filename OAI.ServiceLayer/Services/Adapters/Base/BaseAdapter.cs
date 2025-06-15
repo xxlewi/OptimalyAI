@@ -169,11 +169,11 @@ namespace OAI.ServiceLayer.Services.Adapters.Base
                     // Numeric validations
                     if (value != null && double.TryParse(value.ToString(), out var numValue))
                     {
-                        if (parameter.Validation.MinValue.HasValue && numValue < parameter.Validation.MinValue)
-                            return $"Parameter '{parameter.Name}' must be at least {parameter.Validation.MinValue}";
+                        if (parameter.Validation.MinValue != null && double.TryParse(parameter.Validation.MinValue.ToString(), out var minValue) && numValue < minValue)
+                            return $"Parameter '{parameter.Name}' must be at least {minValue}";
                         
-                        if (parameter.Validation.MaxValue.HasValue && numValue > parameter.Validation.MaxValue)
-                            return $"Parameter '{parameter.Name}' must be at most {parameter.Validation.MaxValue}";
+                        if (parameter.Validation.MaxValue != null && double.TryParse(parameter.Validation.MaxValue.ToString(), out var maxValue) && numValue > maxValue)
+                            return $"Parameter '{parameter.Name}' must be at most {maxValue}";
                     }
                 }
             }

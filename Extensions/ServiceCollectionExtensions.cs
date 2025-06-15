@@ -258,6 +258,32 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OAI.Core.Interfaces.Tools.ITool>(provider => 
             provider.GetRequiredService<OAI.ServiceLayer.Services.Tools.Implementations.FirecrawlWebScrapingTool>());
         
+        // Register adapter services
+        services.AddScoped<OAI.Core.Interfaces.Adapters.IAdapterRegistry, OAI.ServiceLayer.Services.Adapters.AdapterRegistryService>();
+        services.AddScoped<OAI.Core.Interfaces.Adapters.IAdapterExecutor, OAI.ServiceLayer.Services.Adapters.AdapterExecutorService>();
+        
+        // Register adapter implementations
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ExcelInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.CsvInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.JsonInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ExcelOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.CsvOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.JsonOutputAdapter>();
+        
+        // Register adapters as IAdapter
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ExcelInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.CsvInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.JsonInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ExcelOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.CsvOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.JsonOutputAdapter>());
+        
         return services;
     }
     

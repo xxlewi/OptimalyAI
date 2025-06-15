@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
 using OAI.Core.Entities.Business;
 using OAI.Core.Entities.Projects;
+using OAI.Core.Entities.Adapters;
 using OptimalyAI.Extensions;
 using System.Reflection;
 
@@ -20,6 +21,10 @@ public class AppDbContext : DbContext
     // Explicit DbSets for workflow entities
     public DbSet<ProjectStage> ProjectStages { get; set; }
     public DbSet<ProjectStageTool> ProjectStageTools { get; set; }
+    
+    // Adapter entities
+    public DbSet<AdapterDefinition> AdapterDefinitions { get; set; }
+    public DbSet<AdapterExecution> AdapterExecutions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

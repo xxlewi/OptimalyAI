@@ -171,7 +171,11 @@ namespace OAI.ServiceLayer.Services.Adapters.Base
                     Code = ToolErrorCodes.ValidationError,
                     Message = "Configuration validation failed",
                     Details = string.Join("; ", validationResult.Errors),
-                    ValidationErrors = validationResult.FieldErrors
+                    Type = ToolErrorType.ValidationError,
+                    Context = new Dictionary<string, object>
+                    {
+                        ["ValidationErrors"] = validationResult.FieldErrors
+                    }
                 },
                 StartedAt = startTime,
                 CompletedAt = DateTime.UtcNow,

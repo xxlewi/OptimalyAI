@@ -170,6 +170,7 @@ namespace OAI.Core.Interfaces.Tools
         public int? Rows { get; set; }
         public int? Columns { get; set; }
         public double? Step { get; set; }
+        public string[] FileExtensions { get; set; }
         public Dictionary<string, object> CustomHints { get; set; } = new Dictionary<string, object>();
     }
 

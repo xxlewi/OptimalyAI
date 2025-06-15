@@ -5,11 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Interfaces.Adapters;
 using OAI.Core.Interfaces.Tools;
 using OAI.ServiceLayer.Services.Adapters.Base;
-using ClosedXML.Excel;
 
 namespace OAI.ServiceLayer.Services.Adapters.Implementations
 {
