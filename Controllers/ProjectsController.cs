@@ -47,6 +47,20 @@ namespace OptimalyAI.Controllers
                 // Získat projekty z databáze - pro view načíst všechny včetně archivovaných
                 var (projects, totalCount) = await _projectService.GetProjectsAsync(page, pageSize, "all", workflowType, search);
                 
+                // Debug výpis informací o projektech a jejich zákaznících
+                _logger.LogInformation("=== DEBUG: Projects and Customers Info ===");
+                _logger.LogInformation("Total projects loaded: {Count}", projects.Count());
+                
+                foreach (var project in projects)
+                {
+                    _logger.LogInformation("Project: Id={ProjectId}, Name={Name}, CustomerId={CustomerId}, CustomerName={CustomerName}",
+                        project.Id,
+                        project.Name,
+                        project.CustomerId,
+                        project.CustomerName);
+                }
+                _logger.LogInformation("=== END DEBUG ===");
+                
                 // Získat statistiky
                 var summary = await _projectService.GetSummaryAsync();
                 
@@ -286,7 +300,7 @@ namespace OptimalyAI.Controllers
                 if (createDto.CustomerId == null && !string.IsNullOrEmpty(createDto.CustomerName) && createDto.CustomerName != "Interní projekt")
                 {
                     // Create new customer first
-                    var newCustomer = await _customerService.CreateAsync(new OAI.Core.DTOs.Customers.CreateCustomerDto
+                    var newCustomer = await _customerService.CreateAsync(new CreateCustomerDto
                     {
                         Name = createDto.CustomerName,
                         Email = createDto.CustomerEmail ?? "",

@@ -278,6 +278,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.EmailOutputAdapter>();
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ApiOutputAdapter>();
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ChatInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ChatOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ConversationContextAdapter>();
         
         // Register workflow-specific adapters (temporarily commented out due to compilation issues)
         // services.AddTransient<OAI.ServiceLayer.Services.Adapters.Workflow.FileUploadInputAdapter>();
@@ -312,6 +315,12 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ApiOutputAdapter>());
         services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
             provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ChatInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ChatOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ConversationContextAdapter>());
             
         // Register workflow adapters as IAdapter (temporarily commented out)
         // services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
