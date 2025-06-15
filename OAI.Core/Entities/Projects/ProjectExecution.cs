@@ -17,7 +17,7 @@ namespace OAI.Core.Entities.Projects
         /// Typ spuštění (Manual, Scheduled, Triggered)
         /// </summary>
         [MaxLength(50)]
-        public string ExecutionType { get; set; }
+        public string? ExecutionType { get; set; }
 
         /// <summary>
         /// Status spuštění
@@ -42,22 +42,22 @@ namespace OAI.Core.Entities.Projects
         /// <summary>
         /// Vstupní parametry (JSON)
         /// </summary>
-        public string InputParameters { get; set; }
+        public string? InputParameters { get; set; }
 
         /// <summary>
         /// Výstupní data (JSON)
         /// </summary>
-        public string OutputData { get; set; }
+        public string? OutputData { get; set; }
 
         /// <summary>
         /// Chybová zpráva
         /// </summary>
-        public string ErrorMessage { get; set; }
+        public string? ErrorMessage { get; set; }
 
         /// <summary>
         /// Stack trace chyby
         /// </summary>
-        public string ErrorStackTrace { get; set; }
+        public string? ErrorStackTrace { get; set; }
 
         /// <summary>
         /// Počet použitých nástrojů
@@ -77,13 +77,13 @@ namespace OAI.Core.Entities.Projects
         /// <summary>
         /// Detailní log spuštění
         /// </summary>
-        public string ExecutionLog { get; set; }
+        public string? ExecutionLog { get; set; }
 
         /// <summary>
         /// ID uživatele, který spustil
         /// </summary>
         [MaxLength(100)]
-        public string InitiatedBy { get; set; }
+        public string? InitiatedBy { get; set; }
 
         // Navigační vlastnosti
         public virtual Project Project { get; set; }

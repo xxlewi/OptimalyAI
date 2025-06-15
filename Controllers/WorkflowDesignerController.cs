@@ -34,13 +34,43 @@ namespace OptimalyAI.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(Guid projectId, bool readOnly = false)
         {
-            // Získej nebo vytvoř workflow
+            WorkflowGraphViewModel workflow;
+            
+            // Try to load from database first
             if (!_workflows.ContainsKey(projectId))
             {
-                _workflows[projectId] = await CreateDefaultWorkflowAsync(projectId);
+                // Try to load from database
+                var repository = _unitOfWork.GetGuidRepository<ProjectWorkflow>();
+                var projectWorkflows = await repository.GetAsync(w => w.ProjectId == projectId && w.IsActive);
+                var projectWorkflow = projectWorkflows.FirstOrDefault();
+                
+                if (projectWorkflow != null && !string.IsNullOrEmpty(projectWorkflow.StepsDefinition))
+                {
+                    try
+                    {
+                        // Parse the saved workflow definition
+                        var workflowData = JsonSerializer.Deserialize<dynamic>(projectWorkflow.StepsDefinition);
+                        workflow = await CreateWorkflowFromDatabaseAsync(projectId, workflowData);
+                    }
+                    catch
+                    {
+                        // If parsing fails, create default
+                        workflow = await CreateDefaultWorkflowAsync(projectId);
+                    }
+                }
+                else
+                {
+                    // Create a basic workflow if none exists
+                    workflow = await CreateDefaultWorkflowAsync(projectId);
+                }
+                
+                // Cache it
+                _workflows[projectId] = workflow;
             }
-            
-            var workflow = _workflows[projectId];
+            else
+            {
+                workflow = _workflows[projectId];
+            }
             
             ViewBag.ProjectId = projectId;
             ViewBag.ReadOnly = readOnly;
@@ -434,6 +464,13 @@ namespace OptimalyAI.Controllers
                     _logger.LogInformation("Workflow verified in database with ID: {Id}, Version: {Version}", 
                         savedWorkflow.Id, savedWorkflow.Version);
                 }
+                
+                // Store workflow ID in memory for UI
+                if (!_workflows.ContainsKey(request.ProjectId))
+                {
+                    _workflows[request.ProjectId] = workflow;
+                }
+                _workflows[request.ProjectId].WorkflowId = projectWorkflow.Id;
                 
                 return Json(new { success = true, message = "Workflow uloženo", workflowId = projectWorkflow.Id });
             }

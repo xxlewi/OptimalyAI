@@ -9,6 +9,8 @@ using OptimalyAI.Validation;
 using OptimalyAI.Services.AI;
 using OptimalyAI.Services.AI.Interfaces;
 using Microsoft.Extensions.Logging;
+using OAI.Core.Interfaces.Workflow;
+using OAI.ServiceLayer.Services.Workflow;
 
 namespace OptimalyAI.Extensions;
 
@@ -310,6 +312,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
         services.TryAddScoped<OAI.Core.Interfaces.Tools.IToolExecutor, OAI.ServiceLayer.Services.Tools.ToolExecutorService>();
         services.TryAddScoped<OAI.Core.Interfaces.Tools.IToolSecurity, OAI.ServiceLayer.Services.Tools.ToolSecurityService>();
+        
+        // Register Workflow services
+        services.AddScoped<IWorkflowExecutor, WorkflowExecutor>();
         
         // Register Web Search services
         if (!services.Any(s => s.ServiceType == typeof(OAI.ServiceLayer.Services.WebSearch.IWebSearchService)))

@@ -383,6 +383,64 @@
     .badge-purple:hover {
         background-color: #563d7c;
     }
+    
+    /* Drag & Drop Visual Feedback */
+    .tool-item.dragging {
+        opacity: 0.5;
+        transform: scale(0.95);
+        cursor: grabbing !important;
+    }
+    
+    #workflow-canvas.drag-over {
+        background-color: rgba(0, 123, 255, 0.05);
+        border: 2px dashed #007bff;
+    }
+    
+    .drop-zone-indicator {
+        position: absolute;
+        width: 150px;
+        height: 80px;
+        border: 3px dashed #28a745;
+        border-radius: 8px;
+        background-color: rgba(40, 167, 69, 0.1);
+        pointer-events: none;
+        display: none;
+        z-index: 1000;
+        animation: pulse 1s infinite;
+    }
+    
+    @@keyframes pulse {
+        0% { opacity: 0.4; transform: scale(0.98); }
+        50% { opacity: 0.8; transform: scale(1.02); }
+        100% { opacity: 0.4; transform: scale(0.98); }
+    }
+    
+    .workflow-node.connection-source {
+        box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.3);
+    }
+    
+    .workflow-node.connection-target-valid {
+        box-shadow: 0 0 0 4px rgba(40, 167, 69, 0.3);
+    }
+    
+    .workflow-node.connection-target-invalid {
+        box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.3);
+    }
+    
+    .connection-line-preview {
+        stroke: #007bff;
+        stroke-width: 3;
+        stroke-dasharray: 5, 5;
+        fill: none;
+        pointer-events: none;
+        animation: dash 0.5s linear infinite;
+    }
+    
+    @@keyframes dash {
+        to {
+            stroke-dashoffset: -10;
+        }
+    }
 </style>
 
 <div class="content-header">
@@ -399,14 +457,14 @@
                     <a href="/Projects/@Model.ProjectId" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i> Zpět na projekt
                     </a>
-                    <button class="btn btn-success" onclick="saveWorkflow()">
+                    <button class="btn btn-success" onclick="saveWorkflow().catch(err => console.error(err))">
                         <i class="fas fa-save"></i> Uložit
                     </button>
                     <button class="btn btn-info" onclick="validateWorkflow()">
                         <i class="fas fa-check"></i> Validovat
                     </button>
-                    <button class="btn btn-primary" onclick="testWorkflow()">
-                        <i class="fas fa-play"></i> Test
+                    <button class="btn btn-warning" onclick="testWorkflow()">
+                        <i class="fas fa-download"></i> Export JSON
                     </button>
                 </div>
             </div>
@@ -419,6 +477,9 @@
         @if (ViewBag.ReadOnly != true)
         {
         <div class="toolbar">
+            <button class="btn btn-sm btn-primary" onclick="runWorkflow()">
+                <i class="fas fa-play"></i> Spustit
+            </button>
             <button class="btn btn-sm btn-secondary" onclick="clearWorkflow()">
                 <i class="fas fa-trash"></i> Vyčistit
             </button>
@@ -500,6 +561,8 @@
                             </marker>
                         </defs>
                     </svg>
+                    <!-- Drop zone indicator -->
+                    <div class="drop-zone-indicator" id="dropZoneIndicator"></div>
                 </div>
             </div>
         </div>
@@ -642,6 +705,9 @@
                 <button type="button" class="btn btn-danger" onclick="deleteCurrentNode()">
                     <i class="fas fa-trash"></i> Smazat
                 </button>
+                <button type="button" class="btn btn-info" id="testToolBtn" onclick="testCurrentTool()" style="display: none;">
+                    <i class="fas fa-flask"></i> Test nástroje
+                </button>
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
                 <button type="button" class="btn btn-primary" onclick="updateCurrentNode()">
                     <i class="fas fa-save"></i> Uložit
@@ -650,6 +716,245 @@
         </div>
     </div>
 </div>
+
+<!-- Workflow Execution Modal -->
+<div class="modal fade" id="executionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-play-circle"></i> Spuštění Workflow
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Pre-execution setup -->
+                <div id="executionSetup">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Workflow bude spuštěno s aktuální konfigurací.
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Název spuštění</label>
+                        <input type="text" class="form-control" id="executionName" 
+                               value="Test run - @DateTime.Now.ToString("yyyy-MM-dd HH:mm")">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Vstupní parametry (JSON)</label>
+                        <textarea class="form-control" id="executionParameters" rows="4">{}</textarea>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="enableDebugLogging" checked>
+                        <label class="form-check-label" for="enableDebugLogging">
+                            Povolit debug logy
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Execution progress -->
+                <div id="executionProgress" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">Průběh zpracování</h6>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="sr-only">Zpracovává se...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="progress mb-3">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    
+                    <div id="executionSteps" class="execution-steps">
+                        <!-- Steps will be added dynamically -->
+                    </div>
+                    
+                    <div class="execution-log mt-3">
+                        <h6>Logy</h6>
+                        <div id="executionLog" class="log-container">
+                            <!-- Logs will be added here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Execution results -->
+                <div id="executionResults" style="display: none;">
+                    <div class="alert" id="executionResultAlert">
+                        <!-- Result message -->
+                    </div>
+                    
+                    <div id="executionOutput">
+                        <!-- Output data will be shown here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                <button type="button" class="btn btn-primary" id="startExecutionBtn" onclick="startExecution()">
+                    <i class="fas fa-play"></i> Spustit
+                </button>
+                <button type="button" class="btn btn-danger" id="cancelExecutionBtn" 
+                        onclick="cancelExecution()" style="display: none;">
+                    <i class="fas fa-stop"></i> Zrušit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tool Test Modal -->
+<div class="modal fade" id="toolTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-flask"></i> Test nástroje: <span id="testToolName"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Test setup -->
+                <div id="testSetup">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Nastavte parametry a spusťte test nástroje.
+                    </div>
+                    
+                    <div id="testToolParameters">
+                        <!-- Parameters will be loaded dynamically -->
+                    </div>
+                </div>
+                
+                <!-- Test progress -->
+                <div id="testProgress" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">Testování...</h6>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="sr-only">Zpracovává se...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Test results -->
+                <div id="testResults" style="display: none;">
+                    <div class="alert" id="testResultAlert">
+                        <!-- Result message -->
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Výstup nástroje:</h6>
+                            <pre id="testOutput" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Detaily provedení:</h6>
+                            <div id="testDetails">
+                                <p><strong>Doba běhu:</strong> <span id="testDuration">-</span></p>
+                                <p><strong>Status:</strong> <span id="testStatus">-</span></p>
+                                <p><strong>Typ výstupu:</strong> <span id="testOutputType">-</span></p>
+                            </div>
+                            
+                            <div id="testError" class="alert alert-danger mt-3" style="display: none;">
+                                <h6>Chyba:</h6>
+                                <pre id="testErrorDetails"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                <button type="button" class="btn btn-primary" id="runTestBtn" onclick="runToolTest()">
+                    <i class="fas fa-play"></i> Spustit test
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .execution-steps {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+    }
+    
+    .execution-step {
+        padding: 8px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    
+    .execution-step.running {
+        background: #e3f2fd;
+        border-left: 3px solid #2196f3;
+    }
+    
+    .execution-step.completed {
+        background: #e8f5e9;
+        border-left: 3px solid #4caf50;
+    }
+    
+    .execution-step.failed {
+        background: #ffebee;
+        border-left: 3px solid #f44336;
+    }
+    
+    .log-container {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        max-height: 150px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+    }
+    
+    .log-entry {
+        margin-bottom: 2px;
+    }
+    
+    .log-entry.error {
+        color: #dc3545;
+    }
+    
+    .log-entry.warning {
+        color: #ffc107;
+    }
+    
+    .log-entry.info {
+        color: #17a2b8;
+    }
+    
+    /* Fix for parameter inputs */
+    #dynamicParameters input.form-control {
+        width: 100% !important;
+        height: 38px !important;
+        padding: 6px 12px !important;
+        font-size: 14px !important;
+        line-height: 1.42857143 !important;
+        color: #555 !important;
+        background-color: #fff !important;
+        background-image: none !important;
+        border: 1px solid #ccc !important;
+        border-radius: 4px !important;
+        box-shadow: inset 0 1px 1px rgba(0,0,0,.075) !important;
+        display: block !important;
+    }
+    
+    #dynamicParameters .form-group {
+        margin-bottom: 15px !important;
+    }
+</style>
 
 @section Scripts {
 <script>
@@ -716,6 +1021,8 @@
     
     // Funkce pro vykreslení parametrů
     function renderToolParameters(parameters) {
+        console.log('Rendering parameters:', parameters); // Debug
+        
         if (!parameters || parameters.length === 0) {
             $('#dynamicParameters').html('<div class="text-muted">Tento nástroj nemá žádné parametry</div>');
             return;
@@ -723,64 +1030,188 @@
         
         let html = '';
         parameters.forEach(param => {
+            console.log('Rendering param:', param); // Debug
             html += renderParameter(param);
         });
         
+        console.log('Generated HTML:', html); // Debug
         $('#dynamicParameters').html(html);
+        
+        // Přidat real-time validaci
+        $('#dynamicParameters [data-param]').on('input change', function() {
+            validateSingleParameter($(this));
+        });
+    }
+    
+    // Validace jednotlivého parametru
+    function validateSingleParameter($input) {
+        const paramName = $input.data('param');
+        const paramInfoStr = $input.attr('data-param-info');
+        
+        if (!paramInfoStr) return;
+        
+        // Vyčistit předchozí chyby pro tento parametr
+        $input.removeClass('is-invalid');
+        $(`#error_${paramName}`).hide();
+        
+        try {
+            const paramInfo = JSON.parse(atob(paramInfoStr)); // Decode from base64
+            let value = $input.attr('type') === 'checkbox' ? $input.is(':checked') : $input.val();
+            
+            // Validace povinných polí
+            if (paramInfo.isRequired && (!value || value === '')) {
+                $input.addClass('is-invalid');
+                $(`#error_${paramName}`).text(`${paramInfo.displayName || paramName} je povinné pole`).show();
+                return false;
+            }
+            
+            // Validace podle typu
+            if (value !== '' && value !== null) {
+                switch(paramInfo.type) {
+                    case 'Integer':
+                        const intVal = parseInt(value);
+                        if (isNaN(intVal)) {
+                            $input.addClass('is-invalid');
+                            $(`#error_${paramName}`).text('Musí být celé číslo').show();
+                            return false;
+                        } else {
+                            // Kontrola min/max
+                            if (paramInfo.validation) {
+                                if (paramInfo.validation.min !== null && intVal < paramInfo.validation.min) {
+                                    $input.addClass('is-invalid');
+                                    $(`#error_${paramName}`).text(`Minimální hodnota je ${paramInfo.validation.min}`).show();
+                                    return false;
+                                }
+                                if (paramInfo.validation.max !== null && intVal > paramInfo.validation.max) {
+                                    $input.addClass('is-invalid');
+                                    $(`#error_${paramName}`).text(`Maximální hodnota je ${paramInfo.validation.max}`).show();
+                                    return false;
+                                }
+                            }
+                        }
+                        break;
+                        
+                    case 'String':
+                        if (paramInfo.validation) {
+                            // Kontrola délky
+                            if (paramInfo.validation.minLength !== null && value.length < paramInfo.validation.minLength) {
+                                $input.addClass('is-invalid');
+                                $(`#error_${paramName}`).text(`Minimální délka je ${paramInfo.validation.minLength} znaků`).show();
+                                return false;
+                            }
+                            if (paramInfo.validation.maxLength !== null && value.length > paramInfo.validation.maxLength) {
+                                $input.addClass('is-invalid');
+                                $(`#error_${paramName}`).text(`Maximální délka je ${paramInfo.validation.maxLength} znaků`).show();
+                                return false;
+                            }
+                        }
+                        
+                        // Speciální validace pro URL typ
+                        if (paramInfo.uiHints && paramInfo.uiHints.inputType === 'Url' && value) {
+                            try {
+                                new URL(value);
+                            } catch (e) {
+                                $input.addClass('is-invalid');
+                                $(`#error_${paramName}`).text('Neplatná URL adresa').show();
+                                return false;
+                            }
+                        }
+                        break;
+                }
+            }
+        } catch (e) {
+            console.error('Error validating parameter:', e);
+        }
+        
+        return true;
     }
     
     // Funkce pro vykreslení jednotlivého parametru
-    function renderParameter(param) {
+    function renderParameter(param, prefix = '') {
+        const idPrefix = prefix || 'param_';
         let html = '<div class="form-group">';
-        html += `<label>${param.displayName || param.name}`;
+        html += `<label for="${idPrefix}${param.name}">${param.displayName || param.name}`;
         if (param.isRequired) html += ' <span class="text-danger">*</span>';
         html += '</label>';
+        if (param.description) {
+            html += `<small class="form-text text-muted">${param.description}</small>`;
+        }
         
         // Podle typu parametru vykreslit správný input
-        switch(param.type) {
+        const paramType = param.type || 'String';
+        console.log(`Param ${param.name} has type: ${paramType}`); // Debug
+        
+        switch(paramType) {
             case 'String':
-                if (param.validation?.allowedValues) {
+                if (param.validation?.allowedValues && param.validation.allowedValues.length > 0) {
                     // Select pro allowed values
-                    html += `<select class="form-control" data-param="${param.name}">`;
+                    const selectParamInfo = btoa(JSON.stringify(param));
+                    html += `<select class="form-control" id="${idPrefix}${param.name}" data-param="${param.name}" data-param-info="${selectParamInfo}">`;
                     param.validation.allowedValues.forEach(val => {
                         html += `<option value="${val}"${val === param.defaultValue ? ' selected' : ''}>${val}</option>`;
                     });
                     html += '</select>';
                 } else {
                     // Textový input
-                    html += `<input type="text" class="form-control" data-param="${param.name}" 
-                             value="${param.defaultValue || ''}" placeholder="${param.example || ''}"/>`;
+                    const paramInfo = btoa(JSON.stringify(param)); // Base64 encode to avoid quote issues
+                    html += `<input type="text" class="form-control" id="${idPrefix}${param.name}"
+                             data-param="${param.name}" 
+                             data-param-info="${paramInfo}"
+                             value="${param.defaultValue || ''}" 
+                             placeholder="${param.example || ''}" />`;
                 }
                 break;
                 
             case 'Boolean':
                 html += `<div class="custom-control custom-switch">`;
-                html += `<input type="checkbox" class="custom-control-input" id="param_${param.name}" 
-                         data-param="${param.name}"${param.defaultValue ? ' checked' : ''}>`;
-                html += `<label class="custom-control-label" for="param_${param.name}">Ano</label>`;
+                const boolParamInfo = btoa(JSON.stringify(param));
+                html += `<input type="checkbox" class="custom-control-input" id="${idPrefix}${param.name}" 
+                         data-param="${param.name}" data-param-info="${boolParamInfo}"
+                         ${param.defaultValue ? ' checked' : ''}>`;
+                html += `<label class="custom-control-label" for="${idPrefix}${param.name}">Ano</label>`;
                 html += '</div>';
                 break;
                 
             case 'Integer':
-                html += `<input type="number" class="form-control" data-param="${param.name}" 
+                const intParamInfo = btoa(JSON.stringify(param));
+                html += `<input type="number" class="form-control" id="${idPrefix}${param.name}"
+                         data-param="${param.name}" 
+                         data-param-info="${intParamInfo}"
                          value="${param.defaultValue || ''}" 
                          ${param.validation?.min ? 'min="' + param.validation.min + '"' : ''}
                          ${param.validation?.max ? 'max="' + param.validation.max + '"' : ''}/>`;
                 break;
                 
             case 'Decimal':
-                html += `<input type="number" step="0.01" class="form-control" data-param="${param.name}" 
+                const decimalParamInfo = btoa(JSON.stringify(param));
+                html += `<input type="number" step="0.01" class="form-control" id="${idPrefix}${param.name}"
+                         data-param="${param.name}" 
+                         data-param-info="${decimalParamInfo}"
                          value="${param.defaultValue || ''}"/>`;
                 break;
                 
+            case 'Json':
+                const jsonParamInfo = btoa(JSON.stringify(param));
+                html += `<textarea class="form-control json-input" id="${idPrefix}${param.name}"
+                         data-param="${param.name}" 
+                         data-param-info="${jsonParamInfo}"
+                         rows="4">${param.defaultValue ? JSON.stringify(param.defaultValue, null, 2) : '{}'}</textarea>`;
+                break;
+                
             default:
-                html += `<input type="text" class="form-control" data-param="${param.name}" 
+                const defaultParamInfo = btoa(JSON.stringify(param));
+                html += `<input type="text" class="form-control" id="${idPrefix}${param.name}"
+                         data-param="${param.name}" 
+                         data-param-info="${defaultParamInfo}"
                          value="${param.defaultValue || ''}"/>`;
         }
         
         if (param.description) {
             html += `<small class="form-text text-muted">${param.description}</small>`;
         }
+        
+        // Div pro zobrazení validačních chyb
+        html += `<div class="invalid-feedback" id="error_${idPrefix}${param.name}"></div>`;
         
         html += '</div>';
         return html;
@@ -792,13 +1223,48 @@
         $('.tool-item').on('dragstart', function(e) {
             e.originalEvent.dataTransfer.setData('type', $(this).data('type'));
             e.originalEvent.dataTransfer.setData('tool', $(this).data('tool') || '');
+            
+            // Add dragging class
+            $(this).addClass('dragging');
+            
+            // Set drag image
+            e.originalEvent.dataTransfer.effectAllowed = 'copy';
+        }).on('dragend', function(e) {
+            // Remove dragging class
+            $(this).removeClass('dragging');
         });
         
         // Canvas
-        $('#workflow-canvas').on('dragover', function(e) {
+        $('#workflow-canvas').on('dragenter', function(e) {
             e.preventDefault();
+            $(this).addClass('drag-over');
+        }).on('dragover', function(e) {
+            e.preventDefault();
+            e.originalEvent.dataTransfer.dropEffect = 'copy';
+            
+            // Show drop zone indicator
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left - 75; // Center the indicator
+            const y = e.clientY - rect.top - 40;
+            
+            $('#dropZoneIndicator').css({
+                left: x + 'px',
+                top: y + 'px',
+                display: 'block'
+            });
+        }).on('dragleave', function(e) {
+            // Only remove drag-over if we're leaving the canvas entirely
+            if (e.target === this) {
+                $(this).removeClass('drag-over');
+                $('#dropZoneIndicator').hide();
+            }
         }).on('drop', function(e) {
             e.preventDefault();
+            
+            // Remove visual feedback
+            $(this).removeClass('drag-over');
+            $('#dropZoneIndicator').hide();
+            
             const type = e.originalEvent.dataTransfer.getData('type');
             const tool = e.originalEvent.dataTransfer.getData('tool');
             const rect = this.getBoundingClientRect();
@@ -806,6 +1272,12 @@
             const y = e.clientY - rect.top;
             
             createNode(type, x, y, tool);
+            
+            // Visual feedback for successful drop
+            toastr.success('Nástroj byl přidán do workflow', '', {
+                timeOut: 1000,
+                positionClass: 'toast-bottom-right'
+            });
         });
     }
     
@@ -1077,15 +1549,16 @@
             branch: branch
         };
         
+        // Add visual feedback to source node
+        $('#' + nodeId).addClass('connection-source');
+        
         // Change cursor
         $('#workflow-canvas').css('cursor', 'crosshair');
         
-        // Create temporary line
+        // Create temporary line with preview style
         const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         tempLine.setAttribute('id', 'temp-connection');
-        tempLine.setAttribute('class', 'connection-line');
-        tempLine.setAttribute('stroke', '#ff6b6b');
-        tempLine.setAttribute('stroke-dasharray', '5,5');
+        tempLine.setAttribute('class', 'connection-line-preview');
         $('#connections-svg')[0].appendChild(tempLine);
         
         // Get start position - from output dot
@@ -1137,18 +1610,21 @@
                     
                     // Add visual feedback
                     $(this).addClass('magnetic-hover');
+                    $('#' + inputNodeId).addClass('connection-target-valid');
                     
                     // Store the magnetized target
                     tempLine.setAttribute('data-magnetic-target', inputNodeId);
                     return false; // Break the loop
                 } else {
                     $(this).removeClass('magnetic-hover');
+                    $('#' + inputNodeId).removeClass('connection-target-valid');
                 }
             });
             
             if (!magnetized) {
                 tempLine.removeAttribute('data-magnetic-target');
                 $('.connection-dot.input').removeClass('magnetic-hover');
+                $('.workflow-node').removeClass('connection-target-valid');
             }
             
             tempLine.setAttribute('x1', startX);
@@ -1176,6 +1652,7 @@
                 $('#workflow-canvas').css('cursor', 'default');
                 $(document).off('.connection');
                 $('.connection-dot.input').removeClass('magnetic-hover');
+                $('.workflow-node').removeClass('connection-source connection-target-valid connection-target-invalid');
             }
         });
     }
@@ -1238,6 +1715,7 @@
         $('#workflow-canvas').css('cursor', 'default');
         $(document).off('.connection');
         $('.connection-dot.input').removeClass('magnetic-hover');
+        $('.workflow-node').removeClass('connection-source connection-target-valid connection-target-invalid');
     }
     
     function cancelConnection() {
@@ -1248,6 +1726,7 @@
         $('#workflow-canvas').css('cursor', 'default');
         $(document).off('.connection');
         $('.connection-dot.input').removeClass('magnetic-hover');
+        $('.workflow-node').removeClass('connection-source connection-target-valid connection-target-invalid');
     }
     
     // Update SVG connections
@@ -1359,6 +1838,13 @@
             // Set selected tool
             $('#nodeToolSelect').val(node.tool || '');
             
+            // Show/hide test button based on whether tool is selected
+            if (node.tool) {
+                $('#testToolBtn').show();
+            } else {
+                $('#testToolBtn').hide();
+            }
+            
             // Load tool parameters if tool is selected
             if (node.tool) {
                 loadToolParameters(node.tool);
@@ -1394,11 +1880,142 @@
         $('#nodeEditModal').modal('show');
     }
     
+    // Validace parametrů nástroje
+    function validateToolParameters() {
+        let isValid = true;
+        const errors = [];
+        
+        // Vyčistit předchozí chyby
+        $('#dynamicParameters .form-control').removeClass('is-invalid');
+        $('#dynamicParameters .invalid-feedback').hide();
+        
+        // Projít všechny parametry
+        $('#dynamicParameters [data-param]').each(function() {
+            const $input = $(this);
+            const paramName = $input.data('param');
+            const paramInfoStr = $input.attr('data-param-info');
+            
+            if (!paramInfoStr) return;
+            
+            try {
+                const paramInfo = JSON.parse(atob(paramInfoStr)); // Decode from base64
+                let value = $input.attr('type') === 'checkbox' ? $input.is(':checked') : $input.val();
+                
+                // Validace povinných polí
+                if (paramInfo.isRequired && (!value || value === '')) {
+                    isValid = false;
+                    $input.addClass('is-invalid');
+                    $(`#error_${paramName}`).text(`${paramInfo.displayName || paramName} je povinné pole`).show();
+                    errors.push(`${paramInfo.displayName || paramName} je povinné pole`);
+                    return;
+                }
+                
+                // Validace podle typu
+                if (value !== '' && value !== null) {
+                    switch(paramInfo.type) {
+                        case 'Integer':
+                            const intVal = parseInt(value);
+                            if (isNaN(intVal)) {
+                                isValid = false;
+                                $input.addClass('is-invalid');
+                                $(`#error_${paramName}`).text('Musí být celé číslo').show();
+                                errors.push(`${paramInfo.displayName || paramName}: musí být celé číslo`);
+                            } else {
+                                // Kontrola min/max
+                                if (paramInfo.validation) {
+                                    if (paramInfo.validation.min !== null && intVal < paramInfo.validation.min) {
+                                        isValid = false;
+                                        $input.addClass('is-invalid');
+                                        $(`#error_${paramName}`).text(`Minimální hodnota je ${paramInfo.validation.min}`).show();
+                                        errors.push(`${paramInfo.displayName || paramName}: minimální hodnota je ${paramInfo.validation.min}`);
+                                    }
+                                    if (paramInfo.validation.max !== null && intVal > paramInfo.validation.max) {
+                                        isValid = false;
+                                        $input.addClass('is-invalid');
+                                        $(`#error_${paramName}`).text(`Maximální hodnota je ${paramInfo.validation.max}`).show();
+                                        errors.push(`${paramInfo.displayName || paramName}: maximální hodnota je ${paramInfo.validation.max}`);
+                                    }
+                                }
+                            }
+                            break;
+                            
+                        case 'Decimal':
+                            const decVal = parseFloat(value);
+                            if (isNaN(decVal)) {
+                                isValid = false;
+                                $input.addClass('is-invalid');
+                                $(`#error_${paramName}`).text('Musí být číslo').show();
+                                errors.push(`${paramInfo.displayName || paramName}: musí být číslo`);
+                            }
+                            break;
+                            
+                        case 'String':
+                            if (paramInfo.validation) {
+                                // Kontrola délky
+                                if (paramInfo.validation.minLength !== null && value.length < paramInfo.validation.minLength) {
+                                    isValid = false;
+                                    $input.addClass('is-invalid');
+                                    $(`#error_${paramName}`).text(`Minimální délka je ${paramInfo.validation.minLength} znaků`).show();
+                                    errors.push(`${paramInfo.displayName || paramName}: minimální délka je ${paramInfo.validation.minLength} znaků`);
+                                }
+                                if (paramInfo.validation.maxLength !== null && value.length > paramInfo.validation.maxLength) {
+                                    isValid = false;
+                                    $input.addClass('is-invalid');
+                                    $(`#error_${paramName}`).text(`Maximální délka je ${paramInfo.validation.maxLength} znaků`).show();
+                                    errors.push(`${paramInfo.displayName || paramName}: maximální délka je ${paramInfo.validation.maxLength} znaků`);
+                                }
+                                // Kontrola patternu
+                                if (paramInfo.validation.pattern) {
+                                    const regex = new RegExp(paramInfo.validation.pattern);
+                                    if (!regex.test(value)) {
+                                        isValid = false;
+                                        $input.addClass('is-invalid');
+                                        $(`#error_${paramName}`).text('Neplatný formát').show();
+                                        errors.push(`${paramInfo.displayName || paramName}: neplatný formát`);
+                                    }
+                                }
+                            }
+                            
+                            // Speciální validace pro URL typ
+                            if (paramInfo.uiHints && paramInfo.uiHints.inputType === 'Url') {
+                                try {
+                                    new URL(value);
+                                } catch (e) {
+                                    isValid = false;
+                                    $input.addClass('is-invalid');
+                                    $(`#error_${paramName}`).text('Neplatná URL adresa').show();
+                                    errors.push(`${paramInfo.displayName || paramName}: neplatná URL adresa`);
+                                }
+                            }
+                            break;
+                    }
+                }
+            } catch (e) {
+                console.error('Error validating parameter:', e);
+            }
+        });
+        
+        return { isValid, errors };
+    }
+    
     // Update node
     function updateCurrentNode() {
         const nodeId = $('#editingNodeId').val();
         const node = nodes[nodeId];
         if (!node) return;
+        
+        // Validovat parametry pokud je to nástroj
+        if (node.type === 'tool' && $('#nodeToolSelect').val()) {
+            const validation = validateToolParameters();
+            if (!validation.isValid) {
+                toastr.error('Opravte chyby ve formuláři:<br>' + validation.errors.join('<br>'), 'Chyba validace', {
+                    closeButton: true,
+                    timeOut: 0,
+                    extendedTimeOut: 0
+                });
+                return;
+            }
+        }
         
         node.name = $('#nodeName').val();
         node.description = $('#nodeDescription').val();
@@ -1480,30 +2097,56 @@
     
     // Workflow operations
     function saveWorkflow() {
-        // Convert to orchestrator-compatible format
-        const workflowData = convertToOrchestratorFormat();
-        
-        console.log('Saving workflow:', workflowData);
-        
-        // Send to server
-        $.ajax({
-            url: '/WorkflowDesigner/SaveWorkflow',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                ProjectId: '@Model.ProjectId',
-                WorkflowData: workflowData
-            }),
-            success: function(response) {
-                if (response.success) {
-                    toastr.success('Workflow uloženo');
-                } else {
-                    toastr.error('Chyba při ukládání');
+        return new Promise((resolve, reject) => {
+            // Validovat všechny nástroje před uložením
+            const toolNodes = Object.values(nodes).filter(n => n.type === 'tool');
+            const missingTools = [];
+            
+            toolNodes.forEach(node => {
+                if (!node.tool) {
+                    missingTools.push(node.name);
                 }
-            },
-            error: function() {
-                toastr.error('Chyba při komunikaci se serverem');
+            });
+            
+            if (missingTools.length > 0) {
+                toastr.error('Následující uzly nemají přiřazený nástroj:<br>' + missingTools.join('<br>'), 'Chyba validace');
+                reject('Missing tools');
+                return;
             }
+            
+            // Convert to orchestrator-compatible format
+            const workflowData = convertToOrchestratorFormat();
+            
+            console.log('Saving workflow:', workflowData);
+            
+            // Send to server
+            $.ajax({
+                url: '/WorkflowDesigner/SaveWorkflow',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    ProjectId: '@Model.ProjectId',
+                    WorkflowData: workflowData
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        toastr.success('Workflow uloženo');
+                        // Update workflow ID if returned
+                        if (response.workflowId) {
+                            $('#executionModal').data('workflowId', response.workflowId);
+                            console.log('Workflow saved with ID:', response.workflowId);
+                        }
+                        resolve(response);
+                    } else {
+                        toastr.error('Chyba při ukládání');
+                        reject('Save failed');
+                    }
+                },
+                error: function() {
+                    toastr.error('Chyba při komunikaci se serverem');
+                    reject('Communication error');
+                }
+            });
         });
     }
     
@@ -1913,6 +2556,229 @@ Obrázek</textarea>
         }
     }
     
+    // Workflow execution functions
+    let currentExecutionId = null;
+    let executionCheckInterval = null;
+    
+    function runWorkflow() {
+        // First save the workflow to ensure it's up to date
+        saveWorkflow().then(() => {
+            $('#executionModal').modal('show');
+            resetExecutionModal();
+        }).catch(error => {
+            toastr.error('Musíte nejdříve uložit workflow');
+        });
+    }
+    
+    function resetExecutionModal() {
+        $('#executionSetup').show();
+        $('#executionProgress').hide();
+        $('#executionResults').hide();
+        $('#startExecutionBtn').show();
+        $('#cancelExecutionBtn').hide();
+        $('#executionParameters').val('{}');
+        $('#executionSteps').empty();
+        $('#executionLog').empty();
+        currentExecutionId = null;
+        
+        if (executionCheckInterval) {
+            clearInterval(executionCheckInterval);
+            executionCheckInterval = null;
+        }
+    }
+    
+    function startExecution() {
+        const executionName = $('#executionName').val();
+        const parametersText = $('#executionParameters').val();
+        const enableDebug = $('#enableDebugLogging').is(':checked');
+        
+        // Validate JSON parameters
+        let parameters = {};
+        try {
+            parameters = JSON.parse(parametersText);
+        } catch (e) {
+            toastr.error('Neplatné JSON parametry');
+            return;
+        }
+        
+        // Switch to progress view
+        $('#executionSetup').hide();
+        $('#executionProgress').show();
+        $('#startExecutionBtn').hide();
+        $('#cancelExecutionBtn').show();
+        
+        // Get the workflow ID from modal data or model
+        let workflowId = $('#executionModal').data('workflowId') || '@Model.WorkflowId';
+        
+        console.log('About to execute workflow:', workflowId);
+        console.log('Parameters:', parameters);
+        
+        if (!workflowId || workflowId === '00000000-0000-0000-0000-000000000000') {
+            toastr.error('Workflow musí být nejdříve uloženo');
+            resetExecutionModal();
+            return;
+        }
+        
+        // Start execution via API
+        const requestData = {
+            inputParameters: parameters,
+            enableDebugLogging: enableDebug,
+            initiatedBy: "user" // Add this field
+        };
+        
+        console.log('Sending execution request:', requestData, 'to workflow:', workflowId);
+        
+        $.ajax({
+            url: `/api/workflow/execute/${workflowId}`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(requestData),
+            success: function(response) {
+                if (response.success && response.data) {
+                    currentExecutionId = response.data.executionId;
+                    addLogEntry('Workflow spuštěno s ID: ' + currentExecutionId, 'info');
+                    
+                    // Start polling for status
+                    executionCheckInterval = setInterval(checkExecutionStatus, 2000);
+                } else {
+                    toastr.error(response.message || 'Chyba při spouštění workflow');
+                    showExecutionError(response.message || 'Neznámá chyba');
+                }
+            },
+            error: function(xhr) {
+                console.error('Execution failed:', xhr);
+                console.error('Response:', xhr.responseJSON);
+                console.error('Response Text:', xhr.responseText);
+                
+                const errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.errors?.[0] || 'Chyba při spouštění workflow';
+                const errors = xhr.responseJSON?.errors || [];
+                
+                if (errors.length > 0) {
+                    errors.forEach(err => toastr.error(err));
+                } else {
+                    toastr.error(errorMsg);
+                }
+                showExecutionError(errorMsg);
+            }
+        });
+    }
+    
+    function checkExecutionStatus() {
+        if (!currentExecutionId) return;
+        
+        $.ajax({
+            url: `/api/workflow/status/${currentExecutionId}`,
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.data) {
+                    updateExecutionProgress(response.data);
+                    
+                    // Check if execution is complete
+                    if (response.data.status !== 'Running' && response.data.status !== 'Pending') {
+                        clearInterval(executionCheckInterval);
+                        executionCheckInterval = null;
+                        
+                        if (response.data.status === 'Completed') {
+                            showExecutionSuccess();
+                        } else {
+                            showExecutionError(response.data.message || 'Workflow selhalo');
+                        }
+                    }
+                }
+            },
+            error: function(xhr) {
+                console.error('Error checking execution status:', xhr);
+            }
+        });
+    }
+    
+    function updateExecutionProgress(status) {
+        // Update progress bar
+        const progress = Math.round(status.progressPercentage || 0);
+        $('#progressBar').css('width', progress + '%').text(progress + '%');
+        
+        // Update current step
+        if (status.currentStepName) {
+            const stepExists = $(`#step-${status.currentStepId}`).length > 0;
+            if (!stepExists) {
+                addExecutionStep(status.currentStepId, status.currentStepName, 'running');
+            }
+        }
+        
+        // Add log message if available
+        if (status.message) {
+            addLogEntry(status.message, 'info');
+        }
+    }
+    
+    function addExecutionStep(stepId, stepName, status) {
+        const stepHtml = `
+            <div id="step-${stepId}" class="execution-step ${status}">
+                <i class="fas fa-${status === 'running' ? 'spinner fa-spin' : 
+                                 status === 'completed' ? 'check-circle' : 
+                                 'times-circle'}"></i>
+                ${stepName}
+            </div>
+        `;
+        $('#executionSteps').append(stepHtml);
+    }
+    
+    function addLogEntry(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const logHtml = `
+            <div class="log-entry ${type}">
+                [${timestamp}] ${message}
+            </div>
+        `;
+        $('#executionLog').append(logHtml);
+        $('#executionLog').scrollTop($('#executionLog')[0].scrollHeight);
+    }
+    
+    function showExecutionSuccess() {
+        $('#executionProgress').hide();
+        $('#executionResults').show();
+        $('#cancelExecutionBtn').hide();
+        
+        $('#executionResultAlert')
+            .removeClass('alert-danger')
+            .addClass('alert-success')
+            .html('<i class="fas fa-check-circle"></i> Workflow bylo úspěšně dokončeno!');
+        
+        // TODO: Show output data when available
+    }
+    
+    function showExecutionError(message) {
+        $('#executionProgress').hide();
+        $('#executionResults').show();
+        $('#cancelExecutionBtn').hide();
+        
+        $('#executionResultAlert')
+            .removeClass('alert-success')
+            .addClass('alert-danger')
+            .html(`<i class="fas fa-exclamation-circle"></i> ${message}`);
+    }
+    
+    function cancelExecution() {
+        if (!currentExecutionId) return;
+        
+        if (confirm('Opravdu chcete zrušit probíhající workflow?')) {
+            $.ajax({
+                url: `/api/workflow/cancel/${currentExecutionId}`,
+                method: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        toastr.info('Workflow bylo zrušeno');
+                        clearInterval(executionCheckInterval);
+                        showExecutionError('Workflow bylo zrušeno uživatelem');
+                    }
+                },
+                error: function(xhr) {
+                    toastr.error('Nepodařilo se zrušit workflow');
+                }
+            });
+        }
+    }
+    
     function autoLayout() {
         // Check if there are any nodes
         if (Object.keys(nodes).length === 0) {
@@ -2230,5 +3096,202 @@ Obrázek</textarea>
     function toggleAdvancedSettings() {
         $('#advancedSettingsContent').slideToggle();
     }
+    
+    // Test current tool
+    function testCurrentTool() {
+        const nodeId = $('#editingNodeId').val();
+        const node = nodes[nodeId];
+        
+        if (!node || !node.tool) {
+            toastr.error('Nejprve vyberte nástroj');
+            return;
+        }
+        
+        // Get current parameter values from the edit modal
+        const parameters = {};
+        $('#dynamicParameters [data-param]').each(function() {
+            const paramName = $(this).data('param');
+            let value;
+            
+            if ($(this).attr('type') === 'checkbox') {
+                value = $(this).is(':checked');
+            } else if ($(this).attr('type') === 'number') {
+                value = parseFloat($(this).val()) || 0;
+            } else {
+                value = $(this).val();
+            }
+            
+            parameters[paramName] = value;
+        });
+        
+        // Hide edit modal and show test modal
+        $('#nodeEditModal').modal('hide');
+        
+        // Set up test modal
+        $('#testToolName').text(node.name || node.tool);
+        loadTestToolParameters(node.tool, parameters);
+        
+        // Show test modal
+        $('#toolTestModal').modal('show');
+    }
+    
+    // Load tool parameters for testing
+    function loadTestToolParameters(toolId, currentValues) {
+        $('#testToolParameters').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Načítám parametry...</div>');
+        
+        $.ajax({
+            url: '/api/tools/' + toolId + '/parameters',
+            method: 'GET',
+            success: function(parameters) {
+                renderTestToolParameters(parameters, currentValues);
+            },
+            error: function() {
+                $('#testToolParameters').html('<div class="alert alert-warning">Nepodařilo se načíst parametry nástroje</div>');
+            }
+        });
+    }
+    
+    // Render parameters for testing
+    function renderTestToolParameters(parameters, currentValues) {
+        if (!parameters || parameters.length === 0) {
+            $('#testToolParameters').html('<div class="text-muted">Tento nástroj nemá žádné parametry</div>');
+            return;
+        }
+        
+        let html = '';
+        parameters.forEach(param => {
+            // Use current value if available
+            if (currentValues && currentValues[param.name] !== undefined) {
+                param.defaultValue = currentValues[param.name];
+            }
+            html += renderParameter(param, 'test_');
+        });
+        
+        $('#testToolParameters').html(html);
+    }
+    
+    // Run tool test
+    function runToolTest() {
+        const nodeId = $('#editingNodeId').val();
+        const node = nodes[nodeId];
+        
+        if (!node || !node.tool) {
+            toastr.error('Nástroj nebyl nalezen');
+            return;
+        }
+        
+        // Collect parameters
+        const parameters = {};
+        $('#testToolParameters [data-param]').each(function() {
+            const paramName = $(this).data('param');
+            let value;
+            
+            if ($(this).attr('type') === 'checkbox') {
+                value = $(this).is(':checked');
+            } else if ($(this).attr('type') === 'number') {
+                value = parseFloat($(this).val()) || 0;
+            } else if ($(this).hasClass('json-input')) {
+                try {
+                    value = JSON.parse($(this).val() || '{}');
+                } catch (e) {
+                    value = $(this).val();
+                }
+            } else {
+                value = $(this).val();
+            }
+            
+            parameters[paramName] = value;
+        });
+        
+        // Show progress
+        $('#testSetup').hide();
+        $('#testProgress').show();
+        $('#testResults').hide();
+        $('#runTestBtn').prop('disabled', true);
+        
+        const startTime = Date.now();
+        
+        // Execute tool
+        $.ajax({
+            url: '/api/tools/' + node.tool + '/execute',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(parameters),
+            success: function(response) {
+                const duration = Date.now() - startTime;
+                showTestResults(response, duration, true);
+            },
+            error: function(xhr) {
+                const duration = Date.now() - startTime;
+                let errorMessage = 'Chyba při spuštění nástroje';
+                let errorDetails = '';
+                
+                try {
+                    const errorResponse = JSON.parse(xhr.responseText);
+                    if (errorResponse.message) {
+                        errorMessage = errorResponse.message;
+                    }
+                    if (errorResponse.errors && errorResponse.errors.length > 0) {
+                        errorDetails = errorResponse.errors.join('\n');
+                    } else if (errorResponse.error) {
+                        errorDetails = errorResponse.error;
+                    }
+                } catch (e) {
+                    errorDetails = xhr.responseText || xhr.statusText;
+                }
+                
+                showTestResults({
+                    success: false,
+                    message: errorMessage,
+                    error: errorDetails
+                }, duration, false);
+            },
+            complete: function() {
+                $('#runTestBtn').prop('disabled', false);
+            }
+        });
+    }
+    
+    // Show test results
+    function showTestResults(response, duration, success) {
+        $('#testProgress').hide();
+        $('#testResults').show();
+        
+        // Update alert
+        const $alert = $('#testResultAlert');
+        $alert.removeClass('alert-success alert-danger');
+        $alert.addClass(success ? 'alert-success' : 'alert-danger');
+        $alert.html(`<i class="fas fa-${success ? 'check-circle' : 'exclamation-circle'}"></i> ${response.message || (success ? 'Test dokončen úspěšně' : 'Test selhal')}`);
+        
+        // Update output
+        if (response.data) {
+            $('#testOutput').text(typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2));
+        } else {
+            $('#testOutput').text('Žádný výstup');
+        }
+        
+        // Update details
+        $('#testDuration').text((duration / 1000).toFixed(2) + ' s');
+        $('#testStatus').html(success ? '<span class="badge badge-success">Úspěch</span>' : '<span class="badge badge-danger">Chyba</span>');
+        $('#testOutputType').text(response.data ? typeof response.data : 'null');
+        
+        // Show error if any
+        if (!success && (response.error || response.errors)) {
+            $('#testError').show();
+            $('#testErrorDetails').text(response.error || (response.errors ? response.errors.join('\n') : 'Neznámá chyba'));
+        } else {
+            $('#testError').hide();
+        }
+    }
+    
+    // Modify nodeToolSelect change handler to show/hide test button
+    $(document).on('change', '#nodeToolSelect', function() {
+        const selectedTool = $(this).val();
+        if (selectedTool) {
+            $('#testToolBtn').show();
+        } else {
+            $('#testToolBtn').hide();
+        }
+    });
 </script>
 }

@@ -334,6 +334,7 @@ namespace OptimalyAI.ViewModels
     public class WorkflowGraphViewModel
     {
         public Guid ProjectId { get; set; }
+        public Guid WorkflowId { get; set; } // Database workflow ID
         public string ProjectName { get; set; }
         public List<WorkflowNode> Nodes { get; set; } = new();
         public List<WorkflowEdge> Edges { get; set; } = new();
