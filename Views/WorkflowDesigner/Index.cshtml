@@ -44,23 +44,40 @@
                     </div>
                     <div class="card-body p-2">
                         <div class="node-palette">
-                            <div class="palette-item" draggable="true" data-node-type="Task">
-                                <i class="fas fa-cog"></i> Úloha
+                            <div class="palette-category">
+                                <h6><i class="fas fa-sign-in-alt"></i> Vstup</h6>
+                                <div class="palette-item" draggable="true" data-node-type="InputAdapter">
+                                    <i class="fas fa-download"></i> Input Adaptér
+                                </div>
                             </div>
-                            <div class="palette-item" draggable="true" data-node-type="Condition">
-                                <i class="fas fa-code-branch"></i> Podmínka
+                            
+                            <div class="palette-category mt-3">
+                                <h6><i class="fas fa-tasks"></i> Zpracování</h6>
+                                <div class="palette-item" draggable="true" data-node-type="Task">
+                                    <i class="fas fa-cog"></i> Úloha
+                                </div>
+                                <div class="palette-item" draggable="true" data-node-type="Condition">
+                                    <i class="fas fa-code-branch"></i> Podmínka
+                                </div>
+                                <div class="palette-item" draggable="true" data-node-type="Parallel">
+                                    <i class="fas fa-random"></i> Paralelní
+                                </div>
+                                <div class="palette-item" draggable="true" data-node-type="Join">
+                                    <i class="fas fa-compress-arrows-alt"></i> Spojení
+                                </div>
+                                <div class="palette-item" draggable="true" data-node-type="Loop">
+                                    <i class="fas fa-redo"></i> Smyčka
+                                </div>
+                                <div class="palette-item" draggable="true" data-node-type="Wait">
+                                    <i class="fas fa-clock"></i> Čekání
+                                </div>
                             </div>
-                            <div class="palette-item" draggable="true" data-node-type="Parallel">
-                                <i class="fas fa-random"></i> Paralelní
-                            </div>
-                            <div class="palette-item" draggable="true" data-node-type="Join">
-                                <i class="fas fa-compress-arrows-alt"></i> Spojení
-                            </div>
-                            <div class="palette-item" draggable="true" data-node-type="Loop">
-                                <i class="fas fa-redo"></i> Smyčka
-                            </div>
-                            <div class="palette-item" draggable="true" data-node-type="Wait">
-                                <i class="fas fa-clock"></i> Čekání
+                            
+                            <div class="palette-category mt-3">
+                                <h6><i class="fas fa-sign-out-alt"></i> Výstup</h6>
+                                <div class="palette-item" draggable="true" data-node-type="OutputAdapter">
+                                    <i class="fas fa-upload"></i> Output Adaptér
+                                </div>
                             </div>
                         </div>
                         

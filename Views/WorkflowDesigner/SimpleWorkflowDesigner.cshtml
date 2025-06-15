@@ -508,6 +508,18 @@
             <div class="toolbox">
                 <h5><i class="fas fa-toolbox"></i> Nástroje</h5>
                 
+                <h6>Vstup & Výstup</h6>
+                <div class="tool-item" data-type="InputAdapter" draggable="true">
+                    <i class="fas fa-download"></i> Input Adaptér
+                    <small style="display: block; font-size: 10px; color: #666;">Data vstup</small>
+                </div>
+                <div class="tool-item" data-type="OutputAdapter" draggable="true">
+                    <i class="fas fa-upload"></i> Output Adaptér
+                    <small style="display: block; font-size: 10px; color: #666;">Data výstup</small>
+                </div>
+                
+                <hr>
+                
                 <h6>Základní uzly</h6>
                 <div class="tool-item" data-type="task" draggable="true">
                     <i class="fas fa-square"></i> Proces
@@ -698,6 +710,14 @@
                         <div class="text-muted text-center py-3">
                             <i class="fas fa-info-circle"></i> Vyberte nástroj pro zobrazení parametrů
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Adapter Configuration Section -->
+                <div class="form-group" id="adapterConfigSection" style="display: none;">
+                    <label><i class="fas fa-plug"></i> Konfigurace adaptéru</label>
+                    <div id="adapterConfigContainer">
+                        <!-- Adapter configuration will be loaded here -->
                     </div>
                 </div>
             </div>
@@ -1339,7 +1359,9 @@
             'task': 'Zpracování dat nebo operace',
             'condition': 'Rozhodovací bod (if/else)',
             'parallel': 'Paralelní zpracování',
-            'ai-tool': 'Volání AI nástroje'
+            'ai-tool': 'Volání AI nástroje',
+            'InputAdapter': 'Vstup dat do workflow',
+            'OutputAdapter': 'Výstup dat z workflow'
         };
         
         // If no position provided, auto-position
@@ -1381,6 +1403,8 @@
     function getNodeTypeName(type) {
         const names = {
             'task': 'Proces',
+            'InputAdapter': 'Input Adaptér',
+            'OutputAdapter': 'Output Adaptér',
             'condition': 'Rozhodnutí',
             'parallel': 'Paralelní brána',
             'tool': 'Nástroj'
@@ -1497,7 +1521,9 @@
             'task': 'fas fa-tasks',
             'condition': 'fas fa-question-circle',
             'parallel': 'fas fa-code-branch',
-            'tool': 'fas fa-robot'
+            'tool': 'fas fa-robot',
+            'InputAdapter': 'fas fa-download',
+            'OutputAdapter': 'fas fa-upload'
         };
         return icons[type] || 'fas fa-circle';
     }
@@ -1829,6 +1855,16 @@
             if (node.type === 'condition') {
                 $('#nodeCondition').val(node.condition || '');
             }
+        } else if (node.type === 'InputAdapter' || node.type === 'OutputAdapter') {
+            // Show adapter configuration section
+            $('#toolSection').hide();
+            $('#executionSection').hide();
+            $('#parametersSection').hide();
+            $('#conditionSection').hide();
+            
+            // Show adapter configuration in modal
+            $('#adapterConfigSection').show();
+            showAdapterConfiguration(node);
         } else if (node.type === 'tool') {
             $('#toolSection').show();
             $('#executionSection').show();
@@ -1872,6 +1908,7 @@
             $('#executionSection').show();
             $('#parametersSection').hide();
             $('#conditionSection').hide();
+            $('#adapterConfigSection').hide();
         }
         
         // Reset advanced settings visibility
@@ -2020,7 +2057,18 @@
         node.name = $('#nodeName').val();
         node.description = $('#nodeDescription').val();
         
-        if (node.type === 'condition') {
+        if (node.type === 'InputAdapter' || node.type === 'OutputAdapter') {
+            // Get adapter configuration from the adapter selector
+            const adapterSelector = $('#adapterConfigContainer').find('[data-adapter-selector]');
+            if (adapterSelector.length > 0) {
+                const selectorData = adapterSelector.data('adapter-selector');
+                if (selectorData && selectorData.getConfig) {
+                    const config = selectorData.getConfig();
+                    node.selectedAdapter = config.adapterId;
+                    node.adapterConfiguration = { [config.adapterId]: config.configuration };
+                }
+            }
+        } else if (node.type === 'condition') {
             node.condition = $('#nodeCondition').val();
         } else if (node.type === 'tool') {
             node.tool = $('#nodeToolSelect').val() || null;
@@ -2396,6 +2444,10 @@ Obrázek</textarea>
                 step.retryCount = node.retryCount || 3;
                 // Add configuration parameters
                 step.configuration = node.configuration || {};
+            } else if (node.type === 'InputAdapter' || node.type === 'OutputAdapter') {
+                step.adapterId = node.selectedAdapter || null;
+                step.adapterConfiguration = node.adapterConfiguration || {};
+                step.adapterType = node.type === 'InputAdapter' ? 'Input' : 'Output';
             } else if (node.type === 'condition') {
                 step.condition = node.condition || 'true';
                 step.branches = {
@@ -2491,7 +2543,9 @@ Obrázek</textarea>
             'task': 'process',
             'tool': 'tool',
             'condition': 'decision',
-            'parallel': 'parallel-gateway'
+            'parallel': 'parallel-gateway',
+            'InputAdapter': 'input-adapter',
+            'OutputAdapter': 'output-adapter'
         };
         return typeMap[nodeType] || nodeType;
     }
@@ -3293,5 +3347,55 @@ Obrázek</textarea>
             $('#testToolBtn').hide();
         }
     });
+    
+    // Show adapter configuration for InputAdapter and OutputAdapter nodes
+    function showAdapterConfiguration(node) {
+        const adapterType = node.type === 'InputAdapter' ? 'Input' : 'Output';
+        const containerId = 'adapterConfigContainer';
+        
+        // Create a unique element ID
+        const elementId = 'adapter-selector-' + node.id;
+        
+        // Load the adapter selector component
+        $('#' + containerId).html(`
+            <div id="${elementId}">
+                <div class="text-center">
+                    <i class="fas fa-spinner fa-spin"></i> Načítám adaptéry...
+                </div>
+            </div>
+        `);
+        
+        // Load adapter selector via ViewComponent
+        $.ajax({
+            url: '/Components/AdapterSelector',
+            type: 'GET',
+            data: {
+                elementId: elementId,
+                label: adapterType + ' Adaptér',
+                adapterType: adapterType,
+                existingConfiguration: JSON.stringify(node.adapterConfiguration || {})
+            },
+            success: function(html) {
+                $('#' + containerId).html(html);
+                
+                // Listen for adapter configuration changes
+                $('#' + elementId).on('adapter-config-changed', function(e, data) {
+                    // Update node's adapter configuration
+                    if (!node.adapterConfiguration) {
+                        node.adapterConfiguration = {};
+                    }
+                    node.adapterConfiguration[data.adapterId] = data.config;
+                });
+            },
+            error: function() {
+                $('#' + containerId).html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Chyba při načítání adaptérů
+                    </div>
+                `);
+            }
+        });
+    }
+    
 </script>
 }

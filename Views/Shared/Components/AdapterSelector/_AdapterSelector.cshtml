@@ -1,0 +1,252 @@
+@model AdapterSelectorViewModel
+
+<div class="adapter-selector" id="@Model.ElementId">
+    <div class="form-group">
+        <label>@Model.Label</label>
+        <select class="form-control adapter-select" data-adapter-type="@Model.AdapterType">
+            <option value="">-- Vyberte adaptér --</option>
+            @foreach (var category in Model.AdaptersByCategory)
+            {
+                <optgroup label="@category.Key">
+                    @foreach (var adapter in category.Value)
+                    {
+                        <option value="@adapter.Id" 
+                                data-adapter='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(adapter))'>
+                            @adapter.Name - @adapter.Description
+                        </option>
+                    }
+                </optgroup>
+            }
+        </select>
+    </div>
+    
+    <div class="adapter-config" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0">
+                    <i class="fas fa-cog"></i> Konfigurace: <span class="adapter-name"></span>
+                    <button type="button" class="btn btn-sm btn-link float-right test-adapter-btn">
+                        <i class="fas fa-vial"></i> Test
+                    </button>
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="adapter-params"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(function() {
+    const selector = $('#@Model.ElementId');
+    const adapterSelect = selector.find('.adapter-select');
+    const configSection = selector.find('.adapter-config');
+    const paramsContainer = selector.find('.adapter-params');
+    const testBtn = selector.find('.test-adapter-btn');
+    
+    let currentAdapter = null;
+    let currentConfig = {};
+    
+    // Handle adapter selection
+    adapterSelect.on('change', function() {
+        const selectedOption = $(this).find('option:selected');
+        const adapterId = $(this).val();
+        
+        if (!adapterId) {
+            configSection.hide();
+            currentAdapter = null;
+            currentConfig = {};
+            return;
+        }
+        
+        currentAdapter = selectedOption.data('adapter');
+        selector.find('.adapter-name').text(currentAdapter.name);
+        
+        // Load existing config if available
+        const existingConfig = @Html.Raw(Model.ExistingConfiguration ?? "{}");
+        currentConfig = existingConfig[adapterId] || {};
+        
+        renderParameters();
+        configSection.show();
+    });
+    
+    // Render parameter inputs
+    function renderParameters() {
+        paramsContainer.empty();
+        
+        if (!currentAdapter || !currentAdapter.parameters) {
+            paramsContainer.html('<p class="text-muted">Žádné parametry ke konfiguraci</p>');
+            return;
+        }
+        
+        currentAdapter.parameters.forEach(param => {
+            const paramHtml = createParameterInput(param);
+            paramsContainer.append(paramHtml);
+        });
+        
+        // Initialize any special inputs
+        paramsContainer.find('[data-toggle="tooltip"]').tooltip();
+    }
+    
+    // Create parameter input based on type
+    function createParameterInput(param) {
+        const value = currentConfig[param.name] ?? param.defaultValue ?? '';
+        const required = param.isRequired ? 'required' : '';
+        const requiredMark = param.isRequired ? '<span class="text-danger">*</span>' : '';
+        
+        let inputHtml = '';
+        const inputType = param.uiHints?.inputType || 'Text';
+        
+        switch (inputType) {
+            case 'TextArea':
+                inputHtml = `<textarea class="form-control" name="${param.name}" rows="${param.uiHints?.rows || 3}" 
+                            placeholder="${param.uiHints?.placeholder || ''}" ${required}>${value}</textarea>`;
+                break;
+                
+            case 'Number':
+                const min = param.validation?.minValue ?? '';
+                const max = param.validation?.maxValue ?? '';
+                const step = param.uiHints?.step || 1;
+                inputHtml = `<input type="number" class="form-control" name="${param.name}" 
+                            value="${value}" min="${min}" max="${max}" step="${step}" ${required}>`;
+                break;
+                
+            case 'Checkbox':
+                const checked = value ? 'checked' : '';
+                inputHtml = `
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="${param.name}" 
+                               name="${param.name}" ${checked}>
+                        <label class="custom-control-label" for="${param.name}"></label>
+                    </div>`;
+                break;
+                
+            case 'Select':
+                if (param.validation?.allowedValues) {
+                    inputHtml = `<select class="form-control" name="${param.name}" ${required}>`;
+                    inputHtml += '<option value="">-- Vyberte --</option>';
+                    param.validation.allowedValues.forEach(val => {
+                        const selected = val == value ? 'selected' : '';
+                        inputHtml += `<option value="${val}" ${selected}>${val}</option>`;
+                    });
+                    inputHtml += '</select>';
+                }
+                break;
+                
+            case 'Password':
+                inputHtml = `<input type="password" class="form-control" name="${param.name}" 
+                            value="${value}" placeholder="${param.uiHints?.placeholder || ''}" ${required}>`;
+                break;
+                
+            case 'Email':
+                inputHtml = `<input type="email" class="form-control" name="${param.name}" 
+                            value="${value}" placeholder="${param.uiHints?.placeholder || ''}" ${required}>`;
+                break;
+                
+            case 'Code':
+                const lang = param.uiHints?.customHints?.language || 'json';
+                inputHtml = `<textarea class="form-control code-editor" name="${param.name}" 
+                            rows="${param.uiHints?.rows || 5}" data-language="${lang}"
+                            placeholder="${param.uiHints?.placeholder || ''}" ${required}>${value}</textarea>`;
+                break;
+                
+            default:
+                inputHtml = `<input type="text" class="form-control" name="${param.name}" 
+                            value="${value}" placeholder="${param.uiHints?.placeholder || ''}" ${required}>`;
+        }
+        
+        const helpText = param.uiHints?.helpText ? 
+            `<small class="form-text text-muted">${param.uiHints.helpText}</small>` : '';
+        
+        return `
+            <div class="form-group">
+                <label>${param.displayName} ${requiredMark}</label>
+                ${inputHtml}
+                ${helpText}
+            </div>
+        `;
+    }
+    
+    // Handle parameter changes
+    paramsContainer.on('change', 'input, select, textarea', function() {
+        const name = $(this).attr('name');
+        const type = $(this).attr('type');
+        
+        if (type === 'checkbox') {
+            currentConfig[name] = $(this).is(':checked');
+        } else if (type === 'number') {
+            currentConfig[name] = parseFloat($(this).val()) || 0;
+        } else {
+            currentConfig[name] = $(this).val();
+        }
+        
+        // Trigger change event
+        $(selector).trigger('adapter-config-changed', {
+            adapterId: currentAdapter.id,
+            config: currentConfig
+        });
+    });
+    
+    // Test adapter configuration
+    testBtn.on('click', function() {
+        if (!currentAdapter) return;
+        
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testing...');
+        
+        $.ajax({
+            url: `/api/workflow-adapters/${currentAdapter.id}/test`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ configuration: currentConfig }),
+            success: function(result) {
+                toastr.success(result.message || 'Test successful');
+                console.log('Test result:', result);
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON;
+                if (error && error.errors) {
+                    error.errors.forEach(err => toastr.error(err));
+                } else {
+                    toastr.error('Test failed');
+                }
+            },
+            complete: function() {
+                btn.prop('disabled', false).html('<i class="fas fa-vial"></i> Test');
+            }
+        });
+    });
+    
+    // Public methods
+    selector.data('adapter-selector', {
+        getConfig: function() {
+            return {
+                adapterId: currentAdapter?.id,
+                configuration: currentConfig
+            };
+        },
+        setConfig: function(adapterId, config) {
+            adapterSelect.val(adapterId).trigger('change');
+            currentConfig = config || {};
+            renderParameters();
+        }
+    });
+});
+</script>
+
+<style>
+.adapter-selector .adapter-config {
+    margin-top: 1rem;
+}
+
+.adapter-selector .code-editor {
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+}
+
+.adapter-selector .test-adapter-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+</style>

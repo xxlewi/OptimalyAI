@@ -32,6 +32,8 @@ const CustomNode = ({ data, selected }) => {
             case 'task': return 'fas fa-cog';
             case 'condition': return 'fas fa-code-branch';
             case 'parallel': return 'fas fa-sitemap';
+            case 'InputAdapter': return 'fas fa-download';
+            case 'OutputAdapter': return 'fas fa-upload';
             default: return 'fas fa-circle';
         }
     };
@@ -41,6 +43,8 @@ const CustomNode = ({ data, selected }) => {
             case 'task': return 'Úloha';
             case 'condition': return 'Podmínka';
             case 'parallel': return 'Paralelní';
+            case 'InputAdapter': return 'Input Adaptér';
+            case 'OutputAdapter': return 'Output Adaptér';
             default: return 'Uzel';
         }
     };
@@ -172,7 +176,9 @@ const WorkflowDesigner = () => {
             const typeLabels = {
                 task: 'Úloha',
                 condition: 'Podmínka',
-                parallel: 'Paralelní zpracování'
+                parallel: 'Paralelní zpracování',
+                InputAdapter: 'Input Adaptér',
+                OutputAdapter: 'Output Adaptér'
             };
             
             newNode = {
@@ -280,6 +286,8 @@ function getNodeTypeString(typeEnum) {
         case 2: return 'task';
         case 3: return 'condition';
         case 4: return 'parallel';
+        case 5: return 'InputAdapter';
+        case 6: return 'OutputAdapter';
         default: return 'task';
     }
 }
@@ -298,10 +306,11 @@ function initializeReactFlowDesigner(model) {
 
 // Drag and drop setup
 function setupDragAndDrop() {
-    document.querySelectorAll('.tool-item[draggable="true"]').forEach(item => {
+    // Handle both tool-item and palette-item classes
+    document.querySelectorAll('.tool-item[draggable="true"], .palette-item[draggable="true"]').forEach(item => {
         item.addEventListener('dragstart', (event) => {
-            const nodeType = event.target.closest('.tool-item').getAttribute('data-node-type');
-            const tool = event.target.closest('.tool-item').getAttribute('data-tool');
+            const nodeType = event.target.closest('[data-node-type]')?.getAttribute('data-node-type');
+            const tool = event.target.closest('[data-tool]')?.getAttribute('data-tool');
             
             if (nodeType) {
                 event.dataTransfer.setData('application/reactflow-nodetype', nodeType);
@@ -345,6 +354,13 @@ function editNode(nodeId) {
         data.type === 'condition' ? 'block' : 'none';
     document.getElementById('toolsSection').style.display = 
         data.type === 'task' ? 'block' : 'none';
+    
+    // Show adapter configuration section for adapter nodes
+    const adapterSection = document.getElementById('adapterSection');
+    if (adapterSection) {
+        adapterSection.style.display = 
+            (data.type === 'InputAdapter' || data.type === 'OutputAdapter') ? 'block' : 'none';
+    }
     
     $('#nodeEditModal').modal('show');
 }
@@ -470,6 +486,8 @@ function getNodeTypeEnum(type) {
         case 'task': return 2;
         case 'condition': return 3;
         case 'parallel': return 4;
+        case 'InputAdapter': return 5;
+        case 'OutputAdapter': return 6;
         default: return 2;
     }
 }
