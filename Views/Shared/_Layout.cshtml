@@ -190,39 +190,46 @@
                         </li>
                         
                         <li class="nav-header">AI SYSTÉM</li>
-                        <li class="nav-item">
-                            <a asp-controller="Orchestrators" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-project-diagram"></i>
-                                <p>Orchestrace</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-item">
-                            <a asp-controller="ReActAgents" asp-action="Index" class="nav-link">
+                        <li class="nav-item has-treeview" id="ai-system-menu">
+                            <a href="#" class="nav-link">
                                 <i class="nav-icon fas fa-brain"></i>
-                                <p>ReAct Agenti</p>
+                                <p>
+                                    AI Systém
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
                             </a>
-                        </li>
-                        
-                        <li class="nav-item">
-                            <a asp-controller="Tools" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-toolbox"></i>
-                                <p>Nástroje</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-item">
-                            <a asp-controller="Adapters" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-plug"></i>
-                                <p>I/O Adaptéry</p>
-                            </a>
-                        </li>
-                        
-                        <li class="nav-item">
-                            <a asp-controller="Models" asp-action="Index" class="nav-link">
-                                <i class="nav-icon fas fa-robot"></i>
-                                <p>AI Modely</p>
-                            </a>
+                            <ul class="nav nav-treeview">
+                                <li class="nav-item">
+                                    <a asp-controller="Orchestrators" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-project-diagram nav-icon"></i>
+                                        <p>Orchestrace</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="ReActAgents" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-brain nav-icon"></i>
+                                        <p>ReAct Agenti</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Tools" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-toolbox nav-icon"></i>
+                                        <p>Nástroje</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Adapters" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-plug nav-icon"></i>
+                                        <p>I/O Adaptéry</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Models" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-robot nav-icon"></i>
+                                        <p>AI Modely</p>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         
                         <li class="nav-header">LABORATORY</li>
