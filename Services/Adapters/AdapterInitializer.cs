@@ -29,11 +29,19 @@ namespace OptimalyAI.Services.Adapters
             await RegisterAdapterAsync<ExcelInputAdapter>(registry, scope);
             await RegisterAdapterAsync<CsvInputAdapter>(registry, scope);
             await RegisterAdapterAsync<JsonInputAdapter>(registry, scope);
+            await RegisterAdapterAsync<FileUploadAdapter>(registry, scope);
+            await RegisterAdapterAsync<EmailInputAdapter>(registry, scope);
+            await RegisterAdapterAsync<WebhookInputAdapter>(registry, scope);
+            await RegisterAdapterAsync<ApiInputAdapter>(registry, scope);
+            await RegisterAdapterAsync<DatabaseInputAdapter>(registry, scope);
 
             // Registrovat všechny output adaptéry
             await RegisterAdapterAsync<ExcelOutputAdapter>(registry, scope);
             await RegisterAdapterAsync<CsvOutputAdapter>(registry, scope);
             await RegisterAdapterAsync<JsonOutputAdapter>(registry, scope);
+            await RegisterAdapterAsync<EmailOutputAdapter>(registry, scope);
+            await RegisterAdapterAsync<ApiOutputAdapter>(registry, scope);
+            await RegisterAdapterAsync<DatabaseOutputAdapter>(registry, scope);
 
             _logger.LogInformation("Adapter initialization completed");
         }

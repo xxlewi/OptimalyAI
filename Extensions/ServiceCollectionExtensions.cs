@@ -269,6 +269,14 @@ public static class ServiceCollectionExtensions
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ExcelOutputAdapter>();
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.CsvOutputAdapter>();
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.JsonOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.FileUploadAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.EmailInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.WebhookInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ApiInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.EmailOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ApiOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseOutputAdapter>();
         
         // Register adapters as IAdapter
         services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
@@ -283,6 +291,22 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.CsvOutputAdapter>());
         services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
             provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.JsonOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.FileUploadAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.EmailInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.WebhookInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ApiInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.EmailOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ApiOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseOutputAdapter>());
         
         return services;
     }
