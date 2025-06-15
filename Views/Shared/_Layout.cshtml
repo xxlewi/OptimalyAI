@@ -109,6 +109,13 @@
                     </a>
                 </li>
                 
+                <!-- New Chat -->
+                <li class="nav-item">
+                    <a asp-controller="Chat" asp-action="New" class="nav-link" role="button" title="Nový chat">
+                        <i class="fas fa-plus"></i>
+                    </a>
+                </li>
+                
                 <!-- Dark Mode Toggle -->
                 <li class="nav-item">
                     <a class="nav-link" href="#" role="button" id="dark-mode-toggle">
@@ -242,16 +249,14 @@
                             </a>
                             <ul class="nav nav-treeview" style="display: block;">
                                 <li class="nav-item">
-                                    <a asp-controller="Chat" asp-action="New" class="nav-link">
-                                        <i class="fas fa-plus nav-icon"></i>
-                                        <p>Nový chat</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
                                     <a asp-controller="Chat" asp-action="List" class="nav-link">
                                         <i class="fas fa-history nav-icon"></i>
                                         <p>Historie chatů</p>
                                     </a>
+                                </li>
+                                <li class="nav-divider"></li>
+                                <li id="recent-chats-container">
+                                    <!-- Zde budou dynamicky načítány nedávné chaty -->
                                 </li>
                                 <li class="nav-divider"></li>
                                 <li class="nav-item">
@@ -259,10 +264,6 @@
                                         <i class="fas fa-flask nav-icon"></i>
                                         <p>Workflow Designer</p>
                                     </a>
-                                </li>
-                                <li class="nav-divider"></li>
-                                <li id="recent-chats-container">
-                                    <!-- Zde budou dynamicky načítány nedávné chaty -->
                                 </li>
                             </ul>
                         </li>
