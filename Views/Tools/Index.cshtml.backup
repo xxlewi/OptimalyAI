@@ -1,0 +1,614 @@
+@{
+    ViewData["Title"] = "AI Tools";
+    Layout = "_Layout";
+}
+
+@section Styles {
+    <style>
+        .tool-card {
+            transition: transform 0.2s ease-in-out;
+            border: 1px solid #dee2e6;
+        }
+        .tool-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .tool-status.enabled {
+            color: #28a745;
+        }
+        .tool-status.disabled {
+            color: #dc3545;
+        }
+        .parameter-badge {
+            font-size: 0.75rem;
+            margin: 2px;
+        }
+        .execution-result {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .loading-spinner {
+            display: none;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+            <div class="row mb-2">
+                <div class="col-sm-6">
+                    <h1 class="m-0">AI Tools</h1>
+                </div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                        <li class="breadcrumb-item active">AI Tools</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <!-- Filters and Search -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <input type="text" id="searchTools" class="form-control" placeholder="Search tools...">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" onclick="searchTools()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select id="categoryFilter" class="form-control" onchange="filterByCategory()">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="statusFilter" class="form-control" onchange="filterByStatus()">
+                        <option value="">All Status</option>
+                        <option value="enabled">Enabled</option>
+                        <option value="disabled">Disabled</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-block" onclick="refreshTools()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="row mb-4" id="statisticsCards">
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-info">
+                        <div class="inner">
+                            <h3 id="totalTools">-</h3>
+                            <p>Total Tools</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-tools"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-success">
+                        <div class="inner">
+                            <h3 id="enabledTools">-</h3>
+                            <p>Enabled</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-warning">
+                        <div class="inner">
+                            <h3 id="disabledTools">-</h3>
+                            <p>Disabled</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-secondary">
+                        <div class="inner">
+                            <h3 id="categoriesCount">-</h3>
+                            <p>Categories</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tools Grid -->
+            <div class="row" id="toolsContainer">
+                <!-- Tools will be loaded here dynamically -->
+            </div>
+
+            <!-- Loading Spinner -->
+            <div class="text-center loading-spinner" id="loadingSpinner">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+                <p class="mt-2">Loading tools...</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- Tool Execution Modal -->
+<div class="modal fade" id="executeToolModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Execute Tool: <span id="modalToolName"></span></h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="executeToolForm">
+                    <input type="hidden" id="modalToolId">
+                    <div id="toolParameters">
+                        <!-- Parameters will be generated dynamically -->
+                    </div>
+                </form>
+                
+                <!-- Execution Result -->
+                <div id="executionResult" class="mt-3" style="display: none;">
+                    <h6>Execution Result:</h6>
+                    <div class="execution-result border p-3 bg-light">
+                        <pre id="resultContent"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning" onclick="testTool()">
+                    <i class="fas fa-vial"></i> Test with Sample Data
+                </button>
+                <button type="button" class="btn btn-primary" onclick="executeTool()">
+                    <i class="fas fa-play"></i> Execute
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tool Details Modal -->
+<div class="modal fade" id="toolDetailsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Tool Details: <span id="detailsToolName"></span></h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="toolDetailsContent">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="executeFromDetails()">
+                    <i class="fas fa-play"></i> Execute Tool
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let allTools = [];
+        let filteredTools = [];
+        let currentTool = null;
+
+        $(document).ready(function() {
+            loadTools();
+            loadStatistics();
+            loadCategories();
+            
+            // Enter key search
+            $('#searchTools').keypress(function(e) {
+                if (e.which === 13) {
+                    searchTools();
+                }
+            });
+        });
+
+        async function loadTools() {
+            showLoading(true);
+            try {
+                const response = await fetch('/api/tools');
+                const data = await response.json();
+                
+                if (data.success) {
+                    allTools = data.data;
+                    filteredTools = [...allTools];
+                    renderTools(filteredTools);
+                } else {
+                    showError('Failed to load tools: ' + (data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                showError('Error loading tools: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/tools/statistics');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const stats = data.data;
+                    $('#totalTools').text(stats.totalTools);
+                    $('#enabledTools').text(stats.enabledTools);
+                    $('#disabledTools').text(stats.disabledTools);
+                    $('#categoriesCount').text(Object.keys(stats.categories).length);
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/tools/categories');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const categoryFilter = $('#categoryFilter');
+                    data.data.forEach(category => {
+                        categoryFilter.append(`<option value="${category}">${category}</option>`);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        function renderTools(tools) {
+            const container = $('#toolsContainer');
+            container.empty();
+
+            if (tools.length === 0) {
+                container.html(`
+                    <div class="col-12">
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle"></i>
+                            No tools found matching your criteria.
+                        </div>
+                    </div>
+                `);
+                return;
+            }
+
+            tools.forEach(tool => {
+                const toolCard = createToolCard(tool);
+                container.append(toolCard);
+            });
+        }
+
+        function createToolCard(tool) {
+            const statusClass = tool.isEnabled ? 'enabled' : 'disabled';
+            const statusIcon = tool.isEnabled ? 'fa-check-circle' : 'fa-times-circle';
+            const statusText = tool.isEnabled ? 'Enabled' : 'Disabled';
+            
+            const parametersHtml = tool.parameters.slice(0, 3).map(p => 
+                `<span class="badge badge-secondary parameter-badge">${p.name}</span>`
+            ).join('');
+            
+            const moreParams = tool.parameters.length > 3 ? 
+                `<span class="badge badge-light parameter-badge">+${tool.parameters.length - 3} more</span>` : '';
+
+            return `
+                <div class="col-md-4 col-sm-6 mb-4">
+                    <div class="card tool-card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="card-title mb-0">${tool.name}</h6>
+                            <span class="tool-status ${statusClass}">
+                                <i class="fas ${statusIcon}"></i> ${statusText}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text text-muted small">${tool.description}</p>
+                            <div class="mb-2">
+                                <span class="badge badge-primary">${tool.category}</span>
+                                <span class="badge badge-info">v${tool.version}</span>
+                            </div>
+                            <div class="mb-2">
+                                <small class="text-muted">Parameters:</small><br>
+                                ${parametersHtml}${moreParams}
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <div class="btn-group btn-group-sm w-100" role="group">
+                                <button type="button" class="btn btn-outline-info" onclick="showToolDetails('${tool.id}')">
+                                    <i class="fas fa-info-circle"></i> Details
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" onclick="showExecuteModal('${tool.id}')" ${!tool.isEnabled ? 'disabled' : ''}>
+                                    <i class="fas fa-play"></i> Execute
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function searchTools() {
+            const query = $('#searchTools').val().toLowerCase();
+            filteredTools = allTools.filter(tool => 
+                tool.name.toLowerCase().includes(query) || 
+                tool.description.toLowerCase().includes(query) ||
+                tool.category.toLowerCase().includes(query)
+            );
+            renderTools(filteredTools);
+        }
+
+        function filterByCategory() {
+            const category = $('#categoryFilter').val();
+            filteredTools = category ? allTools.filter(tool => tool.category === category) : [...allTools];
+            renderTools(filteredTools);
+        }
+
+        function filterByStatus() {
+            const status = $('#statusFilter').val();
+            if (status === 'enabled') {
+                filteredTools = allTools.filter(tool => tool.isEnabled);
+            } else if (status === 'disabled') {
+                filteredTools = allTools.filter(tool => !tool.isEnabled);
+            } else {
+                filteredTools = [...allTools];
+            }
+            renderTools(filteredTools);
+        }
+
+        function refreshTools() {
+            loadTools();
+            loadStatistics();
+        }
+
+        async function showToolDetails(toolId) {
+            try {
+                const response = await fetch(`/api/tools/${toolId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const tool = data.data;
+                    $('#detailsToolName').text(tool.name);
+                    
+                    const detailsHtml = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Basic Information</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>ID:</strong></td><td>${tool.id}</td></tr>
+                                    <tr><td><strong>Name:</strong></td><td>${tool.name}</td></tr>
+                                    <tr><td><strong>Category:</strong></td><td>${tool.category}</td></tr>
+                                    <tr><td><strong>Version:</strong></td><td>${tool.version}</td></tr>
+                                    <tr><td><strong>Status:</strong></td><td>
+                                        <span class="badge badge-${tool.isEnabled ? 'success' : 'danger'}">
+                                            ${tool.isEnabled ? 'Enabled' : 'Disabled'}
+                                        </span>
+                                    </td></tr>
+                                </table>
+                                
+                                <h6>Description</h6>
+                                <p>${tool.description}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Parameters (${tool.parameters.length})</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Type</th>
+                                                <th>Required</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${tool.parameters.map(p => `
+                                                <tr>
+                                                    <td>${p.name}</td>
+                                                    <td><code>${p.type}</code></td>
+                                                    <td>${p.isRequired ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-muted"></i>'}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <h6>Capabilities (${tool.capabilities.length})</h6>
+                                <ul class="list-unstyled">
+                                    ${tool.capabilities.map(c => `
+                                        <li><i class="fas fa-check-circle text-success"></i> ${c.description}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                    
+                    $('#toolDetailsContent').html(detailsHtml);
+                    currentTool = tool;
+                    $('#toolDetailsModal').modal('show');
+                } else {
+                    showError('Failed to load tool details: ' + (data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                showError('Error loading tool details: ' + error.message);
+            }
+        }
+
+        function showExecuteModal(toolId) {
+            const tool = allTools.find(t => t.id === toolId);
+            if (!tool) return;
+            
+            currentTool = tool;
+            $('#modalToolName').text(tool.name);
+            $('#modalToolId').val(tool.id);
+            
+            // Generate parameter form
+            const parametersHtml = tool.parameters.map(param => {
+                const required = param.isRequired ? 'required' : '';
+                const helpText = param.description ? `<small class="form-text text-muted">${param.description}</small>` : '';
+                
+                let inputHtml = '';
+                
+                if (param.allowedValues && param.allowedValues.length > 0) {
+                    inputHtml = `
+                        <select class="form-control" id="param_${param.name}" name="${param.name}" ${required}>
+                            <option value="">Select ${param.name}</option>
+                            ${param.allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
+                        </select>
+                    `;
+                } else if (param.type === 'Boolean') {
+                    inputHtml = `
+                        <select class="form-control" id="param_${param.name}" name="${param.name}" ${required}>
+                            <option value="">Select value</option>
+                            <option value="true">True</option>
+                            <option value="false">False</option>
+                        </select>
+                    `;
+                } else {
+                    const inputType = param.type === 'Integer' || param.type === 'Decimal' ? 'number' : 'text';
+                    const placeholder = param.defaultValue ? `Default: ${param.defaultValue}` : `Enter ${param.name}`;
+                    
+                    inputHtml = `
+                        <input type="${inputType}" class="form-control" id="param_${param.name}" 
+                               name="${param.name}" placeholder="${placeholder}" 
+                               value="${param.defaultValue || ''}" ${required}>
+                    `;
+                }
+                
+                return `
+                    <div class="form-group">
+                        <label for="param_${param.name}">
+                            ${param.name} 
+                            ${param.isRequired ? '<span class="text-danger">*</span>' : ''}
+                            <span class="badge badge-secondary">${param.type}</span>
+                        </label>
+                        ${inputHtml}
+                        ${helpText}
+                    </div>
+                `;
+            }).join('');
+            
+            $('#toolParameters').html(parametersHtml);
+            $('#executionResult').hide();
+            $('#executeToolModal').modal('show');
+        }
+
+        async function executeTool() {
+            if (!currentTool) return;
+            
+            const formData = new FormData($('#executeToolForm')[0]);
+            const parameters = {};
+            
+            for (let [key, value] of formData.entries()) {
+                if (value) {
+                    parameters[key] = value;
+                }
+            }
+            
+            const requestData = {
+                toolId: currentTool.id,
+                parameters: parameters,
+                context: {
+                    userId: 'web-user',
+                    sessionId: 'web-session-' + Date.now(),
+                    conversationId: 'web-conversation',
+                    executionTimeout: '00:05:00' // 5 minutes
+                }
+            };
+            
+            try {
+                const response = await fetch('/api/tools/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const data = await response.json();
+                
+                $('#executionResult').show();
+                
+                if (data.success) {
+                    const result = data.data;
+                    $('#resultContent').text(JSON.stringify(result, null, 2));
+                    $('#resultContent').parent().removeClass('border-danger').addClass('border-success');
+                } else {
+                    $('#resultContent').text('Error: ' + (data.message || 'Unknown error'));
+                    $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
+                }
+            } catch (error) {
+                $('#executionResult').show();
+                $('#resultContent').text('Network Error: ' + error.message);
+                $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
+            }
+        }
+
+        async function testTool() {
+            if (!currentTool) return;
+            
+            try {
+                const response = await fetch(`/api/tools/${currentTool.id}/test`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                $('#executionResult').show();
+                
+                if (data.success) {
+                    $('#resultContent').text(JSON.stringify(data.data, null, 2));
+                    $('#resultContent').parent().removeClass('border-danger').addClass('border-success');
+                } else {
+                    $('#resultContent').text('Test Error: ' + (data.message || 'Unknown error'));
+                    $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
+                }
+            } catch (error) {
+                $('#executionResult').show();
+                $('#resultContent').text('Network Error: ' + error.message);
+                $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
+            }
+        }
+
+        function executeFromDetails() {
+            $('#toolDetailsModal').modal('hide');
+            setTimeout(() => {
+                showExecuteModal(currentTool.id);
+            }, 300);
+        }
+
+        function showLoading(show) {
+            if (show) {
+                $('#loadingSpinner').show();
+                $('#toolsContainer').hide();
+            } else {
+                $('#loadingSpinner').hide();
+                $('#toolsContainer').show();
+            }
+        }
+
+        function showError(message) {
+            toastr.error(message);
+        }
+    </script>
+}

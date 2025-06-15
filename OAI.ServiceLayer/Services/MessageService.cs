@@ -7,7 +7,7 @@ namespace OAI.ServiceLayer.Services
 {
     public interface IMessageService : IBaseService<Message>
     {
-        Task<List<Message>> GetConversationMessagesAsync(int conversationId);
+        Task<List<Message>> GetByConversationIdAsync(int conversationId);
     }
 
     public class MessageService : BaseService<Message>, IMessageService
@@ -20,7 +20,7 @@ namespace OAI.ServiceLayer.Services
             _logger = logger;
         }
 
-        public async Task<List<Message>> GetConversationMessagesAsync(int conversationId)
+        public async Task<List<Message>> GetByConversationIdAsync(int conversationId)
         {
             var messages = await GetAllAsync();
             return messages

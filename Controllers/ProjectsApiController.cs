@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using OAI.Core.DTOs;
 using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Projects;
+using System.Linq;
 
 namespace OptimalyAI.Controllers
 {
@@ -44,6 +45,33 @@ namespace OptimalyAI.Controllers
         {
             var (projects, total) = await _projectService.GetProjectsAsync();
             return Ok(new { projects, total });
+        }
+
+        /// <summary>
+        /// Get project counts by status
+        /// </summary>
+        [HttpGet("status-counts")]
+        public async Task<IActionResult> GetCounts()
+        {
+            var (projects, _) = await _projectService.GetProjectsAsync(1, int.MaxValue, "all", null, null);
+            
+            var counts = new
+            {
+                total = projects.Count(),
+                active = projects.Count(p => p.Status == "Active"),
+                inProgress = projects.Count(p => 
+                    p.Status == "Draft" || 
+                    p.Status == "Analysis" || 
+                    p.Status == "Planning" || 
+                    p.Status == "Development" || 
+                    p.Status == "Testing" ||
+                    p.Status == "Active"),
+                planning = projects.Count(p => p.Status == "Planning"),
+                completed = projects.Count(p => p.Status == "Completed"),
+                archived = projects.Count(p => p.Status == "Archived")
+            };
+
+            return Ok(counts);
         }
 
         /// <summary>

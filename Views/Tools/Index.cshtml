@@ -3,155 +3,161 @@
     Layout = "_Layout";
 }
 
-@section Styles {
-    <style>
-        .tool-card {
-            transition: transform 0.2s ease-in-out;
-            border: 1px solid #dee2e6;
-        }
-        .tool-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .tool-status.enabled {
-            color: #28a745;
-        }
-        .tool-status.disabled {
-            color: #dc3545;
-        }
-        .parameter-badge {
-            font-size: 0.75rem;
-            margin: 2px;
-        }
-        .execution-result {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .loading-spinner {
-            display: none;
-        }
-    </style>
-}
-
-<div class="content-header">
+<section class="content-header">
     <div class="container-fluid">
-            <div class="row mb-2">
-                <div class="col-sm-6">
-                    <h1 class="m-0">AI Tools</h1>
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-tools"></i> AI Tools
+                    <small class="text-muted">Interactive Testing</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
+                    <li class="breadcrumb-item active">AI Tools</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Statistics Cards -->
+        <div class="row mb-3">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3 id="totalTools">-</h3>
+                        <p>Celkem nástrojů</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-tools"></i>
+                    </div>
                 </div>
-                <div class="col-sm-6">
-                    <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="@Url.Action("Index", "Home")">Home</a></li>
-                        <li class="breadcrumb-item active">AI Tools</li>
-                    </ol>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3 id="enabledTools">-</h3>
+                        <p>Aktivní</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3 id="disabledTools">-</h3>
+                        <p>Neaktivní</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3 id="categoriesCount">-</h3>
+                        <p>Kategorií</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Section -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchTools" 
+                                   placeholder="Vyhledat nástroj..." autocomplete="off">
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-primary" onclick="filterTools()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="categoryFilter" class="form-control" onchange="filterTools()">
+                            <option value="">Všechny kategorie</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="statusFilter" class="form-control" onchange="filterTools()">
+                            <option value="">Všechny stavy</option>
+                            <option value="enabled">Pouze aktivní</option>
+                            <option value="disabled">Pouze neaktivní</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-default" onclick="clearFilters()">
+                            <i class="fas fa-times"></i> Vymazat
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Seznam AI nástrojů</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="refreshTools()">
+                        <i class="fas fa-sync-alt"></i> Aktualizovat
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="loadingSpinner" class="text-center" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                    <p class="mt-2">Načítání nástrojů...</p>
+                </div>
+                
+                <table class="table table-bordered table-striped table-hover" id="toolsTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Nástroj</th>
+                            <th>Kategorie</th>
+                            <th>Parametry</th>
+                            <th>Stav</th>
+                            <th>Verze</th>
+                            <th style="width: 200px">Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody id="toolsTableBody">
+                        <!-- Tools will be loaded here dynamically -->
+                    </tbody>
+                </table>
+                
+                <div id="noToolsMessage" class="text-center py-5" style="display: none;">
+                    <i class="fas fa-tools fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">Žádné nástroje</h4>
+                    <p class="text-muted">Nebyly nalezeny žádné nástroje odpovídající vašim kritériím.</p>
                 </div>
             </div>
         </div>
     </div>
-
-    <section class="content">
-        <div class="container-fluid">
-            <!-- Filters and Search -->
-            <div class="row mb-3">
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <input type="text" id="searchTools" class="form-control" placeholder="Search tools...">
-                        <div class="input-group-append">
-                            <button class="btn btn-outline-secondary" type="button" onclick="searchTools()">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <select id="categoryFilter" class="form-control" onchange="filterByCategory()">
-                        <option value="">All Categories</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <select id="statusFilter" class="form-control" onchange="filterByStatus()">
-                        <option value="">All Status</option>
-                        <option value="enabled">Enabled</option>
-                        <option value="disabled">Disabled</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button class="btn btn-primary btn-block" onclick="refreshTools()">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
-                </div>
-            </div>
-
-            <!-- Statistics Cards -->
-            <div class="row mb-4" id="statisticsCards">
-                <div class="col-lg-3 col-6">
-                    <div class="small-box bg-info">
-                        <div class="inner">
-                            <h3 id="totalTools">-</h3>
-                            <p>Total Tools</p>
-                        </div>
-                        <div class="icon">
-                            <i class="fas fa-tools"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-6">
-                    <div class="small-box bg-success">
-                        <div class="inner">
-                            <h3 id="enabledTools">-</h3>
-                            <p>Enabled</p>
-                        </div>
-                        <div class="icon">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-6">
-                    <div class="small-box bg-warning">
-                        <div class="inner">
-                            <h3 id="disabledTools">-</h3>
-                            <p>Disabled</p>
-                        </div>
-                        <div class="icon">
-                            <i class="fas fa-times-circle"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-6">
-                    <div class="small-box bg-secondary">
-                        <div class="inner">
-                            <h3 id="categoriesCount">-</h3>
-                            <p>Categories</p>
-                        </div>
-                        <div class="icon">
-                            <i class="fas fa-layer-group"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tools Grid -->
-            <div class="row" id="toolsContainer">
-                <!-- Tools will be loaded here dynamically -->
-            </div>
-
-            <!-- Loading Spinner -->
-            <div class="text-center loading-spinner" id="loadingSpinner">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="sr-only">Loading...</span>
-                </div>
-                <p class="mt-2">Loading tools...</p>
-            </div>
-        </div>
-    </section>
-</div>
+</section>
 
 <!-- Tool Execution Modal -->
 <div class="modal fade" id="executeToolModal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Execute Tool: <span id="modalToolName"></span></h5>
+                <h5 class="modal-title">Spustit nástroj: <span id="modalToolName"></span></h5>
                 <button type="button" class="close" data-dismiss="modal">
                     <span>&times;</span>
                 </button>
@@ -166,19 +172,19 @@
                 
                 <!-- Execution Result -->
                 <div id="executionResult" class="mt-3" style="display: none;">
-                    <h6>Execution Result:</h6>
-                    <div class="execution-result border p-3 bg-light">
+                    <h6>Výsledek:</h6>
+                    <div class="execution-result border p-3 bg-light" style="max-height: 300px; overflow-y: auto;">
                         <pre id="resultContent"></pre>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
                 <button type="button" class="btn btn-warning" onclick="testTool()">
-                    <i class="fas fa-vial"></i> Test with Sample Data
+                    <i class="fas fa-vial"></i> Test s ukázkovými daty
                 </button>
                 <button type="button" class="btn btn-primary" onclick="executeTool()">
-                    <i class="fas fa-play"></i> Execute
+                    <i class="fas fa-play"></i> Spustit
                 </button>
             </div>
         </div>
@@ -190,7 +196,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Tool Details: <span id="detailsToolName"></span></h5>
+                <h5 class="modal-title">Detail nástroje: <span id="detailsToolName"></span></h5>
                 <button type="button" class="close" data-dismiss="modal">
                     <span>&times;</span>
                 </button>
@@ -199,9 +205,9 @@
                 <!-- Details will be loaded here -->
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
                 <button type="button" class="btn btn-primary" onclick="executeFromDetails()">
-                    <i class="fas fa-play"></i> Execute Tool
+                    <i class="fas fa-play"></i> Spustit nástroj
                 </button>
             </div>
         </div>
@@ -222,8 +228,13 @@
             // Enter key search
             $('#searchTools').keypress(function(e) {
                 if (e.which === 13) {
-                    searchTools();
+                    filterTools();
                 }
+            });
+            
+            // Real-time search
+            $('#searchTools').on('keyup', function() {
+                filterTools();
             });
         });
 
@@ -238,10 +249,10 @@
                     filteredTools = [...allTools];
                     renderTools(filteredTools);
                 } else {
-                    showError('Failed to load tools: ' + (data.message || 'Unknown error'));
+                    showError('Nepodařilo se načíst nástroje: ' + (data.message || 'Neznámá chyba'));
                 }
             } catch (error) {
-                showError('Error loading tools: ' + error.message);
+                showError('Chyba při načítání nástrojů: ' + error.message);
             } finally {
                 showLoading(false);
             }
@@ -281,100 +292,148 @@
         }
 
         function renderTools(tools) {
-            const container = $('#toolsContainer');
-            container.empty();
+            const tableBody = $('#toolsTableBody');
+            const table = $('#toolsTable');
+            const noToolsMessage = $('#noToolsMessage');
+            
+            tableBody.empty();
 
             if (tools.length === 0) {
-                container.html(`
-                    <div class="col-12">
-                        <div class="alert alert-info text-center">
-                            <i class="fas fa-info-circle"></i>
-                            No tools found matching your criteria.
-                        </div>
-                    </div>
-                `);
+                table.hide();
+                noToolsMessage.show();
                 return;
             }
 
+            table.show();
+            noToolsMessage.hide();
+
             tools.forEach(tool => {
-                const toolCard = createToolCard(tool);
-                container.append(toolCard);
+                const toolRow = createToolRow(tool);
+                tableBody.append(toolRow);
             });
+            
+            updateFilterInfo();
         }
 
-        function createToolCard(tool) {
-            const statusClass = tool.isEnabled ? 'enabled' : 'disabled';
+        function createToolRow(tool) {
+            const statusClass = tool.isEnabled ? 'success' : 'danger';
             const statusIcon = tool.isEnabled ? 'fa-check-circle' : 'fa-times-circle';
-            const statusText = tool.isEnabled ? 'Enabled' : 'Disabled';
+            const statusText = tool.isEnabled ? 'Aktivní' : 'Neaktivní';
             
-            const parametersHtml = tool.parameters.slice(0, 3).map(p => 
-                `<span class="badge badge-secondary parameter-badge">${p.name}</span>`
-            ).join('');
+            const parametersCount = tool.parameters.length;
+            const requiredParams = tool.parameters.filter(p => p.isRequired).length;
             
-            const moreParams = tool.parameters.length > 3 ? 
-                `<span class="badge badge-light parameter-badge">+${tool.parameters.length - 3} more</span>` : '';
-
             return `
-                <div class="col-md-4 col-sm-6 mb-4">
-                    <div class="card tool-card h-100">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h6 class="card-title mb-0">${tool.name}</h6>
-                            <span class="tool-status ${statusClass}">
-                                <i class="fas ${statusIcon}"></i> ${statusText}
+                <tr data-tool-id="${tool.id}" data-category="${tool.category.toLowerCase()}" 
+                    data-name="${tool.name.toLowerCase()}" data-status="${tool.isEnabled ? 'enabled' : 'disabled'}">
+                    <td>
+                        <div>
+                            <strong>${tool.name}</strong>
+                            <br>
+                            <small class="text-muted">
+                                ${tool.description || 'ID: ' + tool.id.substring(0, 8)}
+                            </small>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-info">
+                            <i class="fas fa-layer-group"></i> ${tool.category}
+                        </span>
+                    </td>
+                    <td>
+                        <div>
+                            <span class="badge badge-secondary">
+                                <i class="fas fa-cog"></i> ${parametersCount} parametrů
                             </span>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-exclamation-circle"></i> ${requiredParams} povinných
+                            </small>
                         </div>
-                        <div class="card-body">
-                            <p class="card-text text-muted small">${tool.description}</p>
-                            <div class="mb-2">
-                                <span class="badge badge-primary">${tool.category}</span>
-                                <span class="badge badge-info">v${tool.version}</span>
-                            </div>
-                            <div class="mb-2">
-                                <small class="text-muted">Parameters:</small><br>
-                                ${parametersHtml}${moreParams}
-                            </div>
-                        </div>
-                        <div class="card-footer bg-transparent">
-                            <div class="btn-group btn-group-sm w-100" role="group">
-                                <button type="button" class="btn btn-outline-info" onclick="showToolDetails('${tool.id}')">
-                                    <i class="fas fa-info-circle"></i> Details
-                                </button>
-                                <button type="button" class="btn btn-outline-primary" onclick="showExecuteModal('${tool.id}')" ${!tool.isEnabled ? 'disabled' : ''}>
-                                    <i class="fas fa-play"></i> Execute
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-${statusClass}">
+                            <i class="fas ${statusIcon}"></i> ${statusText}
+                        </span>
+                    </td>
+                    <td>
+                        <small><i class="fas fa-tag"></i> v${tool.version}</small>
+                    </td>
+                    <td class="text-center align-middle">
+                        <button type="button" class="btn btn-success btn-sm" 
+                                onclick="showExecuteModal('${tool.id}')" 
+                                ${!tool.isEnabled ? 'disabled' : ''} 
+                                title="Spustit nástroj">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm ml-1" 
+                                onclick="showToolDetails('${tool.id}')" title="Detail nástroje">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button type="button" class="btn btn-warning btn-sm ml-1" 
+                                onclick="testTool('${tool.id}')" 
+                                ${!tool.isEnabled ? 'disabled' : ''} 
+                                title="Test s ukázkovými daty">
+                            <i class="fas fa-vial"></i>
+                        </button>
+                    </td>
+                </tr>
             `;
         }
 
-        function searchTools() {
-            const query = $('#searchTools').val().toLowerCase();
-            filteredTools = allTools.filter(tool => 
-                tool.name.toLowerCase().includes(query) || 
-                tool.description.toLowerCase().includes(query) ||
-                tool.category.toLowerCase().includes(query)
-            );
-            renderTools(filteredTools);
+        function filterTools() {
+            const searchTerm = $('#searchTools').val().toLowerCase();
+            const categoryFilter = $('#categoryFilter').val().toLowerCase();
+            const statusFilter = $('#statusFilter').val();
+            
+            $('#toolsTable tbody tr').each(function() {
+                const row = $(this);
+                const name = row.attr('data-name') || '';
+                const category = row.attr('data-category') || '';
+                const status = row.attr('data-status') || '';
+                const description = row.find('td:first small').text().toLowerCase();
+                
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    name.includes(searchTerm) || 
+                    description.includes(searchTerm) ||
+                    category.includes(searchTerm);
+                
+                // Category filter
+                const categoryMatch = !categoryFilter || category.includes(categoryFilter);
+                
+                // Status filter
+                const statusMatch = !statusFilter || status === statusFilter;
+                
+                if (searchMatch && categoryMatch && statusMatch) {
+                    row.show();
+                } else {
+                    row.hide();
+                }
+            });
+            
+            updateFilterInfo();
         }
 
-        function filterByCategory() {
-            const category = $('#categoryFilter').val();
-            filteredTools = category ? allTools.filter(tool => tool.category === category) : [...allTools];
-            renderTools(filteredTools);
-        }
-
-        function filterByStatus() {
-            const status = $('#statusFilter').val();
-            if (status === 'enabled') {
-                filteredTools = allTools.filter(tool => tool.isEnabled);
-            } else if (status === 'disabled') {
-                filteredTools = allTools.filter(tool => !tool.isEnabled);
+        function updateFilterInfo() {
+            const visibleCount = $('#toolsTable tbody tr:visible').length;
+            const totalCount = $('#toolsTable tbody tr').length;
+            
+            if (visibleCount < totalCount) {
+                if ($('#filterInfo').length === 0) {
+                    $('.card-header').append(`<span id="filterInfo" class="float-right text-muted"></span>`);
+                }
+                $('#filterInfo').text(`Zobrazeno ${visibleCount} z ${totalCount} nástrojů`);
             } else {
-                filteredTools = [...allTools];
+                $('#filterInfo').remove();
             }
-            renderTools(filteredTools);
+        }
+
+        function clearFilters() {
+            $('#searchTools').val('');
+            $('#categoryFilter').val('');
+            $('#statusFilter').val('');
+            filterTools();
         }
 
         function refreshTools() {
@@ -394,31 +453,31 @@
                     const detailsHtml = `
                         <div class="row">
                             <div class="col-md-6">
-                                <h6>Basic Information</h6>
+                                <h6>Základní informace</h6>
                                 <table class="table table-sm">
                                     <tr><td><strong>ID:</strong></td><td>${tool.id}</td></tr>
-                                    <tr><td><strong>Name:</strong></td><td>${tool.name}</td></tr>
-                                    <tr><td><strong>Category:</strong></td><td>${tool.category}</td></tr>
-                                    <tr><td><strong>Version:</strong></td><td>${tool.version}</td></tr>
-                                    <tr><td><strong>Status:</strong></td><td>
+                                    <tr><td><strong>Název:</strong></td><td>${tool.name}</td></tr>
+                                    <tr><td><strong>Kategorie:</strong></td><td>${tool.category}</td></tr>
+                                    <tr><td><strong>Verze:</strong></td><td>${tool.version}</td></tr>
+                                    <tr><td><strong>Stav:</strong></td><td>
                                         <span class="badge badge-${tool.isEnabled ? 'success' : 'danger'}">
-                                            ${tool.isEnabled ? 'Enabled' : 'Disabled'}
+                                            ${tool.isEnabled ? 'Aktivní' : 'Neaktivní'}
                                         </span>
                                     </td></tr>
                                 </table>
                                 
-                                <h6>Description</h6>
+                                <h6>Popis</h6>
                                 <p>${tool.description}</p>
                             </div>
                             <div class="col-md-6">
-                                <h6>Parameters (${tool.parameters.length})</h6>
+                                <h6>Parametry (${tool.parameters.length})</h6>
                                 <div class="table-responsive">
                                     <table class="table table-sm">
                                         <thead>
                                             <tr>
-                                                <th>Name</th>
-                                                <th>Type</th>
-                                                <th>Required</th>
+                                                <th>Název</th>
+                                                <th>Typ</th>
+                                                <th>Povinný</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -433,7 +492,7 @@
                                     </table>
                                 </div>
                                 
-                                <h6>Capabilities (${tool.capabilities.length})</h6>
+                                <h6>Schopnosti (${tool.capabilities.length})</h6>
                                 <ul class="list-unstyled">
                                     ${tool.capabilities.map(c => `
                                         <li><i class="fas fa-check-circle text-success"></i> ${c.description}</li>
@@ -447,10 +506,10 @@
                     currentTool = tool;
                     $('#toolDetailsModal').modal('show');
                 } else {
-                    showError('Failed to load tool details: ' + (data.message || 'Unknown error'));
+                    showError('Nepodařilo se načíst detail nástroje: ' + (data.message || 'Neznámá chyba'));
                 }
             } catch (error) {
-                showError('Error loading tool details: ' + error.message);
+                showError('Chyba při načítání detailu nástroje: ' + error.message);
             }
         }
 
@@ -472,21 +531,21 @@
                 if (param.allowedValues && param.allowedValues.length > 0) {
                     inputHtml = `
                         <select class="form-control" id="param_${param.name}" name="${param.name}" ${required}>
-                            <option value="">Select ${param.name}</option>
+                            <option value="">Vyberte ${param.name}</option>
                             ${param.allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
                         </select>
                     `;
                 } else if (param.type === 'Boolean') {
                     inputHtml = `
                         <select class="form-control" id="param_${param.name}" name="${param.name}" ${required}>
-                            <option value="">Select value</option>
-                            <option value="true">True</option>
-                            <option value="false">False</option>
+                            <option value="">Vyberte hodnotu</option>
+                            <option value="true">Ano</option>
+                            <option value="false">Ne</option>
                         </select>
                     `;
                 } else {
                     const inputType = param.type === 'Integer' || param.type === 'Decimal' ? 'number' : 'text';
-                    const placeholder = param.defaultValue ? `Default: ${param.defaultValue}` : `Enter ${param.name}`;
+                    const placeholder = param.defaultValue ? `Výchozí: ${param.defaultValue}` : `Zadejte ${param.name}`;
                     
                     inputHtml = `
                         <input type="${inputType}" class="form-control" id="param_${param.name}" 
@@ -532,7 +591,7 @@
                     userId: 'web-user',
                     sessionId: 'web-session-' + Date.now(),
                     conversationId: 'web-conversation',
-                    executionTimeout: '00:05:00' // 5 minutes
+                    executionTimeout: '00:05:00'
                 }
             };
             
@@ -554,38 +613,55 @@
                     $('#resultContent').text(JSON.stringify(result, null, 2));
                     $('#resultContent').parent().removeClass('border-danger').addClass('border-success');
                 } else {
-                    $('#resultContent').text('Error: ' + (data.message || 'Unknown error'));
+                    $('#resultContent').text('Chyba: ' + (data.message || 'Neznámá chyba'));
                     $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
                 }
             } catch (error) {
                 $('#executionResult').show();
-                $('#resultContent').text('Network Error: ' + error.message);
+                $('#resultContent').text('Síťová chyba: ' + error.message);
                 $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
             }
         }
 
-        async function testTool() {
-            if (!currentTool) return;
+        async function testTool(toolId = null) {
+            const targetToolId = toolId || (currentTool ? currentTool.id : null);
+            if (!targetToolId) return;
             
             try {
-                const response = await fetch(`/api/tools/${currentTool.id}/test`, {
+                const response = await fetch(`/api/tools/${targetToolId}/test`, {
                     method: 'POST'
                 });
                 
                 const data = await response.json();
                 
-                $('#executionResult').show();
-                
-                if (data.success) {
-                    $('#resultContent').text(JSON.stringify(data.data, null, 2));
-                    $('#resultContent').parent().removeClass('border-danger').addClass('border-success');
+                if (!currentTool && toolId) {
+                    // If called from table row, show the execute modal first
+                    showExecuteModal(toolId);
+                    setTimeout(() => {
+                        displayTestResult(data);
+                    }, 500);
                 } else {
-                    $('#resultContent').text('Test Error: ' + (data.message || 'Unknown error'));
-                    $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
+                    displayTestResult(data);
                 }
             } catch (error) {
-                $('#executionResult').show();
-                $('#resultContent').text('Network Error: ' + error.message);
+                if (currentTool) {
+                    $('#executionResult').show();
+                    $('#resultContent').text('Síťová chyba: ' + error.message);
+                    $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
+                } else {
+                    showError('Chyba při testování nástroje: ' + error.message);
+                }
+            }
+        }
+
+        function displayTestResult(data) {
+            $('#executionResult').show();
+            
+            if (data.success) {
+                $('#resultContent').text(JSON.stringify(data.data, null, 2));
+                $('#resultContent').parent().removeClass('border-danger').addClass('border-success');
+            } else {
+                $('#resultContent').text('Test chyba: ' + (data.message || 'Neznámá chyba'));
                 $('#resultContent').parent().removeClass('border-success').addClass('border-danger');
             }
         }
@@ -600,15 +676,19 @@
         function showLoading(show) {
             if (show) {
                 $('#loadingSpinner').show();
-                $('#toolsContainer').hide();
+                $('#toolsTable').hide();
+                $('#noToolsMessage').hide();
             } else {
                 $('#loadingSpinner').hide();
-                $('#toolsContainer').show();
             }
         }
 
         function showError(message) {
-            toastr.error(message);
+            if (typeof toastr !== 'undefined') {
+                toastr.error(message);
+            } else {
+                alert(message);
+            }
         }
     </script>
 }

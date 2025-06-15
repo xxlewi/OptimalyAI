@@ -174,14 +174,32 @@
                                     </td>
                                     <td>
                                         <div>
-                                            <i class="fas fa-user text-muted"></i> 
-                                            @project.CustomerName
+                                            @if (project.CustomerId.HasValue)
+                                            {
+                                                <i class="fas fa-user text-muted"></i> 
+                                                <a href="@Url.Action("Details", "Customers", new { id = project.CustomerId })" class="text-primary">
+                                                    @(project.CustomerName ?? "Neznámý zákazník")
+                                                </a>
+                                            }
+                                            else if (!string.IsNullOrEmpty(project.CustomerName))
+                                            {
+                                                <i class="fas fa-user text-muted"></i> 
+                                                @project.CustomerName
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-user text-muted"></i> 
+                                                <span class="text-muted">Interní projekt</span>
+                                            }
                                             <br>
                                             <small class="text-muted">
-                                                <i class="fas fa-envelope"></i> 
-                                                <a href="mailto:@(project.CustomerEmail ?? "email@example.com")" class="text-muted">
-                                                    @(project.CustomerEmail ?? "email@example.com")
-                                                </a>
+                                                @if (!string.IsNullOrEmpty(project.CustomerEmail))
+                                                {
+                                                    <i class="fas fa-envelope"></i> 
+                                                    <a href="mailto:@project.CustomerEmail" class="text-muted">
+                                                        @project.CustomerEmail
+                                                    </a>
+                                                }
                                             </small>
                                         </div>
                                     </td>

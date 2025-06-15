@@ -191,7 +191,10 @@
                         <li class="nav-item">
                             <a asp-controller="Projects" asp-action="Index" class="nav-link">
                                 <i class="nav-icon fas fa-project-diagram"></i>
-                                <p>Projekty</p>
+                                <p>
+                                    Projekty
+                                    <span class="badge badge-info right project-count-active">0</span>
+                                </p>
                             </a>
                         </li>
                         
@@ -258,37 +261,6 @@
                                     <!-- Zde budou dynamicky načítány nedávné chaty -->
                                 </li>
                                 <li class="nav-divider"></li>
-                            </ul>
-                        </li>
-                        
-                        <li class="nav-header">LABORATORY</li>
-                        <li class="nav-item has-treeview">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon fas fa-flask"></i>
-                                <p>
-                                    Laboratory
-                                    <i class="right fas fa-angle-left"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview">
-                                <li class="nav-item">
-                                    <a asp-controller="Laboratory" asp-action="WorkflowDesigner" class="nav-link">
-                                        <i class="fas fa-project-diagram nav-icon"></i>
-                                        <p>JointJS Designer</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="Laboratory" asp-action="GoJSDemo" class="nav-link">
-                                        <i class="fas fa-sitemap nav-icon"></i>
-                                        <p>GoJS Demo</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="Laboratory" asp-action="DrawIODemo" class="nav-link">
-                                        <i class="fas fa-draw-polygon nav-icon"></i>
-                                        <p>Draw.io Demo</p>
-                                    </a>
-                                </li>
                             </ul>
                         </li>
                         
@@ -552,11 +524,28 @@
             });
         }
         
+        // Load project counts
+        function loadProjectCounts() {
+            $.ajax({
+                url: '/api/projects/status-counts',
+                method: 'GET',
+                success: function(response) {
+                    if (response) {
+                        $('.project-count-active').text(response.active || 0);
+                    }
+                }
+            });
+        }
+        
         // Load counts on page load
         loadRequestCounts();
+        loadProjectCounts();
         
         // Refresh counts every 30 seconds
-        setInterval(loadRequestCounts, 30000);
+        setInterval(function() {
+            loadRequestCounts();
+            loadProjectCounts();
+        }, 30000);
     </script>
     
     @await RenderSectionAsync("Scripts", required: false)

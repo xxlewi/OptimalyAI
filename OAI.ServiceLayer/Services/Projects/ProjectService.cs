@@ -119,6 +119,7 @@ namespace OAI.ServiceLayer.Services.Projects
                 filter: filter,
                 orderBy: q => q.OrderByDescending(p => p.UpdatedAt),
                 include: query => query
+                    .Include(p => p.Customer)
                     .Include(p => p.Workflows)
                     .Include(p => p.Executions),
                 skip: (page - 1) * pageSize,
@@ -185,8 +186,14 @@ namespace OAI.ServiceLayer.Services.Projects
 
             await _unitOfWork.SaveChangesAsync();
 
+            // Načtení projektu s Customer pro správné mapování
+            var createdProject = await _projectRepository.GetAsync(
+                filter: p => p.Id == project.Id,
+                include: query => query.Include(p => p.Customer)
+            ).FirstOrDefaultAsync();
+
             _logger.LogInformation("Project created successfully with ID: {Id}", project.Id);
-            var complexResultDto = _projectMapper.ToDto(project);
+            var complexResultDto = _projectMapper.ToDto(createdProject ?? project);
             return ConvertToSimpleProjectDto(complexResultDto);
         }
 
@@ -195,6 +202,7 @@ namespace OAI.ServiceLayer.Services.Projects
             var project = await _projectRepository.GetAsync(
                 filter: p => p.Id == id,
                 include: query => query
+                    .Include(p => p.Customer)
                     .Include(p => p.ProjectOrchestrators)
                     .Include(p => p.ProjectTools)
                     .Include(p => p.Workflows))

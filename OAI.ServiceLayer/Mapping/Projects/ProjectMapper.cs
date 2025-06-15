@@ -200,7 +200,7 @@ namespace OAI.ServiceLayer.Mapping.Projects
             {
                 Id = entity.Id,
                 Name = entity.Name,
-                CustomerName = entity.CustomerName ?? string.Empty,
+                CustomerName = entity.Customer?.Name ?? entity.CustomerName ?? string.Empty,
                 CustomerRequirement = entity.CustomerRequirement ?? string.Empty,
                 Status = entity.Status,
                 Priority = entity.Priority,
