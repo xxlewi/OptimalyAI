@@ -251,10 +251,12 @@ public static class ServiceCollectionExtensions
         
         // Register web scraping tools
         services.AddHttpClient<OAI.ServiceLayer.Services.Tools.Implementations.JinaReaderTool>();
-        services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.JinaReaderTool>();
+        services.AddScoped<OAI.Core.Interfaces.Tools.ITool>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Tools.Implementations.JinaReaderTool>());
         
         services.AddHttpClient<OAI.ServiceLayer.Services.Tools.Implementations.FirecrawlWebScrapingTool>();
-        services.AddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.FirecrawlWebScrapingTool>();
+        services.AddScoped<OAI.Core.Interfaces.Tools.ITool>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Tools.Implementations.FirecrawlWebScrapingTool>());
         
         return services;
     }

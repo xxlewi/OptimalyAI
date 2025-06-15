@@ -320,6 +320,30 @@ public class ToolsApiController : ControllerBase
     }
 
     /// <summary>
+    /// Execute a specific tool with parameters
+    /// </summary>
+    [HttpPost("{toolId}/execute")]
+    public async Task<IActionResult> ExecuteSpecificTool(string toolId, [FromBody] Dictionary<string, object> parameters)
+    {
+        try
+        {
+            var request = new ExecuteToolRequest
+            {
+                ToolId = toolId,
+                Parameters = parameters ?? new Dictionary<string, object>()
+            };
+            
+            return await ExecuteTool(request);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing specific tool {ToolId}", toolId);
+            var response = ApiResponse.ErrorResponse($"Tool execution failed: {ex.Message}");
+            return BadRequest(response);
+        }
+    }
+
+    /// <summary>
     /// Test a tool with sample data
     /// </summary>
     [HttpPost("{toolId}/test")]
