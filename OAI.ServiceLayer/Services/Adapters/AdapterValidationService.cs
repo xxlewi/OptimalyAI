@@ -117,9 +117,9 @@ namespace OAI.ServiceLayer.Services.Adapters
                 var adapterResult = await adapter.ExecuteAsync(testContext, cancellationToken);
 
                 testResult.Success = adapterResult.IsSuccess;
-                testResult.ErrorMessage = adapterResult.ErrorMessage;
+                testResult.ErrorMessage = adapterResult.Error?.Message;
                 testResult.ResultData = adapterResult.Data;
-                testResult.ItemsProcessed = adapterResult.ItemsProcessed;
+                testResult.ItemsProcessed = (int)(adapterResult.Metrics?.ItemsProcessed ?? 0);
                 testResult.CompletedAt = DateTime.UtcNow;
                 testResult.Duration = testResult.CompletedAt - testResult.StartedAt;
 
@@ -153,7 +153,7 @@ namespace OAI.ServiceLayer.Services.Adapters
                 var healthStatus = await adapter.GetHealthStatusAsync();
                 if (!healthStatus.IsHealthy)
                 {
-                    result.Warnings.Add($"Adapter health check failed: {healthStatus.Message}");
+                    result.Warnings.Add($"Adapter health check failed: {healthStatus.Status}");
                 }
             }
             catch (Exception ex)
@@ -195,10 +195,10 @@ namespace OAI.ServiceLayer.Services.Adapters
                 {
                     // For input adapters, we can try to validate the source
                     // This would be adapter-specific implementation
-                    var schemas = adapter.GetInputSchemas();
+                    var schemas = inputAdapter.GetOutputSchemas();
                     if (schemas == null || !schemas.Any())
                     {
-                        result.Warnings.Add("No input schemas defined for input adapter");
+                        result.Warnings.Add("No output schemas defined for input adapter");
                     }
                 }
                 catch (Exception ex)
@@ -220,10 +220,10 @@ namespace OAI.ServiceLayer.Services.Adapters
                 try
                 {
                     // For output adapters, we can try to validate the destination
-                    var schemas = adapter.GetOutputSchemas();
+                    var schemas = outputAdapter.GetInputSchemas();
                     if (schemas == null || !schemas.Any())
                     {
-                        result.Warnings.Add("No output schemas defined for output adapter");
+                        result.Warnings.Add("No input schemas defined for output adapter");
                     }
                 }
                 catch (Exception ex)

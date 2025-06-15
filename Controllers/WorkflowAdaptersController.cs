@@ -99,7 +99,7 @@ namespace OptimalyAI.Controllers
 
                 var schemas = new
                 {
-                    Input = adapter.GetInputSchemas()?.Select(s => new
+                    Input = (adapter as IOutputAdapter)?.GetInputSchemas()?.Select(s => new
                     {
                         s.Id,
                         s.Name,
@@ -115,7 +115,7 @@ namespace OptimalyAI.Controllers
                             f.DefaultValue
                         })
                     }),
-                    Output = adapter.GetOutputSchemas()?.Select(s => new
+                    Output = (adapter as IInputAdapter)?.GetOutputSchemas()?.Select(s => new
                     {
                         s.Id,
                         s.Name,

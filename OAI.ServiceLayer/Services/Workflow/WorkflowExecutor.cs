@@ -11,6 +11,7 @@ using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Adapters;
 using OAI.Core.Interfaces.Tools;
 using OAI.Core.Interfaces.Workflow;
+using OAI.ServiceLayer.Services.Tools.Base;
 
 namespace OAI.ServiceLayer.Services.Workflow
 {
@@ -739,8 +740,12 @@ namespace OAI.ServiceLayer.Services.Workflow
             {
                 return new ToolResult
                 {
+                    ExecutionId = Guid.NewGuid().ToString(),
+                    ToolId = "workflow_executor",
                     IsSuccess = false,
-                    Error = new ToolError { Message = "No adapter specified for input step" }
+                    Error = new ToolError { Message = "No adapter specified for input step" },
+                    StartedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow
                 };
             }
 
@@ -752,8 +757,12 @@ namespace OAI.ServiceLayer.Services.Workflow
                 {
                     return new ToolResult
                     {
+                        ExecutionId = Guid.NewGuid().ToString(),
+                        ToolId = "workflow_executor",
                         IsSuccess = false,
-                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' not found" }
+                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' not found" },
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
                     };
                 }
 
@@ -788,21 +797,28 @@ namespace OAI.ServiceLayer.Services.Workflow
                 {
                     // Store adapter output in context
                     context.SetVariable($"input_{step.Id}", result.Data);
-                    context.ItemsProcessed += result.ItemsProcessed;
+                    context.ItemsProcessed += (int)(result.Metrics?.ItemsProcessed ?? 0);
                     
                     return new ToolResult
                     {
+                        ExecutionId = Guid.NewGuid().ToString(),
+                        ToolId = "workflow_executor",
                         IsSuccess = true,
                         Data = result.Data,
-                        ProcessingTime = result.ProcessingTime
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
                     };
                 }
                 else
                 {
                     return new ToolResult
                     {
+                        ExecutionId = Guid.NewGuid().ToString(),
+                        ToolId = "workflow_executor",
                         IsSuccess = false,
-                        Error = new ToolError { Message = result.ErrorMessage }
+                        Error = new ToolError { Message = result.Error?.Message ?? "Adapter execution failed" },
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
                     };
                 }
             }
@@ -811,8 +827,12 @@ namespace OAI.ServiceLayer.Services.Workflow
                 _logger.LogError(ex, "Error executing input adapter step {StepId}", step.Id);
                 return new ToolResult
                 {
+                    ExecutionId = Guid.NewGuid().ToString(),
+                    ToolId = "workflow_executor",
                     IsSuccess = false,
-                    Error = new ToolError { Message = ex.Message, StackTrace = ex.StackTrace }
+                    Error = new ToolError { Message = $"Error executing input adapter: {ex.Message}" },
+                    StartedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow
                 };
             }
         }
@@ -826,8 +846,12 @@ namespace OAI.ServiceLayer.Services.Workflow
             {
                 return new ToolResult
                 {
+                    ExecutionId = Guid.NewGuid().ToString(),
+                    ToolId = "workflow_executor",
                     IsSuccess = false,
-                    Error = new ToolError { Message = "No adapter specified for output step" }
+                    Error = new ToolError { Message = "No adapter specified for output step" },
+                    StartedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow
                 };
             }
 
@@ -839,8 +863,12 @@ namespace OAI.ServiceLayer.Services.Workflow
                 {
                     return new ToolResult
                     {
+                        ExecutionId = Guid.NewGuid().ToString(),
+                        ToolId = "workflow_executor",
                         IsSuccess = false,
-                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' not found" }
+                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' not found" },
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
                     };
                 }
 
@@ -849,8 +877,12 @@ namespace OAI.ServiceLayer.Services.Workflow
                 {
                     return new ToolResult
                     {
+                        ExecutionId = Guid.NewGuid().ToString(),
+                        ToolId = "workflow_executor",
                         IsSuccess = false,
-                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' is not an output adapter" }
+                        Error = new ToolError { Message = $"Adapter '{step.AdapterId}' is not an output adapter" },
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
                     };
                 }
 
@@ -891,21 +923,28 @@ namespace OAI.ServiceLayer.Services.Workflow
                 {
                     // Store output result in context
                     context.SetVariable($"output_{step.Id}_result", result.Data);
-                    context.ItemsProcessed += result.ItemsProcessed;
+                    context.ItemsProcessed += (int)(result.Metrics?.ItemsProcessed ?? 0);
                     
                     return new ToolResult
                     {
+                        ExecutionId = Guid.NewGuid().ToString(),
+                        ToolId = "workflow_executor",
                         IsSuccess = true,
                         Data = result.Data,
-                        ProcessingTime = result.ProcessingTime
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
                     };
                 }
                 else
                 {
                     return new ToolResult
                     {
+                        ExecutionId = Guid.NewGuid().ToString(),
+                        ToolId = "workflow_executor",
                         IsSuccess = false,
-                        Error = new ToolError { Message = result.ErrorMessage }
+                        Error = new ToolError { Message = result.Error?.Message ?? "Adapter execution failed" },
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
                     };
                 }
             }
@@ -914,8 +953,12 @@ namespace OAI.ServiceLayer.Services.Workflow
                 _logger.LogError(ex, "Error executing output adapter step {StepId}", step.Id);
                 return new ToolResult
                 {
+                    ExecutionId = Guid.NewGuid().ToString(),
+                    ToolId = "workflow_executor",
                     IsSuccess = false,
-                    Error = new ToolError { Message = ex.Message, StackTrace = ex.StackTrace }
+                    Error = new ToolError { Message = $"Error executing output adapter: {ex.Message}" },
+                    StartedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow
                 };
             }
         }
