@@ -1,0 +1,106 @@
+@model OAI.Core.Interfaces.Adapters.IAdapter
+
+<div class="card h-100 adapter-card">
+    <div class="card-header bg-gradient @(Model.Type == OAI.Core.Interfaces.Adapters.AdapterType.Input ? "bg-primary" : Model.Type == OAI.Core.Interfaces.Adapters.AdapterType.Output ? "bg-success" : "bg-info") text-white">
+        <h5 class="card-title mb-0">
+            @switch(Model.Type)
+            {
+                case OAI.Core.Interfaces.Adapters.AdapterType.Input:
+                    <i class="fas fa-download me-2"></i>
+                    break;
+                case OAI.Core.Interfaces.Adapters.AdapterType.Output:
+                    <i class="fas fa-upload me-2"></i>
+                    break;
+                case OAI.Core.Interfaces.Adapters.AdapterType.Bidirectional:
+                    <i class="fas fa-sync-alt me-2"></i>
+                    break;
+            }
+            @Model.Name
+        </h5>
+        <small class="text-white-50">@Model.Id</small>
+    </div>
+    <div class="card-body">
+        <p class="card-text">@Model.Description</p>
+        
+        <div class="mb-3">
+            <span class="badge bg-secondary me-1">
+                <i class="fas fa-layer-group me-1"></i>@Model.Category
+            </span>
+            <span class="badge bg-info">
+                <i class="fas fa-code-branch me-1"></i>v@Model.Version
+            </span>
+            @if (Model.Type == OAI.Core.Interfaces.Adapters.AdapterType.Bidirectional)
+            {
+                <span class="badge bg-warning text-dark">
+                    <i class="fas fa-exchange-alt me-1"></i>Bidirectional
+                </span>
+            }
+        </div>
+
+        @{
+            var capabilities = Model.GetCapabilities();
+            var formats = capabilities?.SupportedFormats ?? new List<string>();
+        }
+        
+        @if (formats.Any())
+        {
+            <div class="mb-3">
+                <small class="text-muted d-block mb-1">Podporované formáty:</small>
+                <div>
+                    @foreach (var format in formats)
+                    {
+                        <span class="badge bg-light text-dark me-1">
+                            @switch(format.ToLower())
+                            {
+                                case "excel":
+                                case "xlsx":
+                                    <i class="fas fa-file-excel text-success me-1"></i>
+                                    break;
+                                case "csv":
+                                    <i class="fas fa-file-csv text-primary me-1"></i>
+                                    break;
+                                case "json":
+                                    <i class="fas fa-file-code text-warning me-1"></i>
+                                    break;
+                                default:
+                                    <i class="fas fa-file me-1"></i>
+                                    break;
+                            }
+                            @format.ToUpper()
+                        </span>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="mb-3">
+            <small class="text-muted d-block mb-1">Parametry:</small>
+            <div>
+                <span class="badge bg-light text-dark">
+                    <i class="fas fa-cog me-1"></i>@Model.Parameters.Count() parametrů
+                </span>
+                @if (Model.Parameters.Any(p => p.IsRequired))
+                {
+                    <span class="badge bg-warning text-dark">
+                        <i class="fas fa-asterisk me-1"></i>@Model.Parameters.Count(p => p.IsRequired) povinných
+                    </span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .adapter-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .adapter-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    
+    .bg-gradient {
+        background-image: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-primary-dark) 100%);
+    }
+</style>

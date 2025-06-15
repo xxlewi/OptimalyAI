@@ -3,6 +3,7 @@ using OptimalyAI.Configuration;
 using OptimalyAI.Hubs;
 using OptimalyAI.Services.Monitoring;
 using OptimalyAI.Services.Tools;
+using OptimalyAI.Services.Adapters;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,6 +38,9 @@ try
     
     // Add Tool initializer
     builder.Services.AddHostedService<ToolInitializer>();
+    
+    // Add Adapter initializer
+    builder.Services.AddSingleton<AdapterInitializer>();
 
     var app = builder.Build();
 
@@ -45,6 +49,10 @@ try
 
     // Ensure database is created/migrated
     await app.EnsureDatabaseAsync(app.Environment);
+    
+    // Initialize adapters
+    var adapterInitializer = app.Services.GetRequiredService<AdapterInitializer>();
+    await adapterInitializer.InitializeAsync();
 
     app.MapStaticAssets();
     app.UseApiRouting();

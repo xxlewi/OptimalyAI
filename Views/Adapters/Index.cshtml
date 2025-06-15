@@ -1,0 +1,126 @@
+@model IEnumerable<OAI.Core.Interfaces.Adapters.IAdapter>
+@{
+    ViewData["Title"] = "I/O Adaptéry";
+    var inputAdapters = ViewBag.InputAdapters as List<OAI.Core.Interfaces.Adapters.IAdapter> ?? new List<OAI.Core.Interfaces.Adapters.IAdapter>();
+    var outputAdapters = ViewBag.OutputAdapters as List<OAI.Core.Interfaces.Adapters.IAdapter> ?? new List<OAI.Core.Interfaces.Adapters.IAdapter>();
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-4">
+                <i class="fas fa-plug me-2"></i>I/O Adaptéry
+            </h1>
+            <p class="lead">
+                Správa adaptérů pro čtení a zápis dat v různých formátech. Adaptéry umožňují vašim workflow pracovat s Excel, CSV, JSON a dalšími datovými zdroji.
+            </p>
+        </div>
+    </div>
+
+    <!-- Statistiky -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-download me-2"></i>Input Adaptéry
+                    </h5>
+                    <p class="card-text display-6">@inputAdapters.Count</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-upload me-2"></i>Output Adaptéry
+                    </h5>
+                    <p class="card-text display-6">@outputAdapters.Count</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-sync-alt me-2"></i>Bidirectional
+                    </h5>
+                    <p class="card-text display-6">@Model.Count(a => a.Type == OAI.Core.Interfaces.Adapters.AdapterType.Bidirectional)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-check-circle me-2"></i>Aktivní
+                    </h5>
+                    <p class="card-text display-6">@Model.Count()</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input Adaptéry -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2 class="mb-3">
+                <i class="fas fa-download me-2"></i>Input Adaptéry
+                <small class="text-muted ms-2">Pro čtení dat</small>
+            </h2>
+            <div class="row">
+                @foreach (var adapter in inputAdapters)
+                {
+                    <div class="col-md-4 mb-3">
+                        @await Html.PartialAsync("_AdapterCard", adapter)
+                    </div>
+                }
+                @if (!inputAdapters.Any())
+                {
+                    <div class="col">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Zatím nejsou k dispozici žádné input adaptéry.
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Output Adaptéry -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2 class="mb-3">
+                <i class="fas fa-upload me-2"></i>Output Adaptéry
+                <small class="text-muted ms-2">Pro zápis dat</small>
+            </h2>
+            <div class="row">
+                @foreach (var adapter in outputAdapters)
+                {
+                    <div class="col-md-4 mb-3">
+                        @await Html.PartialAsync("_AdapterCard", adapter)
+                    </div>
+                }
+                @if (!outputAdapters.Any())
+                {
+                    <div class="col">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Zatím nejsou k dispozici žádné output adaptéry.
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Tooltip initialization
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
