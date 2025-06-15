@@ -71,6 +71,12 @@
             <ul class="navbar-nav ml-auto">
                 <!-- Quick Actions -->
                 <li class="nav-item">
+                    <a class="nav-link" asp-controller="Chat" asp-action="New" role="button" title="Nový chat">
+                        <i class="fas fa-comments text-primary"></i>
+                        <span class="d-none d-sm-inline ml-1">Nový chat</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" asp-controller="Requests" asp-action="New" role="button" title="Nový požadavek">
                         <i class="fas fa-plus-circle text-success"></i>
                         <span class="d-none d-sm-inline ml-1">Nový požadavek</span>
@@ -106,13 +112,6 @@
                 <li class="nav-item">
                     <a class="nav-link" data-widget="fullscreen" href="#" role="button">
                         <i class="fas fa-expand-arrows-alt"></i>
-                    </a>
-                </li>
-                
-                <!-- New Chat -->
-                <li class="nav-item">
-                    <a asp-controller="Chat" asp-action="New" class="nav-link" role="button" title="Nový chat">
-                        <i class="fas fa-plus"></i>
                     </a>
                 </li>
                 
