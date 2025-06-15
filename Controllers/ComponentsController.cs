@@ -6,12 +6,13 @@ namespace OptimalyAI.Controllers
     /// <summary>
     /// Controller for rendering ViewComponents via AJAX
     /// </summary>
+    [Route("Components")]
     public class ComponentsController : Controller
     {
         /// <summary>
         /// Render AdapterSelector ViewComponent
         /// </summary>
-        [HttpGet]
+        [HttpGet("AdapterSelector")]
         public async Task<IActionResult> AdapterSelector(
             string elementId,
             string label,

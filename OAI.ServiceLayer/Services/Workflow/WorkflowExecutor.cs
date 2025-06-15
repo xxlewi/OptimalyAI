@@ -781,7 +781,7 @@ namespace OAI.ServiceLayer.Services.Workflow
                 };
 
                 // Execute adapter
-                context.LogMessage($"Executing input adapter: {adapter.Name}", Core.Interfaces.Workflow.LogLevel.Information);
+                context.LogMessage($"Executing input adapter: {adapter.Name}", OAI.Core.Interfaces.Workflow.LogLevel.Information);
                 var result = await adapter.ExecuteAsync(adapterContext, cancellationToken);
 
                 if (result.IsSuccess)
@@ -884,7 +884,7 @@ namespace OAI.ServiceLayer.Services.Workflow
                 };
 
                 // Execute adapter
-                context.LogMessage($"Executing output adapter: {adapter.Name}", Core.Interfaces.Workflow.LogLevel.Information);
+                context.LogMessage($"Executing output adapter: {adapter.Name}", OAI.Core.Interfaces.Workflow.LogLevel.Information);
                 var result = await adapter.ExecuteAsync(adapterContext, cancellationToken);
 
                 if (result.IsSuccess)
@@ -957,7 +957,7 @@ namespace OAI.ServiceLayer.Services.Workflow
         public void SetStepOutput(string stepId, object output) => StepOutputs[stepId] = output;
         public object GetStepOutput(string stepId) => StepOutputs.TryGetValue(stepId, out var output) ? output : null;
         
-        public void LogMessage(string message, Core.Interfaces.Workflow.LogLevel level = Core.Interfaces.Workflow.LogLevel.Information)
+        public void LogMessage(string message, OAI.Core.Interfaces.Workflow.LogLevel level = OAI.Core.Interfaces.Workflow.LogLevel.Information)
         {
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
             _executionLog.Add($"[{timestamp}] [{level}] {message}");

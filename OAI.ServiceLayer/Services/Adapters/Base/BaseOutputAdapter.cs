@@ -20,7 +20,7 @@ namespace OAI.ServiceLayer.Services.Adapters.Base
         /// <summary>
         /// Execute adapter in workflow context
         /// </summary>
-        public async Task<IAdapterResult> ExecuteAsync(
+        public override async Task<IAdapterResult> ExecuteAsync(
             AdapterExecutionContext context,
             CancellationToken cancellationToken = default)
         {

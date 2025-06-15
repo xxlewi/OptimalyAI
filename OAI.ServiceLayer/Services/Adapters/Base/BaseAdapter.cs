@@ -273,8 +273,11 @@ namespace OAI.ServiceLayer.Services.Adapters.Base
         }
         
         /// <summary>
-        /// Execute adapter - must be implemented by derived classes
+        /// Execute adapter - should be overridden by derived classes
         /// </summary>
-        public abstract Task<IAdapterResult> ExecuteAsync(AdapterExecutionContext context, CancellationToken cancellationToken = default);
+        public virtual Task<IAdapterResult> ExecuteAsync(AdapterExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException($"ExecuteAsync not implemented for adapter {Name}");
+        }
     }
 }

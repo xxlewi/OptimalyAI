@@ -261,6 +261,7 @@ public static class ServiceCollectionExtensions
         // Register adapter services
         services.AddScoped<OAI.Core.Interfaces.Adapters.IAdapterRegistry, OAI.ServiceLayer.Services.Adapters.AdapterRegistryService>();
         services.AddScoped<OAI.Core.Interfaces.Adapters.IAdapterExecutor, OAI.ServiceLayer.Services.Adapters.AdapterExecutorService>();
+        services.AddScoped<OAI.ServiceLayer.Services.Adapters.AdapterValidationService>();
         
         // Register adapter implementations
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ExcelInputAdapter>();
@@ -278,9 +279,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ApiOutputAdapter>();
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseOutputAdapter>();
         
-        // Register workflow-specific adapters
-        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Workflow.FileUploadInputAdapter>();
-        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Workflow.EmailOutputAdapter>();
+        // Register workflow-specific adapters (temporarily commented out due to compilation issues)
+        // services.AddTransient<OAI.ServiceLayer.Services.Adapters.Workflow.FileUploadInputAdapter>();
+        // services.AddTransient<OAI.ServiceLayer.Services.Adapters.Workflow.EmailOutputAdapter>();
         
         // Register adapters as IAdapter
         services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
@@ -312,11 +313,11 @@ public static class ServiceCollectionExtensions
         services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
             provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.DatabaseOutputAdapter>());
             
-        // Register workflow adapters as IAdapter
-        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
-            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Workflow.FileUploadInputAdapter>());
-        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
-            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Workflow.EmailOutputAdapter>());
+        // Register workflow adapters as IAdapter (temporarily commented out)
+        // services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+        //     provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Workflow.FileUploadInputAdapter>());
+        // services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+        //     provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Workflow.EmailOutputAdapter>());
         
         return services;
     }

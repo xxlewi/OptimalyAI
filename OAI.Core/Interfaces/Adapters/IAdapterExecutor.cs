@@ -49,19 +49,4 @@ namespace OAI.Core.Interfaces.Adapters
         Task<AdapterExecutionStatistics> GetStatisticsAsync(string adapterId);
     }
 
-    /// <summary>
-    /// Context for adapter execution
-    /// </summary>
-    public class AdapterExecutionContext
-    {
-        public string ExecutionId { get; set; } = Guid.NewGuid().ToString();
-        public string WorkflowId { get; set; }
-        public string NodeId { get; set; }
-        public string UserId { get; set; }
-        public string SessionId { get; set; }
-        public Dictionary<string, object> Variables { get; set; } = new();
-        public TimeSpan ExecutionTimeout { get; set; } = TimeSpan.FromMinutes(5);
-        public bool EnableDetailedLogging { get; set; }
-        public Dictionary<string, object> CustomData { get; set; } = new();
-    }
 }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.Interfaces.Adapters;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
@@ -15,13 +16,16 @@ namespace OptimalyAI.Controllers
     {
         private readonly IAdapterRegistry _adapterRegistry;
         private readonly ILogger<WorkflowAdaptersController> _logger;
+        private readonly OAI.ServiceLayer.Services.Adapters.AdapterValidationService _validationService;
 
         public WorkflowAdaptersController(
             IAdapterRegistry adapterRegistry,
-            ILogger<WorkflowAdaptersController> logger)
+            ILogger<WorkflowAdaptersController> logger,
+            OAI.ServiceLayer.Services.Adapters.AdapterValidationService validationService)
         {
             _adapterRegistry = adapterRegistry;
             _logger = logger;
+            _validationService = validationService;
         }
 
         /// <summary>
@@ -146,42 +150,13 @@ namespace OptimalyAI.Controllers
         {
             try
             {
-                var adapter = await _adapterRegistry.GetAdapterAsync(adapterId);
-                if (adapter == null)
-                {
-                    return NotFound(new { error = "Adapter not found" });
-                }
-
-                // Validate required parameters
-                var errors = new List<string>();
-                foreach (var param in adapter.Parameters.Where(p => p.IsRequired))
-                {
-                    if (!configuration.ContainsKey(param.Name) || configuration[param.Name] == null)
-                    {
-                        errors.Add($"Required parameter '{param.DisplayName}' is missing");
-                    }
-                }
-
-                // Validate parameter types and constraints
-                foreach (var kvp in configuration)
-                {
-                    var param = adapter.Parameters.FirstOrDefault(p => p.Name == kvp.Key);
-                    if (param != null)
-                    {
-                        var validationResult = param.Validate(kvp.Value);
-                        if (!validationResult.IsValid)
-                        {
-                            errors.Add($"{param.DisplayName}: {validationResult.ErrorMessage}");
-                        }
-                    }
-                }
-
-                if (errors.Any())
-                {
-                    return BadRequest(new { valid = false, errors });
-                }
-
-                return Ok(new { valid = true });
+                var validationResult = await _validationService.ValidateAdapterConfigurationAsync(adapterId, configuration);
+                
+                return Ok(new { 
+                    valid = validationResult.IsValid,
+                    errors = validationResult.Errors,
+                    warnings = validationResult.Warnings
+                });
             }
             catch (Exception ex)
             {
@@ -198,36 +173,23 @@ namespace OptimalyAI.Controllers
         {
             try
             {
-                var adapter = await _adapterRegistry.GetAdapterAsync(adapterId);
-                if (adapter == null)
-                {
-                    return NotFound(new { error = "Adapter not found" });
-                }
-
-                // For now, just validate the configuration
-                // In real implementation, this would perform actual test
-                var validationResult = await ValidateAdapterConfig(adapterId, request.Configuration);
+                var testResult = await _validationService.TestAdapterAsync(adapterId, request.Configuration, request.TestData);
                 
-                if (validationResult is BadRequestObjectResult)
+                return Ok(new
                 {
-                    return validationResult;
-                }
-
-                // Simulate test result
-                var result = new
-                {
-                    Success = true,
-                    Message = $"Adapter '{adapter.Name}' configuration is valid",
+                    testResult.Success,
+                    testResult.Message,
+                    ErrorMessage = testResult.ErrorMessage,
                     TestData = new
                     {
-                        ConnectionTest = adapter.Type == AdapterType.Input ? "Source accessible" : "Destination accessible",
-                        SampleData = adapter.Type == AdapterType.Input ? 
-                            new { RecordCount = 10, FirstRecord = new { Id = 1, Name = "Sample" } } :
-                            new { WritableFields = new[] { "Id", "Name", "Value" } }
+                        testResult.AdapterId,
+                        testResult.StartedAt,
+                        testResult.CompletedAt,
+                        Duration = testResult.Duration.TotalMilliseconds,
+                        testResult.ItemsProcessed,
+                        Data = testResult.ResultData
                     }
-                };
-
-                return Ok(result);
+                });
             }
             catch (Exception ex)
             {
