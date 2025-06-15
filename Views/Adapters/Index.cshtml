@@ -5,122 +5,364 @@
     var outputAdapters = ViewBag.OutputAdapters as List<OAI.Core.Interfaces.Adapters.IAdapter> ?? new List<OAI.Core.Interfaces.Adapters.IAdapter>();
 }
 
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col">
-            <h1 class="display-4">
-                <i class="fas fa-plug me-2"></i>I/O Adaptéry
-            </h1>
-            <p class="lead">
-                Správa adaptérů pro čtení a zápis dat v různých formátech. Adaptéry umožňují vašim workflow pracovat s Excel, CSV, JSON a dalšími datovými zdroji.
-            </p>
-        </div>
-    </div>
-
-    <!-- Statistiky -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card bg-primary text-white">
-                <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-download me-2"></i>Input Adaptéry
-                    </h5>
-                    <p class="card-text display-6">@inputAdapters.Count</p>
-                </div>
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-plug"></i> I/O Adaptéry
+                    <small class="text-muted">Integrace dat</small>
+                </h1>
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-success text-white">
-                <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-upload me-2"></i>Output Adaptéry
-                    </h5>
-                    <p class="card-text display-6">@outputAdapters.Count</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-sync-alt me-2"></i>Bidirectional
-                    </h5>
-                    <p class="card-text display-6">@Model.Count(a => a.Type == OAI.Core.Interfaces.Adapters.AdapterType.Bidirectional)</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-dark">
-                <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-check-circle me-2"></i>Aktivní
-                    </h5>
-                    <p class="card-text display-6">@Model.Count()</p>
-                </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item active">Adaptéry</li>
+                </ol>
             </div>
         </div>
     </div>
+</section>
 
-    <!-- Input Adaptéry -->
-    <div class="row mb-4">
-        <div class="col">
-            <h2 class="mb-3">
-                <i class="fas fa-download me-2"></i>Input Adaptéry
-                <small class="text-muted ms-2">Pro čtení dat</small>
-            </h2>
-            <div class="row">
-                @foreach (var adapter in inputAdapters)
-                {
-                    <div class="col-md-4 mb-3">
-                        @await Html.PartialAsync("_AdapterCard", adapter)
+<section class="content">
+    <div class="container-fluid">
+        <!-- Stats Row -->
+        <div class="row mb-3">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@inputAdapters.Count</h3>
+                        <p>Input Adaptéry</p>
                     </div>
-                }
-                @if (!inputAdapters.Any())
-                {
-                    <div class="col">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Zatím nejsou k dispozici žádné input adaptéry.
+                    <div class="icon">
+                        <i class="fas fa-download"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@outputAdapters.Count</h3>
+                        <p>Output Adaptéry</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-upload"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@Model.Count(a => a.Type == OAI.Core.Interfaces.Adapters.AdapterType.Bidirectional)</h3>
+                        <p>Bidirectional</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3>@Model.Count()</h3>
+                        <p>Celkem adaptérů</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-plug"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Section -->
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchAdapters" 
+                                   placeholder="Vyhledat adaptér..." autocomplete="off">
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-primary" onclick="filterAdapters()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                }
+                    <div class="col-md-3">
+                        <select id="typeFilter" class="form-control" onchange="filterAdapters()">
+                            <option value="all">Všechny adaptéry</option>
+                            <option value="Input">Input adaptéry</option>
+                            <option value="Output">Output adaptéry</option>
+                            <option value="Bidirectional">Bidirectional</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <button type="button" class="btn btn-default" onclick="clearFilters()">
+                            <i class="fas fa-times"></i> Vymazat filtry
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Output Adaptéry -->
-    <div class="row mb-4">
-        <div class="col">
-            <h2 class="mb-3">
-                <i class="fas fa-upload me-2"></i>Output Adaptéry
-                <small class="text-muted ms-2">Pro zápis dat</small>
-            </h2>
-            <div class="row">
-                @foreach (var adapter in outputAdapters)
+        <!-- Adapters Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Seznam adaptérů</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="refreshAdapters()">
+                        <i class="fas fa-sync"></i> Obnovit
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.Any())
                 {
-                    <div class="col-md-4 mb-3">
-                        @await Html.PartialAsync("_AdapterCard", adapter)
-                    </div>
+                    <table class="table table-bordered table-striped table-hover" id="adaptersTable">
+                        <thead>
+                            <tr>
+                                <th>Adaptér</th>
+                                <th>Typ</th>
+                                <th>Kategorie</th>
+                                <th>Verze</th>
+                                <th>Stav</th>
+                                <th style="width: 200px">Akce</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var adapter in Model)
+                            {
+                                <tr data-type="@adapter.Type" data-name="@adapter.Name.ToLower()" data-category="@adapter.Category?.ToLower()">
+                                    <td>
+                                        <div>
+                                            <strong>@adapter.Name</strong>
+                                            @if (adapter.Type == OAI.Core.Interfaces.Adapters.AdapterType.Input)
+                                            {
+                                                <span class="badge badge-info float-right">Input</span>
+                                            }
+                                            else if (adapter.Type == OAI.Core.Interfaces.Adapters.AdapterType.Output)
+                                            {
+                                                <span class="badge badge-success float-right">Output</span>
+                                            }
+                                            else if (adapter.Type == OAI.Core.Interfaces.Adapters.AdapterType.Bidirectional)
+                                            {
+                                                <span class="badge badge-warning float-right">Bidirectional</span>
+                                            }
+                                            <br>
+                                            <small class="text-muted">
+                                                @if (!string.IsNullOrEmpty(adapter.Description))
+                                                {
+                                                    @adapter.Description
+                                                }
+                                                else
+                                                {
+                                                    <text>ID: @adapter.Id</text>
+                                                }
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="text-center">
+                                            @if (adapter.Type == OAI.Core.Interfaces.Adapters.AdapterType.Input)
+                                            {
+                                                <i class="fas fa-download text-info fa-2x" title="Input Adaptér"></i>
+                                                <br><small class="text-muted">Čtení dat</small>
+                                            }
+                                            else if (adapter.Type == OAI.Core.Interfaces.Adapters.AdapterType.Output)
+                                            {
+                                                <i class="fas fa-upload text-success fa-2x" title="Output Adaptér"></i>
+                                                <br><small class="text-muted">Zápis dat</small>
+                                            }
+                                            else if (adapter.Type == OAI.Core.Interfaces.Adapters.AdapterType.Bidirectional)
+                                            {
+                                                <i class="fas fa-sync-alt text-warning fa-2x" title="Bidirectional Adaptér"></i>
+                                                <br><small class="text-muted">Čtení i zápis</small>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-secondary">@(adapter.Category ?? "Obecné")</span>
+                                        <br>
+                                        <small class="text-muted">
+                                            @adapter.Parameters.Count() parametrů
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <strong>@adapter.Version</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                <i class="fas fa-code"></i> @adapter.Id
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="text-center">
+                                            <span class="badge badge-success">
+                                                <i class="fas fa-check"></i> Aktivní
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">Připravený</small>
+                                        </div>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <button type="button" class="btn btn-success btn-sm" 
+                                                onclick="testAdapter('@adapter.Id')" title="Testovat adaptér">
+                                            <i class="fas fa-vial"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-primary btn-sm ml-1" 
+                                                onclick="configureAdapter('@adapter.Id')" title="Konfigurovat adaptér">
+                                            <i class="fas fa-cog"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-info btn-sm ml-1" 
+                                                onclick="viewAdapterDetails('@adapter.Id')" title="Detail adaptéru">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm ml-1" 
+                                                onclick="exportAdapterConfig('@adapter.Id')" title="Exportovat konfiguraci">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 }
-                @if (!outputAdapters.Any())
+                else
                 {
-                    <div class="col">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Zatím nejsou k dispozici žádné output adaptéry.
-                        </div>
+                    <div class="text-center py-5">
+                        <i class="fas fa-plug fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">Žádné adaptéry</h4>
+                        <p class="text-muted">Zatím nejsou k dispozici žádné adaptéry.</p>
+                        <button type="button" class="btn btn-primary" onclick="refreshAdapters()">
+                            <i class="fas fa-sync"></i> Obnovit seznam
+                        </button>
                     </div>
                 }
             </div>
         </div>
     </div>
-</div>
+</section>
 
 @section Scripts {
     <script>
+        function testAdapter(adapterId) {
+            // Otevřít modal pro testování adaptéru
+            $.ajax({
+                url: `/api/workflow-adapters/${adapterId}/schemas`,
+                type: 'GET',
+                success: function(response) {
+                    // Zobrazit testovací dialog
+                    showAdapterTestDialog(adapterId, response);
+                },
+                error: function(xhr) {
+                    toastr.error('Nepodařilo se načíst schémata adaptéru');
+                }
+            });
+        }
+        
+        function configureAdapter(adapterId) {
+            // Přesměrování na workflow designer s adaptérem
+            window.location.href = `/WorkflowDesigner?adapterId=${adapterId}`;
+        }
+        
+        function viewAdapterDetails(adapterId) {
+            // Zobrazit detail adaptéru
+            $.ajax({
+                url: `/api/workflow-adapters/${adapterId}/schemas`,
+                type: 'GET',
+                success: function(response) {
+                    showAdapterDetailsDialog(adapterId, response);
+                },
+                error: function(xhr) {
+                    toastr.error('Nepodařilo se načíst detail adaptéru');
+                }
+            });
+        }
+        
+        function exportAdapterConfig(adapterId) {
+            // Export konfigurace adaptéru
+            window.location.href = `/api/adapters/${adapterId}/export`;
+        }
+        
+        function refreshAdapters() {
+            window.location.reload();
+        }
+        
+        function filterAdapters() {
+            const searchTerm = $('#searchAdapters').val().toLowerCase();
+            const typeFilter = $('#typeFilter').val();
+            
+            $('#adaptersTable tbody tr').each(function() {
+                const row = $(this);
+                const type = row.attr('data-type');
+                const name = row.attr('data-name') || '';
+                const category = row.attr('data-category') || '';
+                const description = row.find('td:first small').text().toLowerCase();
+                
+                // Type filter
+                let typeMatch = true;
+                if (typeFilter !== 'all') {
+                    typeMatch = type === typeFilter;
+                }
+                
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    name.includes(searchTerm) || 
+                    description.includes(searchTerm) ||
+                    category.includes(searchTerm);
+                
+                if (typeMatch && searchMatch) {
+                    row.show();
+                } else {
+                    row.hide();
+                }
+            });
+            
+            // Zobrazit počet filtrovaných adaptérů
+            const visibleCount = $('#adaptersTable tbody tr:visible').length;
+            const totalCount = $('#adaptersTable tbody tr').length;
+            
+            if (visibleCount < totalCount) {
+                if ($('#filterInfo').length === 0) {
+                    $('.card-header').append(`<span id="filterInfo" class="float-right text-muted"></span>`);
+                }
+                $('#filterInfo').text(`Zobrazeno ${visibleCount} z ${totalCount} adaptérů`);
+            } else {
+                $('#filterInfo').remove();
+            }
+        }
+        
+        function clearFilters() {
+            $('#searchAdapters').val('');
+            $('#typeFilter').val('all');
+            filterAdapters();
+        }
+        
+        function showAdapterTestDialog(adapterId, schemas) {
+            // Zobrazit modal pro testování
+            // TODO: Implementovat testovací dialog
+            toastr.info('Testovací dialog bude implementován');
+        }
+        
+        function showAdapterDetailsDialog(adapterId, schemas) {
+            // Zobrazit modal s detailem
+            // TODO: Implementovat detail dialog
+            toastr.info('Detail dialog bude implementován');
+        }
+        
+        // Real-time search při psaní
+        $('#searchAdapters').on('keyup', function() {
+            filterAdapters();
+        });
+        
         $(document).ready(function() {
+            // Aplikovat výchozí filtr při načtení stránky
+            filterAdapters();
+            
             // Tooltip initialization
-            $('[data-bs-toggle="tooltip"]').tooltip();
+            $('[title]').tooltip();
         });
     </script>
 }
