@@ -4,6 +4,8 @@ Moderní **production-ready** ASP.NET Core aplikace s Clean Architecture, Reposi
 
 ## 🏗️ Clean Architecture
 
+Podrobný popis architektury najdete v [Documentation/INFRASTRUCTURE_ARCHITECTURE.md](Documentation/INFRASTRUCTURE_ARCHITECTURE.md)
+
 ### Vrstvová struktura
 ```
 OptimalyAI/                 # 🌐 Presentation Layer (Web + API)

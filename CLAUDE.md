@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🚨 CRITICAL ARCHITECTURE RULES
 
+For detailed infrastructure architecture guide, see [Documentation/INFRASTRUCTURE_ARCHITECTURE.md](Documentation/INFRASTRUCTURE_ARCHITECTURE.md)
+
 ### ❌ FORBIDDEN ACTIONS
 1. **NEVER create Infrastructure folder in root project!**
    - Infrastructure components belong to OAI.ServiceLayer or OAI.DataLayer
