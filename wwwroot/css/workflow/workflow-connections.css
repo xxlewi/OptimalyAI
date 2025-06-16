@@ -1,0 +1,80 @@
+/* 
+ * Workflow Designer - Connection Styles
+ * Clean Architecture Refactoring
+ */
+
+/* Connection lines */
+.connection-line {
+    stroke: #007bff;
+    stroke-width: 3;
+    fill: none;
+    pointer-events: none;
+}
+
+/* Connection preview (while dragging) */
+.connection-line-preview {
+    stroke: #007bff;
+    stroke-width: 3;
+    stroke-dasharray: 5, 5;
+    fill: none;
+    pointer-events: none;
+    animation: dash 0.5s linear infinite;
+}
+
+/* Connection dots */
+.connection-dot {
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border: 2px solid white;
+    border-radius: 50%;
+    position: absolute;
+    cursor: crosshair;
+    z-index: 20;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.connection-dot:hover {
+    background: #0056b3;
+    transform: scale(1.2);
+}
+
+/* Input connection dot */
+.connection-dot.input {
+    left: 50%;
+    top: -8px;
+    transform: translateX(-50%);
+}
+
+.connection-dot.input:hover {
+    transform: translateX(-50%) scale(1.2);
+}
+
+/* Output connection dot */
+.connection-dot.output {
+    left: 50%;
+    bottom: -8px;
+    transform: translateX(-50%);
+}
+
+.connection-dot.output:hover {
+    transform: translateX(-50%) scale(1.2);
+}
+
+/* Magnetic effect for connection dots */
+.connection-dot.magnetic-hover {
+    background: #28a745;
+    transform: scale(1.5);
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.8);
+    animation: pulse-connection 0.5s ease-in-out infinite;
+}
+
+.connection-dot.input.magnetic-hover {
+    transform: translateX(-50%) scale(1.5);
+}
+
+@keyframes pulse-connection {
+    0% { transform: translateX(-50%) scale(1.5); }
+    50% { transform: translateX(-50%) scale(1.8); }
+    100% { transform: translateX(-50%) scale(1.5); }
+}

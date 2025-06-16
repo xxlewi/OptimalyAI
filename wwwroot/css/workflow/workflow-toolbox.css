@@ -1,0 +1,54 @@
+/* 
+ * Workflow Designer - Toolbox Styles
+ * Clean Architecture Refactoring
+ */
+
+/* Toolbox container */
+.toolbox {
+    width: 250px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.toolbox h6 {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+/* Tool items */
+.tool-item {
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: move;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.tool-item:hover {
+    border-color: #007bff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Dragging state */
+.tool-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+    cursor: grabbing !important;
+}
+
+/* Tool badges */
+.tool-badge {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 4px;
+}

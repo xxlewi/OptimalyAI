@@ -1,0 +1,55 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+
+@if (ViewBag.ReadOnly != true)
+{
+    <div class="toolbox">
+        <h5><i class="fas fa-toolbox"></i> Nástroje</h5>
+        
+        <h6>Vstup & Výstup</h6>
+        <div class="tool-item" data-type="InputAdapter" draggable="true">
+            <i class="fas fa-download"></i> Input Adaptér
+            <small style="display: block; font-size: 10px; color: #666;">Data vstup</small>
+        </div>
+        <div class="tool-item" data-type="OutputAdapter" draggable="true">
+            <i class="fas fa-upload"></i> Output Adaptér
+            <small style="display: block; font-size: 10px; color: #666;">Data výstup</small>
+        </div>
+        
+        <hr>
+        
+        <h6>Základní uzly</h6>
+        <div class="tool-item" data-type="task" draggable="true">
+            <i class="fas fa-square"></i> Proces
+            <small style="display: block; font-size: 10px; color: #666;">Obdélník</small>
+        </div>
+        <div class="tool-item" data-type="condition" draggable="true">
+            <i class="fas fa-question-circle"></i> Rozhodnutí
+            <small style="display: block; font-size: 10px; color: #666;">Podmínka</small>
+        </div>
+        <div class="tool-item" data-type="parallel" draggable="true">
+            <i class="fas fa-plus"></i> Paralelní brána
+            <small style="display: block; font-size: 10px; color: #666;">AND Gateway</small>
+        </div>
+        
+        <hr>
+        
+        <h6>AI Nástroje</h6>
+        @if (ViewBag.ToolsByCategory != null)
+        {
+            var toolsByCategory = ViewBag.ToolsByCategory as Dictionary<string, List<OAI.Core.Interfaces.Tools.ITool>>;
+            if (toolsByCategory != null)
+            {
+                @foreach(var category in toolsByCategory)
+                {
+                    <h6 style="font-size: 0.9em; margin-top: 10px;">@category.Key</h6>
+                    @foreach(var tool in category.Value)
+                    {
+                        <div class="tool-item" data-type="tool" data-tool="@tool.Id" draggable="true" title="@tool.Description">
+                            <i class="fas fa-robot"></i> @tool.Name
+                        </div>
+                    }
+                }
+            }
+        }
+    </div>
+}

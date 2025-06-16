@@ -736,8 +736,10 @@
             let steps = [];
             
             // Get steps from orchestratorData or nodes
-            if (workflow.metadata && workflow.metadata.orchestratorData && workflow.metadata.orchestratorData.steps) {
-                steps = workflow.metadata.orchestratorData.steps;
+            if (workflow.metadata && workflow.metadata.orchestratorData) {
+                // The orchestratorData now contains the entire WorkflowDesignerDto
+                const orchestratorData = workflow.metadata.orchestratorData;
+                steps = orchestratorData.steps || [];
             } else if (workflow.nodes) {
                 // Convert nodes to steps format for display
                 steps = workflow.nodes.map(node => ({
@@ -836,12 +838,17 @@
         
         function loadWorkflowSteps(projectId) {
             $.ajax({
-                url: '/WorkflowDesigner/LoadWorkflow',
+                url: `/api/workflow-designer/${projectId}`,
                 type: 'GET',
-                data: { projectId: projectId },
                 success: function(response) {
-                    if (response.success && response.workflow) {
-                        renderWorkflowSteps(response.workflow);
+                    if (response.success && response.data) {
+                        // Create wrapper object for compatibility
+                        const workflowWrapper = {
+                            metadata: {
+                                orchestratorData: response.data
+                            }
+                        };
+                        renderWorkflowSteps(workflowWrapper);
                     }
                 },
                 error: function() {

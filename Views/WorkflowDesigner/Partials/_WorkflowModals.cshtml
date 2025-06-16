@@ -1,0 +1,396 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+
+<!-- I/O Configuration Modal -->
+<div class="modal fade" id="ioConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Konfigurace vstupů a výstupů workflow</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Input Configuration -->
+                <h6><i class="fas fa-sign-in-alt"></i> Konfigurace vstupu</h6>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Typ vstupu</label>
+                            <select class="form-control" id="modalInputType" onchange="updateInputConfig()">
+                                <option value="files">📁 Soubory</option>
+                                <option value="images">🖼️ Obrázky</option>
+                                <option value="api">🌐 API</option>
+                                <option value="database">🗄️ Databáze</option>
+                                <option value="csv">📊 CSV</option>
+                                <option value="manual">✏️ Manuální</option>
+                            </select>
+                        </div>
+                        
+                        <div id="inputConfigDetails">
+                            <!-- Dynamic content based on input type -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Output Configuration -->
+                <h6><i class="fas fa-sign-out-alt"></i> Konfigurace výstupu</h6>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Typ výstupu</label>
+                            <select class="form-control" id="modalOutputType" onchange="updateOutputConfig()">
+                                <option value="excel">📊 Excel</option>
+                                <option value="json">📄 JSON</option>
+                                <option value="csv">📊 CSV</option>
+                                <option value="api">📤 API</option>
+                                <option value="database">💿 Databáze</option>
+                                <option value="email">📧 Email</option>
+                            </select>
+                        </div>
+                        
+                        <div id="outputConfigDetails">
+                            <!-- Dynamic content based on output type -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="saveIOConfig()">
+                    <i class="fas fa-save"></i> Uložit konfiguraci
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Node Edit Modal -->
+<div class="modal fade" id="nodeEditModal" tabindex="-1" style="z-index: 9999;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit uzel</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editingNodeId">
+                <div class="form-group">
+                    <label>Název</label>
+                    <input type="text" class="form-control" id="nodeName">
+                </div>
+                <div class="form-group">
+                    <label>Popis</label>
+                    <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
+                </div>
+                <div class="form-group" id="toolSection">
+                    <label>Nástroj</label>
+                    <select class="form-control" id="nodeToolSelect">
+                        <option value="">-- Vyberte nástroj --</option>
+                        @if (ViewBag.RegisteredTools != null)
+                        {
+                            var registeredTools = ViewBag.RegisteredTools as List<OAI.Core.Interfaces.Tools.ITool>;
+                            if (registeredTools != null)
+                            {
+                                @foreach(var tool in registeredTools)
+                                {
+                                    <option value="@tool.Id">@tool.Name</option>
+                                }
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-group" id="executionSection">
+                    <div class="custom-control custom-switch mb-3">
+                        <input type="checkbox" class="custom-control-input" id="nodeUseReAct">
+                        <label class="custom-control-label" for="nodeUseReAct">
+                            <i class="fas fa-brain"></i> Použít ReAct pattern
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Timeout (sekundy)</label>
+                        <input type="number" class="form-control" id="nodeTimeout" min="10" max="600" value="300">
+                    </div>
+                    <div class="form-group">
+                        <label>Počet pokusů při selhání</label>
+                        <input type="number" class="form-control" id="nodeRetryCount" min="0" max="5" value="3">
+                    </div>
+                </div>
+                <div class="form-group" id="conditionSection" style="display: none;">
+                    <label>Podmínka</label>
+                    <input type="text" class="form-control" id="nodeCondition" placeholder="result > 0">
+                </div>
+                <div class="form-group" id="parametersSection">
+                    <label><i class="fas fa-sliders-h"></i> Parametry nástroje</label>
+                    <div id="dynamicParameters">
+                        <!-- Parametry se načtou dynamicky podle vybraného nástroje -->
+                        <div class="text-muted text-center py-3">
+                            <i class="fas fa-info-circle"></i> Vyberte nástroj pro zobrazení parametrů
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Adapter Configuration Section -->
+                <div class="form-group" id="adapterConfigSection" style="display: none;">
+                    <label><i class="fas fa-plug"></i> Konfigurace adaptéru</label>
+                    <div id="adapterConfigContainer">
+                        <!-- Adapter configuration will be loaded here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="deleteCurrentNode()">
+                    <i class="fas fa-trash"></i> Smazat
+                </button>
+                <button type="button" class="btn btn-info" id="testToolBtn" onclick="testCurrentTool()" style="display: none;">
+                    <i class="fas fa-flask"></i> Test nástroje
+                </button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="updateCurrentNode()">
+                    <i class="fas fa-save"></i> Uložit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Workflow Execution Modal -->
+<div class="modal fade" id="executionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-play-circle"></i> Spuštění Workflow
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Pre-execution setup -->
+                <div id="executionSetup">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Workflow bude spuštěno s aktuální konfigurací.
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Název spuštění</label>
+                        <input type="text" class="form-control" id="executionName" 
+                               value="Test run - @DateTime.Now.ToString("yyyy-MM-dd HH:mm")">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Vstupní parametry (JSON)</label>
+                        <textarea class="form-control" id="executionParameters" rows="4">{}</textarea>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="enableDebugLogging" checked>
+                        <label class="form-check-label" for="enableDebugLogging">
+                            Povolit debug logy
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Execution progress -->
+                <div id="executionProgress" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">Průběh zpracování</h6>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="sr-only">Zpracovává se...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="progress mb-3">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    
+                    <div id="executionSteps" class="execution-steps">
+                        <!-- Steps will be added dynamically -->
+                    </div>
+                    
+                    <div class="execution-log mt-3">
+                        <h6>Logy</h6>
+                        <div id="executionLog" class="log-container">
+                            <!-- Logs will be added here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Execution results -->
+                <div id="executionResults" style="display: none;">
+                    <div class="alert" id="executionResultAlert">
+                        <!-- Result message -->
+                    </div>
+                    
+                    <div id="executionOutput">
+                        <!-- Output data will be shown here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                <button type="button" class="btn btn-primary" id="startExecutionBtn" onclick="startExecution()">
+                    <i class="fas fa-play"></i> Spustit
+                </button>
+                <button type="button" class="btn btn-danger" id="cancelExecutionBtn" 
+                        onclick="cancelExecution()" style="display: none;">
+                    <i class="fas fa-stop"></i> Zrušit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tool Test Modal -->
+<div class="modal fade" id="toolTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-flask"></i> Test nástroje: <span id="testToolName"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Test setup -->
+                <div id="testSetup">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Nastavte parametry a spusťte test nástroje.
+                    </div>
+                    
+                    <div id="testToolParameters">
+                        <!-- Parameters will be loaded dynamically -->
+                    </div>
+                </div>
+                
+                <!-- Test progress -->
+                <div id="testProgress" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">Testování...</h6>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="sr-only">Zpracovává se...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Test results -->
+                <div id="testResults" style="display: none;">
+                    <div class="alert" id="testResultAlert">
+                        <!-- Result message -->
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Výstup nástroje:</h6>
+                            <pre id="testOutput" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Detaily provedení:</h6>
+                            <div id="testDetails">
+                                <p><strong>Doba běhu:</strong> <span id="testDuration">-</span></p>
+                                <p><strong>Status:</strong> <span id="testStatus">-</span></p>
+                                <p><strong>Typ výstupu:</strong> <span id="testOutputType">-</span></p>
+                            </div>
+                            
+                            <div id="testError" class="alert alert-danger mt-3" style="display: none;">
+                                <h6>Chyba:</h6>
+                                <pre id="testErrorDetails"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                <button type="button" class="btn btn-primary" id="runTestBtn" onclick="runToolTest()">
+                    <i class="fas fa-play"></i> Spustit test
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .execution-steps {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+    }
+    
+    .execution-step {
+        padding: 8px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    
+    .execution-step.running {
+        background: #e3f2fd;
+        border-left: 3px solid #2196f3;
+    }
+    
+    .execution-step.completed {
+        background: #e8f5e9;
+        border-left: 3px solid #4caf50;
+    }
+    
+    .execution-step.failed {
+        background: #ffebee;
+        border-left: 3px solid #f44336;
+    }
+    
+    .log-container {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        max-height: 150px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+    }
+    
+    .log-entry {
+        margin-bottom: 2px;
+    }
+    
+    .log-entry.error {
+        color: #dc3545;
+    }
+    
+    .log-entry.warning {
+        color: #ffc107;
+    }
+    
+    .log-entry.info {
+        color: #17a2b8;
+    }
+    
+    /* Fix for parameter inputs */
+    #dynamicParameters input.form-control {
+        width: 100% !important;
+        height: 38px !important;
+        padding: 6px 12px !important;
+        font-size: 14px !important;
+        line-height: 1.42857143 !important;
+        color: #555 !important;
+        background-color: #fff !important;
+        background-image: none !important;
+        border: 1px solid #ccc !important;
+        border-radius: 4px !important;
+        box-shadow: inset 0 1px 1px rgba(0,0,0,.075) !important;
+        display: block !important;
+    }
+    
+    #dynamicParameters .form-group {
+        margin-bottom: 15px !important;
+    }
+</style>

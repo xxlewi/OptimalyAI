@@ -25,8 +25,8 @@
                     <div class="workflow-canvas-readonly" style="position: relative; width: 2000px; height: 1500px; background-image: linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px); background-size: 20px 20px;">
                         <svg class="workflow-svg-readonly" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
                             <defs>
-                                <marker id="arrowhead-viewer" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                    <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d"/>
+                                <marker id="arrowhead-viewer" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                    <polygon points="0 0, 8 3, 0 6" fill="#007bff" />
                                 </marker>
                             </defs>
                         </svg>
@@ -42,12 +42,13 @@
         }
         
         loadWorkflow() {
-            fetch(`/WorkflowDesigner/LoadWorkflow?projectId=${this.projectId}`)
+            fetch(`/api/workflow-designer/${this.projectId}`)
                 .then(response => response.json())
                 .then(data => {
                     console.log('Workflow data loaded:', data);
-                    if (data.success && data.workflow) {
-                        this.renderWorkflow(data.workflow);
+                    if (data.success && data.data) {
+                        // The API returns data in 'data' property
+                        this.renderFromOrchestratorData(data.data);
                     }
                 })
                 .catch(error => {
@@ -56,12 +57,15 @@
         }
         
         renderWorkflow(workflow) {
+            console.log('Rendering workflow:', workflow);
+            
             // Clear existing
             this.canvas.querySelectorAll('.workflow-node').forEach(node => node.remove());
-            this.svg.querySelectorAll('path').forEach(path => path.remove());
+            this.svg.querySelectorAll('line').forEach(line => line.remove());
             
             // Check if we have orchestrator data
             if (workflow.metadata && workflow.metadata.orchestratorData) {
+                console.log('Found orchestrator data, rendering from it');
                 this.renderFromOrchestratorData(workflow.metadata.orchestratorData);
             } else if (workflow.nodes && workflow.nodes.length > 0) {
                 // Render nodes
@@ -90,12 +94,19 @@
         }
         
         renderFromOrchestratorData(data) {
-            if (!data || !data.steps) return;
+            console.log('Rendering from orchestrator data:', data);
             
+            if (!data || !data.steps) {
+                console.log('No data or steps to render');
+                return;
+            }
+            
+            console.log('Number of steps to render:', data.steps.length);
             const positions = data.metadata?.nodePositions || {};
             
             // Create nodes from steps
             data.steps.forEach((step, index) => {
+                console.log('Processing step:', step);
                 const pos = positions[step.id] || {
                     x: 200 + (index % 3) * 250,
                     y: 200 + Math.floor(index / 3) * 150
@@ -105,7 +116,10 @@
                 let nodeType = 'task';
                 if (step.type === 'decision') nodeType = 'condition';
                 else if (step.type === 'parallel-gateway') nodeType = 'parallel';
-                else if (step.type === 'ai-tool') nodeType = 'ai-tool';
+                else if (step.type === 'tool') nodeType = 'ai-tool';
+                else if (step.type === 'process') nodeType = 'task';
+                else if (step.type === 'input-adapter') nodeType = 'task';
+                else if (step.type === 'output-adapter') nodeType = 'task';
                 
                 this.renderNode({
                     id: step.id,
@@ -282,7 +296,7 @@
             
             // Add connection dots
             if (node.type !== 'condition' && node.type !== 'parallel') {
-                // Input dot
+                // Input dot (top)
                 const inputDot = document.createElement('div');
                 inputDot.style.cssText = `
                     position: absolute;
@@ -291,14 +305,14 @@
                     background: #007bff;
                     border: 2px solid white;
                     border-radius: 50%;
-                    left: -8px;
-                    top: 50%;
-                    transform: translateY(-50%);
+                    left: 50%;
+                    top: -8px;
+                    transform: translateX(-50%);
                     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
                 `;
                 nodeEl.appendChild(inputDot);
                 
-                // Output dot
+                // Output dot (bottom)
                 const outputDot = document.createElement('div');
                 outputDot.style.cssText = `
                     position: absolute;
@@ -307,9 +321,9 @@
                     background: #007bff;
                     border: 2px solid white;
                     border-radius: 50%;
-                    right: -8px;
-                    top: 50%;
-                    transform: translateY(-50%);
+                    left: 50%;
+                    bottom: -8px;
+                    transform: translateX(-50%);
                     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
                 `;
                 nodeEl.appendChild(outputDot);
@@ -333,8 +347,8 @@
         }
         
         updateConnections() {
-            // Clear existing paths
-            this.svg.querySelectorAll('path').forEach(path => path.remove());
+            // Clear existing lines
+            this.svg.querySelectorAll('line').forEach(line => line.remove());
             
             this.connections.forEach(conn => {
                 const fromNode = this.nodes[conn.from];
@@ -353,30 +367,24 @@
             
             let x1, y1, x2, y2;
             
-            if (branch === 'true') {
-                x1 = fromRect.right - containerRect.left;
-                y1 = fromRect.top - containerRect.top + fromRect.height * 0.3;
-            } else if (branch === 'false') {
-                x1 = fromRect.right - containerRect.left;
-                y1 = fromRect.top - containerRect.top + fromRect.height * 0.7;
-            } else {
-                x1 = fromRect.right - containerRect.left;
-                y1 = fromRect.top - containerRect.top + fromRect.height / 2;
-            }
+            // Always connect from bottom of fromNode to top of toNode
+            x1 = fromRect.left - containerRect.left + fromRect.width / 2;
+            y1 = fromRect.bottom - containerRect.top;
             
-            x2 = toRect.left - containerRect.left;
-            y2 = toRect.top - containerRect.top + toRect.height / 2;
+            x2 = toRect.left - containerRect.left + toRect.width / 2;
+            y2 = toRect.top - containerRect.top;
             
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            // Create line instead of path for consistency with designer
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', y2);
+            line.setAttribute('stroke', branch === 'true' ? '#28a745' : branch === 'false' ? '#dc3545' : '#007bff');
+            line.setAttribute('stroke-width', '2');
+            line.setAttribute('marker-end', 'url(#arrowhead-viewer)');
             
-            const midX = (x1 + x2) / 2;
-            path.setAttribute('d', `M ${x1} ${y1} Q ${midX} ${y1} ${midX} ${(y1 + y2) / 2} Q ${midX} ${y2} ${x2} ${y2}`);
-            path.setAttribute('stroke', branch === 'true' ? '#28a745' : branch === 'false' ? '#dc3545' : '#6c757d');
-            path.setAttribute('stroke-width', '2');
-            path.setAttribute('fill', 'none');
-            path.setAttribute('marker-end', 'url(#arrowhead-viewer)');
-            
-            this.svg.appendChild(path);
+            this.svg.appendChild(line);
         }
     }
     

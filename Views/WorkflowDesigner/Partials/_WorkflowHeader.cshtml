@@ -1,0 +1,30 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>
+                    <i class="fas fa-project-diagram"></i> Workflow Designer
+                    <small class="text-muted">@Model.ProjectName</small>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-sm-right">
+                    <a href="/Projects/@Model.ProjectId" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Zpět na projekt
+                    </a>
+                    <button class="btn btn-success" onclick="saveWorkflow().catch(err => console.error(err))">
+                        <i class="fas fa-save"></i> Uložit
+                    </button>
+                    <button class="btn btn-info" onclick="validateWorkflow()">
+                        <i class="fas fa-check"></i> Validovat
+                    </button>
+                    <button class="btn btn-warning" onclick="testWorkflow()">
+                        <i class="fas fa-download"></i> Export JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

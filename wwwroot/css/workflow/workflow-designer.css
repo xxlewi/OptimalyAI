@@ -1,0 +1,106 @@
+/* 
+ * Workflow Designer - Main Layout Styles
+ * Clean Architecture Refactoring
+ */
+
+/* Main container layout */
+.designer-container {
+    display: flex;
+    height: calc(100vh - 200px);
+    gap: 20px;
+}
+
+/* Canvas container */
+.canvas-container {
+    flex: 1;
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    position: relative;
+    overflow: auto;
+}
+
+.canvas-container.readonly {
+    width: 100%;
+    flex: none;
+}
+
+/* Main canvas */
+#workflow-canvas {
+    width: 2000px;
+    height: 1500px;
+    position: relative;
+    background-image: 
+        linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* Drag & drop states */
+#workflow-canvas.drag-over {
+    background-color: rgba(0, 123, 255, 0.05);
+    border: 2px dashed #007bff;
+}
+
+/* Toolbar */
+.toolbar {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Zoom controls */
+.zoom-controls {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.zoom-level {
+    font-size: 14px;
+    color: #666;
+    min-width: 50px;
+    text-align: center;
+}
+
+/* Drop zone indicator */
+.drop-zone-indicator {
+    position: absolute;
+    width: 150px;
+    height: 80px;
+    border: 3px dashed #28a745;
+    border-radius: 8px;
+    background-color: rgba(40, 167, 69, 0.1);
+    pointer-events: none;
+    display: none;
+    z-index: 1000;
+    animation: pulse 1s infinite;
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { opacity: 0.4; transform: scale(0.98); }
+    50% { opacity: 0.8; transform: scale(1.02); }
+    100% { opacity: 0.4; transform: scale(0.98); }
+}
+
+@keyframes dash {
+    to {
+        stroke-dashoffset: -10;
+    }
+}
+
+/* Badge extensions */
+.badge-purple {
+    background-color: #6f42c1;
+    color: #fff;
+}
+
+.badge-purple:hover {
+    background-color: #563d7c;
+}

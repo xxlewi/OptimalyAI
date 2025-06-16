@@ -1,0 +1,28 @@
+@model OptimalyAI.ViewModels.WorkflowGraphViewModel
+
+@if (ViewBag.ReadOnly != true)
+{
+    <div class="toolbar">
+        <button class="btn btn-sm btn-primary" onclick="runWorkflow()">
+            <i class="fas fa-play"></i> Spustit
+        </button>
+        <button class="btn btn-sm btn-secondary" onclick="clearWorkflow()">
+            <i class="fas fa-trash"></i> Vyčistit
+        </button>
+        <button class="btn btn-sm btn-secondary" onclick="autoLayout()">
+            <i class="fas fa-magic"></i> Automatické rozložení
+        </button>
+        <div class="zoom-controls">
+            <button class="btn btn-sm btn-outline-secondary" onclick="zoomOut()" title="Oddálit">
+                <i class="fas fa-search-minus"></i>
+            </button>
+            <span class="zoom-level">100%</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="zoomIn()" title="Přiblížit">
+                <i class="fas fa-search-plus"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="zoomReset()" title="Resetovat">
+                <i class="fas fa-compress"></i>
+            </button>
+        </div>
+    </div>
+}

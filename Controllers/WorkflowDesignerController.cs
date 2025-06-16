@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Linq;
 using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Tools;
+using OAI.Core.Interfaces.Workflow;
+using OAI.Core.DTOs.Workflow;
 using OAI.Core.Entities.Projects;
 using System.Threading.Tasks;
 using System.Text.Json;
@@ -20,15 +22,21 @@ namespace OptimalyAI.Controllers
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<WorkflowDesignerController> _logger;
         private readonly IToolRegistry _toolRegistry;
+        private readonly IWorkflowDesignerService _workflowDesignerService;
         
         // In-memory storage pro rychlý přístup (cache)
         private static Dictionary<Guid, WorkflowGraphViewModel> _workflows = new();
         
-        public WorkflowDesignerController(IUnitOfWork unitOfWork, ILogger<WorkflowDesignerController> logger, IToolRegistry toolRegistry)
+        public WorkflowDesignerController(
+            IUnitOfWork unitOfWork, 
+            ILogger<WorkflowDesignerController> logger, 
+            IToolRegistry toolRegistry,
+            IWorkflowDesignerService workflowDesignerService)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _toolRegistry = toolRegistry;
+            _workflowDesignerService = workflowDesignerService;
         }
         
         [HttpGet]
@@ -148,6 +156,43 @@ namespace OptimalyAI.Controllers
         [HttpGet]
         public async Task<IActionResult> LoadWorkflow(Guid projectId)
         {
+            try
+            {
+                // Check in-memory cache first for old workflow format
+                WorkflowGraphViewModel? oldWorkflow = null;
+                if (_workflows.ContainsKey(projectId))
+                {
+                    oldWorkflow = _workflows[projectId];
+                }
+                else
+                {
+                    // Create a basic workflow structure for compatibility
+                    oldWorkflow = await CreateDefaultWorkflowAsync(projectId);
+                }
+                
+                // Use the new WorkflowDesignerService to get workflow
+                var workflowDto = await _workflowDesignerService.GetWorkflowAsync(projectId);
+                
+                // Merge the metadata
+                oldWorkflow.Metadata.OrchestratorData = workflowDto;
+                
+                // Return in format expected by the details page
+                return Json(new { 
+                    success = true,
+                    workflow = oldWorkflow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading workflow for project {ProjectId}", projectId);
+                return Json(new { success = false, message = "Chyba při načítání workflow" });
+            }
+        }
+        
+        // Keep the old implementation as a backup method
+        [HttpGet]
+        public async Task<IActionResult> LoadWorkflowOld(Guid projectId)
+        {
             WorkflowGraphViewModel workflow;
             
             // Check in-memory cache first
@@ -258,6 +303,32 @@ namespace OptimalyAI.Controllers
         
         [HttpPost]
         public async Task<IActionResult> SaveWorkflow([FromBody] SaveWorkflowRequest request)
+        {
+            try
+            {
+                var dto = new SaveWorkflowDto
+                {
+                    WorkflowData = JsonSerializer.Serialize(request.WorkflowData)
+                };
+                
+                var savedWorkflow = await _workflowDesignerService.SaveWorkflowAsync(request.ProjectId, dto);
+                
+                return Json(new 
+                { 
+                    success = true, 
+                    workflowId = savedWorkflow.Id,
+                    message = "Workflow uloženo úspěšně"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving workflow for project {ProjectId}", request.ProjectId);
+                return Json(new { success = false, message = "Chyba při ukládání workflow" });
+            }
+        }
+        
+        [HttpPost]
+        public async Task<IActionResult> SaveWorkflowOld([FromBody] SaveWorkflowRequest request)
         {
             if (request == null || request.ProjectId == Guid.Empty)
             {
