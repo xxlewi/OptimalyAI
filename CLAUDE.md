@@ -130,19 +130,19 @@ OAI.DataLayer/           # DATA ACCESS LAYER
 
 ## Database Configuration
 - **All environments**: Uses PostgreSQL via Docker
-- **NEVER** use LocalDB, SQLite, or any file-based database
+- **NEVER** use LocalDB, SQLite, or In-Memory database
 - Always apply migrations when creating new entities or modifying existing ones
 
 ### PostgreSQL with Docker
 ```bash
 # Start PostgreSQL
-./docker-db-start.sh
+./Tools/database/docker-db-start.sh
 
 # Stop PostgreSQL  
-./docker-db-stop.sh
+./Tools/database/docker-db-stop.sh
 
 # Apply migrations
-dotnet ef database update
+dotnet ef database update -p OAI.DataLayer
 ```
 
 ### Connection Details

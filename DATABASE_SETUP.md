@@ -1,19 +1,15 @@
 # OptimalyAI - Nastavení databáze
 
-## Přepínání mezi vývojovou a produkční databází
+## Databázová konfigurace
 
-OptimalyAI podporuje dva režimy databáze:
-
-1. **In-Memory databáze** (výchozí) - pro vývoj
-2. **PostgreSQL databáze** - pro produkci
+OptimalyAI používá výhradně **PostgreSQL databázi** pro všechna prostředí.
 
 ### Konfigurace
 
-V souboru `appsettings.json` nastavte:
+V souboru `appsettings.json`:
 
 ```json
 {
-  "UseProductionDatabase": false,  // false = In-Memory, true = PostgreSQL
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Port=5432;Database=optimalyai_db;Username=optimaly;Password=OptimalyAI2024!"
   }
@@ -44,29 +40,19 @@ docker-compose logs postgres
 # Password: admin123
 ```
 
-### První spuštění s PostgreSQL
+### První spuštění
 
 1. Spusťte PostgreSQL:
    ```bash
    ./Tools/database/docker-db-start.sh
    ```
 
-2. Nastavte v `appsettings.json`:
-   ```json
-   "UseProductionDatabase": true
-   ```
-
-3. Vytvořte migrace (pokud ještě neexistují):
+2. Aplikujte migrace:
    ```bash
-   dotnet ef migrations add InitialCreate
+   dotnet ef database update -p OAI.DataLayer
    ```
 
-4. Aplikujte migrace:
-   ```bash
-   dotnet ef database update
-   ```
-
-5. Spusťte aplikaci:
+3. Spusťte aplikaci:
    ```bash
    python run-dev.py
    ```
@@ -75,40 +61,33 @@ docker-compose logs postgres
 
 ### Vytvoření nové migrace
 ```bash
-dotnet ef migrations add NazevMigrace
+dotnet ef migrations add NazevMigrace -p OAI.DataLayer
 ```
 
 ### Aplikování migrací
 ```bash
-dotnet ef database update
+dotnet ef database update -p OAI.DataLayer
 ```
 
 ### Vrácení migrace
 ```bash
-dotnet ef database update PredchoziMigrace
+dotnet ef database update PredchoziMigrace -p OAI.DataLayer
 ```
 
 ### Odstranění poslední migrace
 ```bash
-dotnet ef migrations remove
+dotnet ef migrations remove -p OAI.DataLayer
 ```
 
-## Rozdíly mezi In-Memory a PostgreSQL
+## Výhody PostgreSQL
 
-### In-Memory databáze
-- ✅ Rychlé spuštění
-- ✅ Žádná konfigurace
-- ✅ Ideální pro vývoj a testování
-- ❌ Data se ztratí po restartu
-- ❌ Nepodporuje všechny SQL funkce
-
-### PostgreSQL
-- ✅ Plná podpora SQL
-- ✅ Trvalé uložení dat
-- ✅ Podpora transakcí
-- ✅ Výkonné pro produkci
-- ❌ Vyžaduje Docker nebo instalaci
-- ❌ Pomalejší start
+- ✅ Plná podpora SQL funkcí
+- ✅ Trvalé uložení dat mezi restarty
+- ✅ Podpora transakcí a ACID vlastností
+- ✅ Výkonné pro produkční nasazení
+- ✅ Podpora JSON/JSONB datových typů
+- ✅ Full-text search capabilities
+- ✅ Snadné zálohování a obnovení
 
 ## Řešení problémů
 
