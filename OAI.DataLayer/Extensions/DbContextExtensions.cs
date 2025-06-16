@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
 using System.Reflection;
 
-namespace OptimalyAI.Extensions;
+namespace OAI.DataLayer.Extensions;
 
 public static class DbContextExtensions
 {

@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using OptimalyAI.Infrastructure;
+using OAI.DataLayer.Context;
 
 namespace OptimalyAI.Extensions;
 

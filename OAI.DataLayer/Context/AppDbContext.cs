@@ -3,10 +3,10 @@ using OAI.Core.Entities;
 using OAI.Core.Entities.Business;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Entities.Adapters;
-using OptimalyAI.Extensions;
+using OAI.DataLayer.Extensions;
 using System.Reflection;
 
-namespace OptimalyAI.Infrastructure;
+namespace OAI.DataLayer.Context;
 
 public class AppDbContext : DbContext
 {

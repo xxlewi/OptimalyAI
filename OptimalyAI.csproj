@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
@@ -13,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="OAI.Core\OAI.Core.csproj" />
     <ProjectReference Include="OAI.ServiceLayer\OAI.ServiceLayer.csproj" />
+    <ProjectReference Include="OAI.DataLayer\OAI.DataLayer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,12 +38,16 @@
   <ItemGroup>
     <Compile Remove="OAI.ServiceLayer\**" />
     <Compile Remove="OAI.Core\**" />
+    <Compile Remove="OAI.DataLayer\**" />
     <Content Remove="OAI.ServiceLayer\**" />
     <Content Remove="OAI.Core\**" />
+    <Content Remove="OAI.DataLayer\**" />
     <EmbeddedResource Remove="OAI.ServiceLayer\**" />
     <EmbeddedResource Remove="OAI.Core\**" />
+    <EmbeddedResource Remove="OAI.DataLayer\**" />
     <None Remove="OAI.ServiceLayer\**" />
     <None Remove="OAI.Core\**" />
+    <None Remove="OAI.DataLayer\**" />
   </ItemGroup>
 
 </Project>

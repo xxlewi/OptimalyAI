@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OAI.Core.Interfaces;
-using OAI.ServiceLayer.Infrastructure;
+using OAI.DataLayer.UnitOfWork;
+using OAI.DataLayer.Repositories;
 using System.Reflection;
 using FluentValidation;
 using OptimalyAI.Configuration;
@@ -20,7 +21,7 @@ public static class ServiceCollectionExtensions
     {
         var useProductionDatabase = configuration.GetValue<bool>("UseProductionDatabase");
         
-        services.AddDbContext<Infrastructure.AppDbContext>(options =>
+        services.AddDbContext<OAI.DataLayer.Context.AppDbContext>(options =>
         {
             if (useProductionDatabase)
             {
@@ -41,7 +42,7 @@ public static class ServiceCollectionExtensions
             }
         });
         
-        services.AddScoped<DbContext>(provider => provider.GetService<Infrastructure.AppDbContext>()!);
+        services.AddScoped<DbContext>(provider => provider.GetService<OAI.DataLayer.Context.AppDbContext>()!);
         
         // Add distributed memory cache for sessions
         services.AddDistributedMemoryCache();

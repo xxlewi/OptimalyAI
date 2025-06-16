@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OAI.Core\OAI.Core.csproj" />
+    <ProjectReference Include="..\OAI.DataLayer\OAI.DataLayer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

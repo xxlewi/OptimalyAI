@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OAI.ServiceLayer", "OAI.Ser
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OAI.Core", "OAI.Core\OAI.Core.csproj", "{ADB42D08-D096-47AF-9AF2-75C9A4C78F30}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OAI.DataLayer", "OAI.DataLayer\OAI.DataLayer.csproj", "{C6188ACA-262D-49E0-AF1F-49A8795D5BA2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{ADB42D08-D096-47AF-9AF2-75C9A4C78F30}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ADB42D08-D096-47AF-9AF2-75C9A4C78F30}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ADB42D08-D096-47AF-9AF2-75C9A4C78F30}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6188ACA-262D-49E0-AF1F-49A8795D5BA2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6188ACA-262D-49E0-AF1F-49A8795D5BA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6188ACA-262D-49E0-AF1F-49A8795D5BA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6188ACA-262D-49E0-AF1F-49A8795D5BA2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

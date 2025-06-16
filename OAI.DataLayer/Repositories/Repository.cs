@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
 using OAI.Core.Interfaces;
 
-namespace OAI.ServiceLayer.Infrastructure;
+namespace OAI.DataLayer.Repositories;
 
 public class Repository<T> : IRepository<T> where T : BaseEntity
 {

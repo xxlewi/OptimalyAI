@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OptimalyAI.Configuration;
-using OptimalyAI.Infrastructure;
+using OAI.DataLayer.Context;
 using OptimalyAI.Middleware;
 
 namespace OptimalyAI.Extensions;

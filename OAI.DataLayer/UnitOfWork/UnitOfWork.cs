@@ -2,9 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using OAI.Core.Interfaces;
 using OAI.Core.Entities;
+using OAI.DataLayer.Repositories;
 using System.Collections.Generic;
 
-namespace OAI.ServiceLayer.Infrastructure;
+namespace OAI.DataLayer.UnitOfWork;
 
 public class UnitOfWork : IUnitOfWork
 {

@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
 using OAI.Core.Interfaces;
 
-namespace OAI.ServiceLayer.Infrastructure
+namespace OAI.DataLayer.Repositories
 {
     public class GuidRepository<T> : IGuidRepository<T> where T : BaseGuidEntity
     {
