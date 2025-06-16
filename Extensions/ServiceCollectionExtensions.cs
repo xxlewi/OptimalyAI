@@ -281,6 +281,11 @@ public static class ServiceCollectionExtensions
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ChatInputAdapter>();
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ChatOutputAdapter>();
         services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ConversationContextAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.FileSystemInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.FileSystemOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ImageInputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ImageOutputAdapter>();
+        services.AddTransient<OAI.ServiceLayer.Services.Adapters.Implementations.ImageProcessingAdapter>();
         
         // Register workflow-specific adapters (temporarily commented out due to compilation issues)
         // services.AddTransient<OAI.ServiceLayer.Services.Adapters.Workflow.FileUploadInputAdapter>();
@@ -321,6 +326,16 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ChatOutputAdapter>());
         services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
             provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ConversationContextAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.FileSystemInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.FileSystemOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ImageInputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ImageOutputAdapter>());
+        services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Adapters.Implementations.ImageProcessingAdapter>());
             
         // Register workflow adapters as IAdapter (temporarily commented out)
         // services.AddTransient<OAI.Core.Interfaces.Adapters.IAdapter>(provider => 
