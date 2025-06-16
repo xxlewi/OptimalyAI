@@ -1,7 +1,6 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using OptimalyAI.Middleware;
 
 namespace OptimalyAI.Validation;
 
@@ -39,7 +38,7 @@ public class ValidationFilter : IAsyncActionFilter
 
         if (errors.Any())
         {
-            throw new Middleware.ValidationException("Validační chyby", errors);
+            throw new InvalidOperationException("Validační chyby");
         }
 
         await next();

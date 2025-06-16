@@ -30,10 +30,10 @@ V souboru `appsettings.json` nastavte:
 
 ```bash
 # Spustit PostgreSQL
-./docker-db-start.sh
+./Tools/database/docker-db-start.sh
 
 # Zastavit PostgreSQL
-./docker-db-stop.sh
+./Tools/database/docker-db-stop.sh
 
 # Zobrazit logy
 docker-compose logs postgres
@@ -48,7 +48,7 @@ docker-compose logs postgres
 
 1. Spusťte PostgreSQL:
    ```bash
-   ./docker-db-start.sh
+   ./Tools/database/docker-db-start.sh
    ```
 
 2. Nastavte v `appsettings.json`:

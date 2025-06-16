@@ -11,6 +11,7 @@ using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
 using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.Core.Interfaces.AI;
 using OAI.ServiceLayer.Services.Orchestration.Base;
 using OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator;
 
@@ -48,7 +49,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
     public class RefactoredConversationOrchestrator : BaseOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto>
     {
         // Core services
-        private readonly IOllamaService _ollamaService;
+        private readonly OAI.Core.Interfaces.AI.IOllamaService _ollamaService;
         private readonly IToolExecutor _toolExecutor;
         private readonly IReActAgent _reActAgent;
         private readonly IConfiguration _configuration;
@@ -66,8 +67,8 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         public override string Description => "Orchestrates conversations between AI models and tools";
 
         public RefactoredConversationOrchestrator(
-            IOllamaService ollamaService,
-            IConversationManager conversationManager,
+            OAI.Core.Interfaces.AI.IOllamaService ollamaService,
+            OAI.Core.Interfaces.AI.IConversationManager conversationManager,
             IToolExecutor toolExecutor,
             IToolRegistry toolRegistry,
             IConfiguration configuration,

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using OptimalyAI.Services.AI.Interfaces;
-using OptimalyAI.Services.AI.Models;
+using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.ServiceLayer.Services.AI.Models;
 using Microsoft.Extensions.Options;
 using OptimalyAI.Configuration;
 using OptimalyAI.ViewModels;
@@ -10,13 +10,13 @@ namespace OptimalyAI.Controllers;
 
 public class AITestController : Controller
 {
-    private readonly IOllamaService _ollamaService;
+    private readonly IWebOllamaService _ollamaService;
     private readonly IConversationManager _conversationManager;
     private readonly OllamaSettings _settings;
     private readonly ILogger<AITestController> _logger;
 
     public AITestController(
-        IOllamaService ollamaService, 
+        IWebOllamaService ollamaService, 
         IConversationManager conversationManager,
         IOptions<OllamaSettings> settings,
         ILogger<AITestController> logger)
@@ -79,7 +79,7 @@ public class AITestController : Controller
     public async Task<IActionResult> Models()
     {
         var models = await _ollamaService.ListModelsAsync();
-        var metrics = new List<ModelPerformanceMetrics>();
+        var metrics = new List<OAI.ServiceLayer.Services.AI.Interfaces.ModelPerformanceMetrics>();
         
         foreach (var model in models)
         {

@@ -10,21 +10,21 @@ using OAI.Core.Entities;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.ServiceLayer.Interfaces;
 using OAI.ServiceLayer.Services;
-using OptimalyAI.Services.AI.Interfaces;
+using OAI.ServiceLayer.Services.AI.Interfaces;
 
 namespace OptimalyAI.Controllers
 {
     public class ChatController : Controller
     {
         private readonly ILogger<ChatController> _logger;
-        private readonly IOllamaService _ollamaService;
+        private readonly IWebOllamaService _ollamaService;
         private readonly IConversationService _conversationService;
         private readonly IMessageService _messageService;
         private readonly IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
 
         public ChatController(
             ILogger<ChatController> logger,
-            IOllamaService ollamaService,
+            IWebOllamaService ollamaService,
             IConversationService conversationService,
             IMessageService messageService,
             IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator)
@@ -111,7 +111,7 @@ namespace OptimalyAI.Controllers
         {
             try
             {
-                var conversation = new Conversation
+                var conversation = new OAI.Core.Entities.Conversation
                 {
                     Title = dto.Title ?? "Nový chat",
                     Model = dto.Model ?? "llama3.2",

@@ -9,13 +9,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.Core.Interfaces.AI;
 
 namespace OAI.ServiceLayer.Services.AI
 {
     /// <summary>
     /// Simple Ollama service implementation for orchestrator use
     /// </summary>
-    public class SimpleOllamaService : IOllamaService
+    public class SimpleOllamaService : ISimpleOllamaService
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<SimpleOllamaService> _logger;
@@ -78,7 +79,7 @@ namespace OAI.ServiceLayer.Services.AI
             }
         }
 
-        public async Task<IList<OllamaModelInfo>> GetAvailableModelsAsync()
+        public async Task<IList<Models.OllamaModelInfo>> GetAvailableModelsAsync()
         {
             try
             {
@@ -96,16 +97,16 @@ namespace OAI.ServiceLayer.Services.AI
                 
                 var result = JsonSerializer.Deserialize<ModelsResponse>(content, options);
 
-                var models = new List<OllamaModelInfo>();
+                var models = new List<Models.OllamaModelInfo>();
                 if (result?.Models != null)
                 {
                     foreach (var model in result.Models)
                     {
-                        var modelInfo = new OllamaModelInfo
+                        var modelInfo = new Models.OllamaModelInfo
                         {
                             Name = model.Name ?? "unknown",
                             Tag = model.Name ?? "latest",
-                            Size = model.Size?.ToString() ?? "0",
+                            Size = model.Size ?? 0,
                             ModifiedAt = model.ModifiedAt
                         };
                         models.Add(modelInfo);
@@ -119,7 +120,7 @@ namespace OAI.ServiceLayer.Services.AI
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting available models");
-                return new List<OllamaModelInfo>();
+                return new List<Models.OllamaModelInfo>();
             }
         }
 
@@ -134,6 +135,25 @@ namespace OAI.ServiceLayer.Services.AI
             {
                 return false;
             }
+        }
+
+        public async Task<string> GenerateAsync(string model, string prompt, CancellationToken cancellationToken = default)
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["temperature"] = 0.7,
+                ["max_tokens"] = 2000
+            };
+            return await GenerateResponseAsync(model, prompt, Guid.NewGuid().ToString(), parameters, cancellationToken);
+        }
+
+        public async Task<string> ChatAsync(string model, string userMessage, string? systemPrompt = null)
+        {
+            var prompt = systemPrompt != null 
+                ? $"System: {systemPrompt}\n\nUser: {userMessage}\n\nAssistant:" 
+                : $"User: {userMessage}\n\nAssistant:";
+            
+            return await GenerateAsync(model, prompt);
         }
 
         public async IAsyncEnumerable<string> GenerateStreamAsync(

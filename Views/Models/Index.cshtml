@@ -127,14 +127,11 @@
                                     <dt class="col-sm-5">Size:</dt>
                                     <dd class="col-sm-7">@((modelInfo.Model.Size / 1024.0 / 1024.0 / 1024.0).ToString("F2")) GB</dd>
                                     
-                                    <dt class="col-sm-5">Family:</dt>
-                                    <dd class="col-sm-7">@modelInfo.Model.Details.Family</dd>
+                                    <dt class="col-sm-5">Tag:</dt>
+                                    <dd class="col-sm-7">@modelInfo.Model.Tag</dd>
                                     
-                                    <dt class="col-sm-5">Parameters:</dt>
-                                    <dd class="col-sm-7">@modelInfo.Model.Details.ParameterSize</dd>
-                                    
-                                    <dt class="col-sm-5">Quantization:</dt>
-                                    <dd class="col-sm-7">@modelInfo.Model.Details.QuantizationLevel</dd>
+                                    <dt class="col-sm-5">Modified:</dt>
+                                    <dd class="col-sm-7">@modelInfo.Model.ModifiedAt.ToString("dd.MM.yyyy HH:mm")</dd>
                                 </dl>
                                 
                                 @if (modelInfo.Metrics.TotalRequests > 0)

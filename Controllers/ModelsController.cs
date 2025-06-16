@@ -1,23 +1,24 @@
 using Microsoft.AspNetCore.Mvc;
-using OptimalyAI.Services.AI.Interfaces;
-using OptimalyAI.Services.AI.Models;
+using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.ServiceLayer.Services.AI.Models;
 using Microsoft.Extensions.Options;
 using OptimalyAI.Configuration;
 using OptimalyAI.ViewModels;
 using System.Diagnostics;
+using OAI.Core.Interfaces.AI;
 
 namespace OptimalyAI.Controllers;
 
 public class ModelsController : Controller
 {
-    private readonly IOllamaService _ollamaService;
-    private readonly IConversationManager _conversationManager;
+    private readonly IWebOllamaService _ollamaService;
+    private readonly OAI.Core.Interfaces.AI.IConversationManager _conversationManager;
     private readonly OllamaSettings _settings;
     private readonly ILogger<ModelsController> _logger;
 
     public ModelsController(
-        IOllamaService ollamaService, 
-        IConversationManager conversationManager,
+        IWebOllamaService ollamaService, 
+        OAI.Core.Interfaces.AI.IConversationManager conversationManager,
         IOptions<OllamaSettings> settings,
         ILogger<ModelsController> logger)
     {

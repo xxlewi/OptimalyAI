@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using OptimalyAI.Services.AI.Interfaces;
+using OAI.ServiceLayer.Services.AI.Interfaces;
 using OptimalyAI.ViewModels;
 using System.Diagnostics;
 using OAI.Core.Interfaces.Tools;
@@ -8,11 +8,11 @@ namespace OptimalyAI.Controllers;
 
 public class OllamaController : Controller
 {
-    private readonly IOllamaService _ollamaService;
+    private readonly IWebOllamaService _ollamaService;
     private readonly ILogger<OllamaController> _logger;
     private readonly IToolRegistry _toolRegistry;
 
-    public OllamaController(IOllamaService ollamaService, ILogger<OllamaController> logger, IToolRegistry toolRegistry)
+    public OllamaController(IWebOllamaService ollamaService, ILogger<OllamaController> logger, IToolRegistry toolRegistry)
     {
         _ollamaService = ollamaService;
         _logger = logger;

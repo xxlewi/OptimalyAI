@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.Entities;
 using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.Core.Interfaces.AI;
 using MessageRole = OAI.ServiceLayer.Services.AI.Interfaces.MessageRole;
 
 namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator
@@ -26,7 +27,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOr
     /// </summary>
     public class ConversationContextManager
     {
-        private readonly IConversationManager _conversationManager;
+        private readonly OAI.Core.Interfaces.AI.IConversationManager _conversationManager;
         private readonly ILogger<ConversationContextManager> _logger;
 
         // Constants
@@ -34,7 +35,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOr
         private const int DEFAULT_MAX_CONTEXT_LENGTH = 4000;
 
         public ConversationContextManager(
-            IConversationManager conversationManager,
+            OAI.Core.Interfaces.AI.IConversationManager conversationManager,
             ILogger<ConversationContextManager> logger)
         {
             _conversationManager = conversationManager ?? throw new ArgumentNullException(nameof(conversationManager));
@@ -159,8 +160,19 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOr
                 userId ?? "system",
                 "AI Conversation " + DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm"));
 
-            _logger.LogInformation("Created new conversation {ConversationId}", newConversation.Id);
-            return newConversation.Id.ToString();
+            string conversationIdStr;
+            if (newConversation is Conversation conv)
+            {
+                conversationIdStr = conv.Id.ToString();
+            }
+            else
+            {
+                // Handle dynamic return type
+                conversationIdStr = newConversation.Id.ToString();
+            }
+
+            _logger.LogInformation("Created new conversation {ConversationId}", conversationIdStr);
+            return conversationIdStr;
         }
 
         /// <summary>

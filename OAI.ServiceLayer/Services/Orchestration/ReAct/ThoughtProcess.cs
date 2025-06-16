@@ -3,20 +3,21 @@ using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
 using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.Core.Interfaces.AI;
 
 namespace OAI.ServiceLayer.Services.Orchestration.ReAct;
 
 public class ThoughtProcess : IThoughtProcess
 {
     private readonly ILogger<ThoughtProcess> _logger;
-    private readonly IOllamaService _ollamaService;
+    private readonly OAI.Core.Interfaces.AI.IOllamaService _ollamaService;
     private readonly IToolRegistry _toolRegistry;
     private readonly ThoughtParser _thoughtParser;
     private const string DefaultModelId = "llama3.2";
 
     public ThoughtProcess(
         ILogger<ThoughtProcess> logger,
-        IOllamaService ollamaService,
+        OAI.Core.Interfaces.AI.IOllamaService ollamaService,
         IToolRegistry toolRegistry,
         ThoughtParser thoughtParser)
     {

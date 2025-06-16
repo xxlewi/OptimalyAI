@@ -7,8 +7,8 @@ using System.Reflection;
 using FluentValidation;
 using OptimalyAI.Configuration;
 using OptimalyAI.Validation;
-using OptimalyAI.Services.AI;
-using OptimalyAI.Services.AI.Interfaces;
+using OAI.ServiceLayer.Services.AI;
+using OAI.ServiceLayer.Services.AI.Interfaces;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Interfaces.Workflow;
 using OAI.ServiceLayer.Services.Workflow;
@@ -19,27 +19,16 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
-        var useProductionDatabase = configuration.GetValue<bool>("UseProductionDatabase");
-        
         services.AddDbContext<OAI.DataLayer.Context.AppDbContext>(options =>
         {
-            if (useProductionDatabase)
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
+            options.UseNpgsql(connectionString, npgsqlOptions =>
             {
-                var connectionString = configuration.GetConnectionString("DefaultConnection");
-                options.UseNpgsql(connectionString, npgsqlOptions =>
-                {
-                    npgsqlOptions.MigrationsAssembly("OptimalyAI");
-                    npgsqlOptions.EnableRetryOnFailure(3);
-                });
-                options.EnableSensitiveDataLogging(false);
-                options.EnableDetailedErrors(false);
-            }
-            else
-            {
-                options.UseInMemoryDatabase("OptimalyAI_InMemory");
-                options.EnableSensitiveDataLogging(true);
-                options.EnableDetailedErrors(true);
-            }
+                npgsqlOptions.MigrationsAssembly("OAI.DataLayer");
+                npgsqlOptions.EnableRetryOnFailure(3);
+            });
+            options.EnableSensitiveDataLogging(false);
+            options.EnableDetailedErrors(false);
         });
         
         services.AddScoped<DbContext>(provider => provider.GetService<OAI.DataLayer.Context.AppDbContext>()!);
@@ -223,7 +212,24 @@ public static class ServiceCollectionExtensions
         services.Configure<OllamaSettings>(configuration.GetSection("OllamaSettings"));
         
         // Register HttpClient for OllamaService (main service)
-        services.AddHttpClient<IOllamaService, OllamaService>("MainOllamaService", (serviceProvider, client) =>
+        services.AddHttpClient<OAI.ServiceLayer.Services.AI.OllamaService>("MainOllamaService", client =>
+        {
+            var settings = configuration.GetSection("OllamaSettings").Get<OllamaSettings>() 
+                ?? new OllamaSettings();
+            
+            client.BaseAddress = new Uri(settings.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(settings.DefaultTimeout);
+        });
+        services.AddScoped<OAI.ServiceLayer.Services.AI.Interfaces.IWebOllamaService>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.AI.OllamaService>());
+        
+        // ServiceLayer IConversationManager interface is not needed - ModelsController uses Core interface
+        
+        // Register the ServiceLayer's ConversationManager for Core interface
+        services.AddScoped<OAI.Core.Interfaces.AI.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();
+        
+        // Register SimpleOllamaService for ServiceLayer
+        services.AddHttpClient<OAI.ServiceLayer.Services.AI.Interfaces.ISimpleOllamaService, OAI.ServiceLayer.Services.AI.SimpleOllamaService>((serviceProvider, client) =>
         {
             var settings = configuration.GetSection("OllamaSettings").Get<OllamaSettings>() 
                 ?? new OllamaSettings();
@@ -232,8 +238,9 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(settings.DefaultTimeout);
         });
         
-        // Register Conversation Manager
-        services.AddSingleton<IConversationManager, ConversationManager>();
+        // Register Core interface implementation
+        services.AddScoped<OAI.Core.Interfaces.AI.IOllamaService>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.AI.Interfaces.ISimpleOllamaService>());
         
         // Register Tool services - Registry must be Singleton to persist registered tools
         services.AddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
@@ -353,7 +360,7 @@ public static class ServiceCollectionExtensions
         services.Configure<OllamaSettings>(configuration.GetSection("OllamaSettings"));
         
         // Register main Conversation Manager
-        services.TryAddSingleton<IConversationManager, ConversationManager>();
+        // services.TryAddSingleton<IConversationManager, ConversationManager>();
         
         // Register orchestrator metrics
         services.AddSingleton<OAI.Core.Interfaces.Orchestration.IOrchestratorMetrics, OAI.ServiceLayer.Services.Orchestration.OrchestratorMetricsService>();
@@ -384,10 +391,10 @@ public static class ServiceCollectionExtensions
             OAI.ServiceLayer.Services.Orchestration.Implementations.WebScrapingOrchestrator>();
         
         // Register conversation manager interface for orchestrator
-        services.AddScoped<OAI.ServiceLayer.Services.AI.Interfaces.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();
+        services.AddScoped<OAI.Core.Interfaces.AI.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();
         
         // Register simple Ollama service for orchestrator
-        services.AddHttpClient<OAI.ServiceLayer.Services.AI.Interfaces.IOllamaService, OAI.ServiceLayer.Services.AI.SimpleOllamaService>("OrchestratorOllamaService", (serviceProvider, client) =>
+        services.AddHttpClient<OAI.ServiceLayer.Services.AI.SimpleOllamaService>("OrchestratorOllamaService", client =>
         {
             var baseUrl = configuration.GetSection("OllamaSettings:BaseUrl").Value ?? "http://localhost:11434";
             var timeout = int.Parse(configuration.GetSection("OllamaSettings:DefaultTimeout").Value ?? "30");
@@ -395,6 +402,8 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(baseUrl);
             client.Timeout = TimeSpan.FromSeconds(timeout);
         });
+        services.AddScoped<OAI.Core.Interfaces.AI.IOllamaService>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.AI.SimpleOllamaService>());
         
         // Register Tool services needed for orchestrators
         services.TryAddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();

@@ -11,14 +11,14 @@ using OAI.Core.Entities;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.ServiceLayer.Interfaces;
 using OAI.ServiceLayer.Services;
-using OptimalyAI.Services.AI.Interfaces;
+using OAI.ServiceLayer.Services.AI.Interfaces;
 
 namespace OptimalyAI.Hubs
 {
     public class ChatHub : Hub
     {
         private readonly ILogger<ChatHub> _logger;
-        private readonly IOllamaService _ollamaService;
+        private readonly IWebOllamaService _ollamaService;
         private readonly IConversationService _conversationService;
         private readonly IMessageService _messageService;
         private readonly IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
@@ -26,7 +26,7 @@ namespace OptimalyAI.Hubs
 
         public ChatHub(
             ILogger<ChatHub> logger,
-            IOllamaService ollamaService,
+            IWebOllamaService ollamaService,
             IConversationService conversationService,
             IMessageService messageService,
             IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator)

@@ -2,12 +2,13 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.Core.Interfaces.AI;
 
 namespace OAI.ServiceLayer.Services.Orchestration.ReAct;
 
 public class ConversationReActAgent : BaseReActAgent
 {
-    private readonly IOllamaService _ollamaService;
+    private readonly OAI.Core.Interfaces.AI.IOllamaService _ollamaService;
     private const string DefaultModelId = "llama3.2";
     private const int DefaultMaxIterations = 5;
 
@@ -17,7 +18,7 @@ public class ConversationReActAgent : BaseReActAgent
         IObservationProcessor observationProcessor,
         IThoughtProcess thoughtProcess,
         IAgentMemory memory,
-        IOllamaService ollamaService)
+        OAI.Core.Interfaces.AI.IOllamaService ollamaService)
         : base(logger, actionExecutor, observationProcessor, thoughtProcess, memory)
     {
         _ollamaService = ollamaService ?? throw new ArgumentNullException(nameof(ollamaService));

@@ -9,8 +9,15 @@ namespace OAI.DataLayer.Context
     {
         public AppDbContext CreateDbContext(string[] args)
         {
+            var basePath = Directory.GetCurrentDirectory();
+            // Pokud jsme v OAI.DataLayer, jdi o úroveň výš
+            if (basePath.EndsWith("OAI.DataLayer"))
+            {
+                basePath = Path.GetDirectoryName(basePath);
+            }
+            
             var configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
+                .SetBasePath(basePath)
                 .AddJsonFile("appsettings.json")
                 .AddJsonFile("appsettings.Development.json", optional: true)
                 .Build();
@@ -21,7 +28,7 @@ namespace OAI.DataLayer.Context
             var connectionString = configuration.GetConnectionString("DefaultConnection");
             optionsBuilder.UseNpgsql(connectionString, npgsqlOptions =>
             {
-                npgsqlOptions.MigrationsAssembly("OptimalyAI");
+                npgsqlOptions.MigrationsAssembly("OAI.DataLayer");
             });
 
             return new AppDbContext(optionsBuilder.Options);

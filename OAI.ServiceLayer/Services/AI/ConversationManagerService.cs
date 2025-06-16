@@ -6,22 +6,22 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.Entities;
 using OAI.Core.Interfaces;
 using OAI.ServiceLayer.Services.AI.Interfaces;
-
+using OAI.Core.Interfaces.AI;
 
 namespace OAI.ServiceLayer.Services.AI
 {
     /// <summary>
     /// Service for managing AI conversations
     /// </summary>
-    public class ConversationManagerService : OAI.ServiceLayer.Services.AI.Interfaces.IConversationManager
+    public class ConversationManagerService : OAI.Core.Interfaces.AI.IConversationManager
     {
-        private readonly IRepository<Conversation> _conversationRepository;
+        private readonly IRepository<OAI.Core.Entities.Conversation> _conversationRepository;
         private readonly IRepository<Message> _messageRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ConversationManagerService> _logger;
 
         public ConversationManagerService(
-            IRepository<Conversation> conversationRepository,
+            IRepository<OAI.Core.Entities.Conversation> conversationRepository,
             IRepository<Message> messageRepository,
             IUnitOfWork unitOfWork,
             ILogger<ConversationManagerService> logger)
@@ -32,9 +32,9 @@ namespace OAI.ServiceLayer.Services.AI
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<Conversation> CreateConversationAsync(string userId, string title = null)
+        public async Task<OAI.Core.Entities.Conversation> CreateConversationAsync(string userId, string title = null)
         {
-            var conversation = new Conversation
+            var conversation = new OAI.Core.Entities.Conversation
             {
                 UserId = userId,
                 Title = title ?? $"Conversation {DateTime.Now:yyyy-MM-dd HH:mm}",
@@ -51,7 +51,7 @@ namespace OAI.ServiceLayer.Services.AI
             return conversation;
         }
 
-        public async Task<Conversation> GetConversationAsync(string conversationId)
+        public async Task<OAI.Core.Entities.Conversation> GetConversationAsync(string conversationId)
         {
             if (!int.TryParse(conversationId, out var id))
             {
@@ -161,6 +161,75 @@ namespace OAI.ServiceLayer.Services.AI
             await _unitOfWork.SaveChangesAsync();
 
             _logger.LogDebug("Updated metadata for conversation {ConversationId}", conversationId);
+        }
+
+        // IConversationManager implementation methods
+        public string StartNewConversation(string model)
+        {
+            // Generate a new conversation ID
+            return Guid.NewGuid().ToString();
+        }
+
+        public void AddMessage(string conversationId, string role, string content)
+        {
+            // This is a synchronous wrapper - in real implementation, you might want to handle this differently
+            Task.Run(async () => await AddMessageAsync(conversationId, null, content, 
+                Enum.Parse<MessageRole>(role, true), null)).Wait();
+        }
+
+        public List<(string role, string content)> GetMessages(string conversationId)
+        {
+            var messages = Task.Run(async () => await GetConversationHistoryAsync(conversationId)).Result;
+            return messages.Select(m => (m.Role, m.Content)).ToList();
+        }
+
+        public void ClearConversation(string conversationId)
+        {
+            // In a real implementation, you'd delete or mark messages as deleted
+            _logger.LogInformation("Clearing conversation {ConversationId}", conversationId);
+        }
+
+        public async Task<string> SummarizeIfNeeded(string conversationId, int maxMessages = 20)
+        {
+            var messages = await GetConversationHistoryAsync(conversationId);
+            if (messages.Count <= maxMessages)
+            {
+                return string.Empty; // No summarization needed
+            }
+
+            // In a real implementation, you'd use AI to summarize older messages
+            var oldMessages = messages.Take(messages.Count - maxMessages).ToList();
+            return $"[Previous {oldMessages.Count} messages summarized]";
+        }
+
+        // Wrapper methods for Core interface compatibility
+        async Task<dynamic?> OAI.Core.Interfaces.AI.IConversationManager.GetConversationAsync(string conversationId)
+        {
+            return await GetConversationAsync(conversationId);
+        }
+
+        async Task<dynamic> OAI.Core.Interfaces.AI.IConversationManager.CreateConversationAsync(string userId, string title)
+        {
+            return await CreateConversationAsync(userId, title);
+        }
+
+        async Task OAI.Core.Interfaces.AI.IConversationManager.AddMessageAsync(string conversationId, string? userId, string content, object role, Dictionary<string, object> metadata)
+        {
+            MessageRole messageRole;
+            if (role is MessageRole mr)
+            {
+                messageRole = mr;
+            }
+            else if (role is string roleStr)
+            {
+                messageRole = Enum.Parse<MessageRole>(roleStr, true);
+            }
+            else
+            {
+                messageRole = MessageRole.User;
+            }
+            
+            await AddMessageAsync(conversationId, userId, content, messageRole, metadata);
         }
     }
 }

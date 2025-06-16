@@ -13,6 +13,15 @@ public class AppDbContext : DbContext
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
     }
+    
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        
+        // Suppress pending model changes warning - database is manually synchronized
+        optionsBuilder.ConfigureWarnings(warnings => 
+            warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    }
 
     // DbSets se přidají automaticky pro všechny entity dědící z BaseEntity
     // Nebo můžete přidat explicitně:
@@ -94,13 +103,10 @@ public class AppDbContext : DbContext
             
         // Sequence will be created only for PostgreSQL during migration
             
-        // Sequence for PostgreSQL (will be ignored for InMemory)
-        if (!Database.IsInMemory())
-        {
-            modelBuilder.HasSequence<int>("RequestNumberSequence")
-                .StartsAt(1)
-                .IncrementsBy(1);
-        }
+        // PostgreSQL sequence for request numbers
+        modelBuilder.HasSequence<int>("RequestNumberSequence")
+            .StartsAt(1)
+            .IncrementsBy(1);
             
         // WorkflowTemplate configuration
         modelBuilder.Entity<WorkflowTemplate>()
