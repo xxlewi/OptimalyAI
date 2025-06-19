@@ -34,6 +34,10 @@ public class AppDbContext : DbContext
     // Adapter entities
     public DbSet<AdapterDefinition> AdapterDefinitions { get; set; }
     public DbSet<AdapterExecution> AdapterExecutions { get; set; }
+    
+    // AI Server entities
+    public DbSet<AiServer> AiServers { get; set; }
+    public DbSet<AiModel> AiModels { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

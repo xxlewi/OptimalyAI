@@ -1,0 +1,103 @@
+@model OAI.Core.DTOs.AiServerDto
+@{
+    ViewData["Title"] = "Smazat AI Server";
+}
+
+<!-- Content Header (Page header) -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>Smazat AI Server</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">AI Servery</a></li>
+                    <li class="breadcrumb-item active">Smazat</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card card-danger">
+                    <div class="card-header">
+                        <h3 class="card-title">Potvrzení smazání</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Opravdu chcete smazat tento AI server? Tuto akci nelze vrátit zpět.
+                        </div>
+                        
+                        <dl class="row">
+                            <dt class="col-sm-4">Název:</dt>
+                            <dd class="col-sm-8">@Model.Name</dd>
+                            
+                            <dt class="col-sm-4">Typ:</dt>
+                            <dd class="col-sm-8">
+                                @switch (Model.ServerType)
+                                {
+                                    case OAI.Core.Entities.AiServerType.Ollama:
+                                        <span>Ollama</span>
+                                        break;
+                                    case OAI.Core.Entities.AiServerType.LMStudio:
+                                        <span>LM Studio</span>
+                                        break;
+                                    case OAI.Core.Entities.AiServerType.OpenAI:
+                                        <span>OpenAI</span>
+                                        break;
+                                    default:
+                                        <span>Vlastní</span>
+                                        break;
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-4">URL:</dt>
+                            <dd class="col-sm-8">@Model.BaseUrl</dd>
+                            
+                            <dt class="col-sm-4">Stav:</dt>
+                            <dd class="col-sm-8">
+                                @if (Model.IsActive)
+                                {
+                                    <span class="badge badge-success">Aktivní</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-danger">Neaktivní</span>
+                                }
+                                @if (Model.IsDefault)
+                                {
+                                    <span class="badge badge-warning ml-2">Výchozí</span>
+                                }
+                            </dd>
+                            
+                            <dt class="col-sm-4">Statistiky:</dt>
+                            <dd class="col-sm-8">
+                                Celkem požadavků: @Model.TotalRequests<br>
+                                Selhání: @Model.FailedRequests
+                            </dd>
+                        </dl>
+                    </div>
+                    <div class="card-footer">
+                        <form asp-action="Delete">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Ano, smazat
+                            </button>
+                            <a asp-action="Index" class="btn btn-default">
+                                <i class="fas fa-times"></i> Zrušit
+                            </a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

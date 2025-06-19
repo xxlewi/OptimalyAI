@@ -118,6 +118,10 @@ public static class ServiceCollectionExtensions
         // Explicitní registrace ToolDefinitionMapper
         services.AddScoped<OAI.ServiceLayer.Mapping.IToolDefinitionMapper, OAI.ServiceLayer.Mapping.ToolDefinitionMapper>();
         
+        // Explicitní registrace AI mapperů
+        services.AddScoped<OAI.ServiceLayer.Mapping.AI.IAiServerMapper, OAI.ServiceLayer.Mapping.AI.AiServerMapper>();
+        services.AddScoped<OAI.ServiceLayer.Mapping.AI.IAiModelMapper, OAI.ServiceLayer.Mapping.AI.AiModelMapper>();
+        
         // Auto-registrace všech mapperů z ServiceLayer
         var serviceLayerAssembly = Assembly.Load("OAI.ServiceLayer");
         

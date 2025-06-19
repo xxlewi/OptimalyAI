@@ -49,6 +49,42 @@
         #chat-menu.menu-open > .nav-treeview {
             display: block !important;
         }
+        
+        /* Zvýraznění aktivního submenu */
+        .nav-sidebar .has-treeview.menu-open > .nav-link {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #007bff;
+        }
+        
+        /* Zvýraznění aktivní položky v submenu */
+        .nav-sidebar .nav-treeview .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-left: 3px solid #17a2b8;
+            margin-left: -3px;
+        }
+        
+        /* Hover efekt pro submenu položky */
+        .nav-sidebar .nav-treeview .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+        
+        /* Animace pro otevírání submenu */
+        .nav-sidebar .has-treeview .nav-treeview {
+            transition: all 0.3s ease-in-out;
+        }
+        
+        /* Zvýraznění ikony u otevřeného submenu */
+        .nav-sidebar .has-treeview.menu-open > .nav-link > p > .right {
+            transform: rotate(90deg);
+            transition: transform 0.3s ease;
+        }
+        
+        /* Lehké pozadí pro celé submenu */
+        .nav-sidebar .has-treeview.menu-open .nav-treeview {
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 0 0 4px 4px;
+            padding: 5px 0;
+        }
     </style>
     @await RenderSectionAsync("Styles", required: false)
 </head>
@@ -208,9 +244,15 @@
                             </a>
                             <ul class="nav nav-treeview">
                                 <li class="nav-item">
+                                    <a asp-controller="AiServers" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-server nav-icon"></i>
+                                        <p>Servery</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
                                     <a asp-controller="Orchestrators" asp-action="Index" class="nav-link">
                                         <i class="fas fa-project-diagram nav-icon"></i>
-                                        <p>Orchestrace</p>
+                                        <p>Orchestrátory</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
@@ -234,18 +276,18 @@
                                 <li class="nav-item">
                                     <a asp-controller="Models" asp-action="Index" class="nav-link">
                                         <i class="fas fa-robot nav-icon"></i>
-                                        <p>AI Modely</p>
+                                        <p>Modely</p>
                                     </a>
                                 </li>
                             </ul>
                         </li>
                         
                         <li class="nav-header">KOMUNIKACE</li>
-                        <li class="nav-item has-treeview menu-open" id="chat-menu">
+                        <li class="nav-item has-treeview" id="chat-menu">
                             <a href="#" class="nav-link">
                                 <i class="nav-icon fas fa-comments"></i>
                                 <p>
-                                    AI Chat
+                                    Chat
                                     <i class="right fas fa-angle-left"></i>
                                 </p>
                             </a>
@@ -546,6 +588,46 @@
             loadRequestCounts();
             loadProjectCounts();
         }, 30000);
+        
+        // Active menu handling
+        $(document).ready(function() {
+            // Get current path
+            var currentPath = window.location.pathname.toLowerCase();
+            
+            // Remove all active and menu-open classes first
+            $('.nav-sidebar .nav-link').removeClass('active');
+            $('.nav-sidebar .nav-item').removeClass('menu-open');
+            
+            // Find and activate current menu item
+            $('.nav-sidebar .nav-link').each(function() {
+                var href = $(this).attr('href');
+                if (href && href !== '#') {
+                    // Normalize the href
+                    var linkPath = new URL(href, window.location.origin).pathname.toLowerCase();
+                    
+                    // Check if current path matches or starts with link path
+                    if (currentPath === linkPath || currentPath.startsWith(linkPath + '/')) {
+                        $(this).addClass('active');
+                        
+                        // If this is inside a treeview, open the parent menu
+                        var parentTreeview = $(this).closest('.has-treeview');
+                        if (parentTreeview.length > 0) {
+                            parentTreeview.addClass('menu-open');
+                            parentTreeview.find('> .nav-link').addClass('active');
+                        }
+                    }
+                }
+            });
+            
+            // Special handling for AI System menu items
+            var aiSystemPaths = ['/aiservers', '/orchestrators', '/reactagents', '/tools', '/adapters', '/models'];
+            var isInAiSystem = aiSystemPaths.some(path => currentPath.startsWith(path));
+            
+            if (isInAiSystem) {
+                $('#ai-system-menu').addClass('menu-open');
+                $('#ai-system-menu > .nav-link').addClass('active');
+            }
+        });
     </script>
     
     @await RenderSectionAsync("Scripts", required: false)

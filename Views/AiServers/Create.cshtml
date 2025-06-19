@@ -1,0 +1,184 @@
+@model OAI.Core.DTOs.CreateAiServerDto
+@{
+    ViewData["Title"] = "Přidat AI Server";
+}
+
+<!-- Content Header (Page header) -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>Přidat AI Server</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">AI Servery</a></li>
+                    <li class="breadcrumb-item active">Přidat</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Nový AI Server</h3>
+                    </div>
+                    <form asp-action="Create">
+                        <div class="card-body">
+                            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                            
+                            <div class="form-group">
+                                <label asp-for="Name" class="control-label">Název</label>
+                                <input asp-for="Name" class="form-control" placeholder="Např. Lokální Ollama" />
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label asp-for="ServerType" class="control-label">Typ serveru</label>
+                                <select asp-for="ServerType" class="form-control">
+                                    <option value="">-- Vyberte typ --</option>
+                                    <option value="@OAI.Core.Entities.AiServerType.Ollama">Ollama</option>
+                                    <option value="@OAI.Core.Entities.AiServerType.LMStudio">LM Studio</option>
+                                    <option value="@OAI.Core.Entities.AiServerType.OpenAI">OpenAI</option>
+                                    <option value="@OAI.Core.Entities.AiServerType.Custom">Vlastní</option>
+                                </select>
+                                <span asp-validation-for="ServerType" class="text-danger"></span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label asp-for="BaseUrl" class="control-label">Base URL</label>
+                                <input asp-for="BaseUrl" class="form-control" placeholder="http://localhost:11434" />
+                                <span asp-validation-for="BaseUrl" class="text-danger"></span>
+                                <small class="form-text text-muted">
+                                    Ollama: http://localhost:11434<br>
+                                    LM Studio: http://localhost:1234
+                                </small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label asp-for="ApiKey" class="control-label">API klíč (volitelné)</label>
+                                <input asp-for="ApiKey" type="password" class="form-control" />
+                                <span asp-validation-for="ApiKey" class="text-danger"></span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label asp-for="Description" class="control-label">Popis</label>
+                                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="TimeoutSeconds" class="control-label">Timeout (sekundy)</label>
+                                        <input asp-for="TimeoutSeconds" type="number" class="form-control" />
+                                        <span asp-validation-for="TimeoutSeconds" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label asp-for="MaxRetries" class="control-label">Max. počet pokusů</label>
+                                        <input asp-for="MaxRetries" type="number" class="form-control" />
+                                        <span asp-validation-for="MaxRetries" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Podporované funkce</label>
+                                <div class="form-check">
+                                    <input asp-for="SupportsChat" class="form-check-input" />
+                                    <label asp-for="SupportsChat" class="form-check-label">Chat</label>
+                                </div>
+                                <div class="form-check">
+                                    <input asp-for="SupportsEmbeddings" class="form-check-input" />
+                                    <label asp-for="SupportsEmbeddings" class="form-check-label">Embeddings</label>
+                                </div>
+                                <div class="form-check">
+                                    <input asp-for="SupportsImageGeneration" class="form-check-input" />
+                                    <label asp-for="SupportsImageGeneration" class="form-check-label">Generování obrázků</label>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input asp-for="IsActive" class="form-check-input" />
+                                    <label asp-for="IsActive" class="form-check-label">Aktivní</label>
+                                </div>
+                                <div class="form-check">
+                                    <input asp-for="IsDefault" class="form-check-input" />
+                                    <label asp-for="IsDefault" class="form-check-label">Nastavit jako výchozí</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Uložit
+                            </button>
+                            <a asp-action="Index" class="btn btn-default">
+                                <i class="fas fa-times"></i> Zrušit
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">Nápověda</h3>
+                    </div>
+                    <div class="card-body">
+                        <h5>Typy serverů</h5>
+                        <ul>
+                            <li><strong>Ollama</strong> - Lokální server pro spouštění open-source modelů</li>
+                            <li><strong>LM Studio</strong> - Desktopová aplikace pro lokální LLM modely</li>
+                            <li><strong>OpenAI</strong> - Cloud API od OpenAI (vyžaduje API klíč)</li>
+                            <li><strong>Vlastní</strong> - Jakýkoliv jiný kompatibilní server</li>
+                        </ul>
+                        
+                        <h5>Instalace</h5>
+                        <p><strong>Ollama:</strong></p>
+                        <pre>curl -fsSL https://ollama.ai/install.sh | sh
+ollama serve</pre>
+                        
+                        <p><strong>LM Studio:</strong></p>
+                        <p>Stáhněte z <a href="https://lmstudio.ai/" target="_blank">lmstudio.ai</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Auto-fill base URL based on server type
+            $('#ServerType').change(function() {
+                var type = $(this).val();
+                var urlInput = $('#BaseUrl');
+                
+                switch(type) {
+                    case '@((int)OAI.Core.Entities.AiServerType.Ollama)':
+                        if (!urlInput.val()) urlInput.val('http://localhost:11434');
+                        break;
+                    case '@((int)OAI.Core.Entities.AiServerType.LMStudio)':
+                        if (!urlInput.val()) urlInput.val('http://localhost:1234');
+                        break;
+                    case '@((int)OAI.Core.Entities.AiServerType.OpenAI)':
+                        if (!urlInput.val()) urlInput.val('https://api.openai.com');
+                        break;
+                }
+            });
+        });
+    </script>
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

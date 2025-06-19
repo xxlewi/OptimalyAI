@@ -1,0 +1,218 @@
+@model IEnumerable<OAI.Core.DTOs.AiServerDto>
+@{
+    ViewData["Title"] = "AI Servery";
+}
+
+<!-- Content Header (Page header) -->
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1>AI Servery</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item active">AI Servery</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main content -->
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Seznam AI serverů</h3>
+                        <div class="card-tools">
+                            <a asp-action="Create" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Přidat server
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (!Model.Any())
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> Zatím nejsou definovány žádné AI servery.
+                            </div>
+                        }
+                        else
+                        {
+                            <table class="table table-bordered table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Název</th>
+                                        <th>Typ</th>
+                                        <th>URL</th>
+                                        <th>Stav</th>
+                                        <th>Výchozí</th>
+                                        <th>Zdraví</th>
+                                        <th>Statistiky</th>
+                                        <th>Akce</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var server in Model)
+                                    {
+                                        <tr>
+                                            <td>@server.Name</td>
+                                            <td>
+                                                @switch (server.ServerType)
+                                                {
+                                                    case OAI.Core.Entities.AiServerType.Ollama:
+                                                        <span class="badge badge-primary">Ollama</span>
+                                                        break;
+                                                    case OAI.Core.Entities.AiServerType.LMStudio:
+                                                        <span class="badge badge-info">LM Studio</span>
+                                                        break;
+                                                    case OAI.Core.Entities.AiServerType.OpenAI:
+                                                        <span class="badge badge-success">OpenAI</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge badge-secondary">Vlastní</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@server.BaseUrl</td>
+                                            <td>
+                                                @if (server.IsActive)
+                                                {
+                                                    <span class="badge badge-success">Aktivní</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-danger">Neaktivní</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (server.IsDefault)
+                                                {
+                                                    <i class="fas fa-star text-warning"></i>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-sm btn-outline-secondary set-default-btn" data-id="@server.Id">
+                                                        <i class="far fa-star"></i>
+                                                    </button>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="health-status" data-id="@server.Id">
+                                                    @if (server.IsHealthy)
+                                                    {
+                                                        <i class="fas fa-check-circle text-success"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-times-circle text-danger"></i>
+                                                    }
+                                                </span>
+                                                <button class="btn btn-sm btn-outline-info check-health-btn ml-2" data-id="@server.Id">
+                                                    <i class="fas fa-heartbeat"></i>
+                                                </button>
+                                            </td>
+                                            <td>
+                                                <small>
+                                                    Požadavky: @server.TotalRequests<br>
+                                                    Selhání: @server.FailedRequests<br>
+                                                    @if (server.AverageResponseTime.HasValue)
+                                                    {
+                                                        <span>Průměrná odezva: @server.AverageResponseTime.Value.ToString("F2")ms</span>
+                                                    }
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <button class="btn btn-sm btn-info test-connection-btn" data-id="@server.Id">
+                                                        <i class="fas fa-plug"></i> Test
+                                                    </button>
+                                                    <a asp-action="Edit" asp-route-id="@server.Id" class="btn btn-sm btn-warning">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                    <a asp-action="Delete" asp-route-id="@server.Id" class="btn btn-sm btn-danger">
+                                                        <i class="fas fa-trash"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Test connection
+            $('.test-connection-btn').click(function() {
+                var btn = $(this);
+                var id = btn.data('id');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+                
+                $.post('@Url.Action("TestConnection")', { id: id }, function(response) {
+                    if (response.success) {
+                        toastr.success('Připojení k serveru je funkční');
+                    } else {
+                        toastr.error('Připojení k serveru selhalo');
+                    }
+                }).fail(function() {
+                    toastr.error('Chyba při testování připojení');
+                }).always(function() {
+                    btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Test');
+                });
+            });
+            
+            // Set default
+            $('.set-default-btn').click(function() {
+                var btn = $(this);
+                var id = btn.data('id');
+                
+                $.post('@Url.Action("SetDefault")', { id: id }, function(response) {
+                    if (response.success) {
+                        toastr.success('Výchozí server byl změněn');
+                        location.reload();
+                    } else {
+                        toastr.error('Nepodařilo se nastavit výchozí server');
+                    }
+                }).fail(function() {
+                    toastr.error('Chyba při nastavování výchozího serveru');
+                });
+            });
+            
+            // Check health
+            $('.check-health-btn').click(function() {
+                var btn = $(this);
+                var id = btn.data('id');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+                
+                $.post('@Url.Action("CheckHealth")', { id: id }, function(response) {
+                    if (response.success) {
+                        var healthSpan = $('.health-status[data-id="' + id + '"]');
+                        if (response.healthy) {
+                            healthSpan.html('<i class="fas fa-check-circle text-success"></i>');
+                            toastr.success('Server je v pořádku');
+                        } else {
+                            healthSpan.html('<i class="fas fa-times-circle text-danger"></i>');
+                            toastr.warning('Server není dostupný');
+                        }
+                    }
+                }).fail(function() {
+                    toastr.error('Chyba při kontrole zdraví serveru');
+                }).always(function() {
+                    btn.prop('disabled', false).html('<i class="fas fa-heartbeat"></i>');
+                });
+            });
+        });
+    </script>
+}

@@ -1,5 +1,6 @@
+@model OptimalyAI.ViewModels.ModelsIndexViewModel
 @{
-    ViewData["Title"] = "AI Models";
+    ViewData["Title"] = "AI Modely";
 }
 
 <!-- Content Header -->
@@ -7,7 +8,13 @@
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1><i class="fas fa-robot"></i> AI Models</h1>
+                <h1><i class="fas fa-robot"></i> AI Modely</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li>
+                    <li class="breadcrumb-item active">AI Modely</li>
+                </ol>
             </div>
         </div>
     </div>
@@ -16,225 +23,388 @@
 <!-- Main content -->
 <section class="content">
     <div class="container-fluid">
-        <!-- Settings Card -->
-        <div class="card card-warning collapsed-card mb-3">
-            <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-cog"></i> Model Settings</h3>
-                <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="card-body">
-                <form id="settingsForm">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Keep Alive Time</label>
-                                <div class="input-group">
-                                    <input type="number" id="keepAlive" class="form-control" value="5" min="0">
-                                    <div class="input-group-append">
-                                        <span class="input-group-text">minutes</span>
-                                    </div>
-                                </div>
-                                <small class="text-muted">0 = never unload, -1 = unload immediately</small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Context Window Size</label>
-                                <input type="number" id="contextSize" class="form-control" value="2048" min="128" max="32768">
-                                <small class="text-muted">Number of tokens in context window</small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Number of Threads</label>
-                                <input type="number" id="numThreads" class="form-control" value="4" min="1" max="32">
-                                <small class="text-muted">CPU threads for inference</small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Temperature</label>
-                                <input type="number" id="temperature" class="form-control" value="0.8" min="0" max="2" step="0.1">
-                                <small class="text-muted">Higher = more creative, Lower = more deterministic</small>
-                            </div>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-warning">
-                        <i class="fas fa-save"></i> Apply Settings
-                    </button>
-                </form>
-            </div>
-        </div>
-        
-        <!-- Download New Model Card -->
-        <div class="card card-success collapsed-card mb-3">
-            <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-download"></i> Download New Model</h3>
-                <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="card-body">
-                <form id="downloadForm">
-                    <div class="form-group">
-                        <label>Model Name</label>
-                        <input type="text" id="modelName" class="form-control" placeholder="e.g., llama3.2:3b, phi3.5, gemma2:2b">
-                        <small class="text-muted">
-                            Browse available models at <a href="https://ollama.com/library" target="_blank">ollama.com/library</a>
-                        </small>
-                    </div>
-                    <button type="submit" class="btn btn-success">
-                        <i class="fas fa-download"></i> Download Model
-                    </button>
-                </form>
-                <div id="downloadProgress" style="display:none;" class="mt-3">
-                    <div class="progress">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
-                    </div>
-                    <small class="text-muted" id="downloadStatus">Downloading...</small>
-                </div>
-            </div>
-        </div>
-        @if (ViewBag.Models != null && ViewBag.Models.Count > 0)
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
-            <div class="row">
-                @foreach (var modelInfo in ViewBag.Models)
-                {
-                    <div class="col-md-6 col-lg-4">
-                        <div class="card @(modelInfo.IsDefault ? "card-primary" : "")">
-                            <div class="card-header">
-                                <h3 class="card-title">
-                                    @modelInfo.Model.Name
-                                    @if (modelInfo.IsDefault)
+            <div class="alert alert-warning alert-dismissible">
+                <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+                <h5><i class="icon fas fa-exclamation-triangle"></i> Upozornění!</h5>
+                @Model.ErrorMessage
+            </div>
+        }
+
+        <!-- Stats Row -->
+        <div class="row">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@Model.TotalModels</h3>
+                        <p>Celkem modelů</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@Model.ActiveServers/@Model.TotalServers</h3>
+                        <p>Aktivní servery</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-server"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@Model.TotalSize</h3>
+                        <p>Celková velikost</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-hdd"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-primary">
+                    <div class="inner">
+                        <h3 id="loadedModelsCount">0</h3>
+                        <p>Načtené modely</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Server Status -->
+        <div class="card card-outline card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-server"></i> Stav serverů</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-sm btn-success" onclick="syncAllModels()">
+                        <i class="fas fa-sync"></i> Synchronizovat modely
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="location.href='@Url.Action("Index", "AiServers")'">
+                        <i class="fas fa-cog"></i> Spravovat servery
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Server</th>
+                            <th>Typ</th>
+                            <th>URL</th>
+                            <th>Stav</th>
+                            <th>Počet modelů</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var server in Model.Servers)
+                        {
+                            <tr>
+                                <td>@server.Name</td>
+                                <td><span class="badge badge-info">@server.ServerType</span></td>
+                                <td><small>@server.BaseUrl</small></td>
+                                <td>
+                                    @if (server.IsHealthy)
                                     {
-                                        <span class="badge badge-warning ml-2">Default</span>
+                                        <span class="badge badge-success">Online</span>
                                     }
-                                </h3>
-                                <div class="card-tools">
-                                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                                        <i class="fas fa-minus"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <dl class="row">
-                                    <dt class="col-sm-5">Size:</dt>
-                                    <dd class="col-sm-7">@((modelInfo.Model.Size / 1024.0 / 1024.0 / 1024.0).ToString("F2")) GB</dd>
-                                    
-                                    <dt class="col-sm-5">Tag:</dt>
-                                    <dd class="col-sm-7">@modelInfo.Model.Tag</dd>
-                                    
-                                    <dt class="col-sm-5">Modified:</dt>
-                                    <dd class="col-sm-7">@modelInfo.Model.ModifiedAt.ToString("dd.MM.yyyy HH:mm")</dd>
-                                </dl>
-                                
-                                @if (modelInfo.Metrics.TotalRequests > 0)
-                                {
-                                    <hr />
-                                    <h6>Performance Metrics:</h6>
-                                    <dl class="row">
-                                        <dt class="col-sm-7">Avg Response Time:</dt>
-                                        <dd class="col-sm-5">@modelInfo.Metrics.AverageResponseTime.ToString("F0") ms</dd>
-                                        
-                                        <dt class="col-sm-7">Tokens/Second:</dt>
-                                        <dd class="col-sm-5">@modelInfo.Metrics.AverageTokensPerSecond.ToString("F1")</dd>
-                                        
-                                        <dt class="col-sm-7">Total Requests:</dt>
-                                        <dd class="col-sm-5">@modelInfo.Metrics.TotalRequests</dd>
-                                    </dl>
-                                }
-                            </div>
-                            <div class="card-footer">
-                                <button class="btn btn-sm btn-primary" onclick="testModel('@modelInfo.Model.Name')">
-                                    <i class="fas fa-vial"></i> Test
-                                </button>
-                                <button class="btn btn-sm btn-info" onclick="warmupModel('@modelInfo.Model.Name')">
-                                    <i class="fas fa-fire"></i> Warmup
-                                </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteModel('@modelInfo.Model.Name')">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
-                            </div>
-                        </div>
+                                    else if (server.IsActive)
+                                    {
+                                        <span class="badge badge-danger">Offline</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary">Neaktivní</span>
+                                    }
+                                </td>
+                                <td>@server.ModelCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Models List -->
+        <div class="card card-outline card-secondary mt-3">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-robot"></i> Seznam modelů</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-sm btn-success" data-toggle="modal" data-target="#downloadModal">
+                        <i class="fas fa-download"></i> Stáhnout nový model
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Models.Any())
+                {
+                    <table id="modelsTable" class="table table-bordered table-striped table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Model</th>
+                                <th>Server</th>
+                                <th>Velikost</th>
+                                <th>Parametry</th>
+                                <th>Kvantizace</th>
+                                <th>Upraveno</th>
+                                <th>Stav</th>
+                                <th style="width: 150px">Akce</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var modelItem in Model.Models)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@modelItem.DisplayName</strong>
+                                        @if (modelItem.IsDefault)
+                                        {
+                                            <span class="badge badge-warning">Výchozí</span>
+                                        }
+                                        <br>
+                                        <small class="text-muted">@modelItem.Name</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-info">@modelItem.ServerName</span>
+                                        <br>
+                                        <small class="text-muted">@modelItem.ServerType</small>
+                                    </td>
+                                    <td>@modelItem.Size</td>
+                                    <td>@modelItem.ParameterSize</td>
+                                    <td>@modelItem.QuantizationLevel</td>
+                                    <td>
+                                        <small>@modelItem.ModifiedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                                    </td>
+                                    <td>
+                                        @if (modelItem.IsLoaded)
+                                        {
+                                            <span class="badge badge-success">Načtený</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-secondary">Nenačtený</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-primary" onclick="testModel('@modelItem.Name', '@modelItem.ServerName')" title="Test">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                            @if (modelItem.IsLoaded)
+                                            {
+                                                <button type="button" class="btn btn-warning" onclick="unloadModel('@modelItem.Name', '@modelItem.ServerName')" title="Uvolnit">
+                                                    <i class="fas fa-stop"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-success" onclick="loadModel('@modelItem.Name', '@modelItem.ServerName')" title="Načíst">
+                                                    <i class="fas fa-play-circle"></i>
+                                                </button>
+                                            }
+                                            <button type="button" class="btn btn-danger" onclick="deleteModel('@modelItem.Name', '@modelItem.ServerName')" title="Smazat">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="alert alert-info m-3">
+                        <i class="fas fa-info-circle"></i> Žádné modely nebyly nalezeny.
                     </div>
                 }
             </div>
-        }
-        else
-        {
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle"></i> No models available. 
-                Please ensure Ollama is running and models are loaded.
+        </div>
+    </div>
+</section>
+
+<!-- Download Modal -->
+<div class="modal fade" id="downloadModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Stáhnout nový model</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
             </div>
-        }
-        
-        <!-- Test Modal -->
-        <div class="modal fade" id="testModal" tabindex="-1" role="dialog">
-            <div class="modal-dialog modal-lg" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Test Model: <span id="testModelName"></span></h5>
-                        <button type="button" class="close" data-dismiss="modal">
-                            <span>&times;</span>
-                        </button>
+            <div class="modal-body">
+                <form id="downloadForm">
+                    <div class="form-group">
+                        <label>Server</label>
+                        <select class="form-control" id="downloadServer" required>
+                            @foreach (var server in Model.Servers.Where(s => s.IsActive && s.ServerType == "Ollama"))
+                            {
+                                <option value="@server.Name">@server.Name</option>
+                            }
+                        </select>
                     </div>
-                    <div class="modal-body">
-                        <form id="testForm">
-                            <div class="form-group">
-                                <label>Prompt:</label>
-                                <textarea class="form-control" id="testPrompt" rows="3">Hello! Can you introduce yourself and tell me what you're capable of?</textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-paper-plane"></i> Send
-                            </button>
-                        </form>
-                        
-                        <div id="testResult" class="mt-3" style="display:none;">
-                            <hr />
-                            <h6>Response:</h6>
-                            <div class="card">
-                                <div class="card-body">
-                                    <pre id="responseText" style="white-space: pre-wrap;"></pre>
-                                </div>
-                            </div>
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    Response Time: <span id="responseTime"></span> ms | 
-                                    Tokens/Second: <span id="tokensPerSecond"></span>
-                                </small>
-                            </div>
+                    <div class="form-group">
+                        <label>Název modelu</label>
+                        <input type="text" class="form-control" id="downloadModelName" placeholder="např. llama3.2:3b, phi3.5, gemma2:2b" required>
+                        <small class="text-muted">
+                            Prohlédněte dostupné modely na <a href="https://ollama.com/library" target="_blank">ollama.com/library</a>
+                        </small>
+                    </div>
+                </form>
+                <div id="downloadProgress" style="display:none;">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted" id="downloadStatus">Stahuji...</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-success" onclick="downloadModel()">
+                    <i class="fas fa-download"></i> Stáhnout
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Modal -->
+<div class="modal fade" id="testModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Test modelu: <span id="testModelName"></span></h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="testForm">
+                    <div class="form-group">
+                        <label>Prompt:</label>
+                        <textarea class="form-control" id="testPrompt" rows="3">Ahoj! Můžeš se mi představit a říct mi, co umíš?</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Odeslat
+                    </button>
+                </form>
+                
+                <div id="testResult" class="mt-3" style="display:none;">
+                    <hr />
+                    <h6>Odpověď:</h6>
+                    <div class="card">
+                        <div class="card-body">
+                            <p id="responseText"></p>
+                            <small class="text-muted">
+                                Čas odpovědi: <span id="responseTime"></span> ms | 
+                                Tokeny/s: <span id="tokensPerSecond"></span>
+                            </small>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</section>
+</div>
 
 @section Scripts {
+    <script src="/plugins/datatables/jquery.dataTables.min.js"></script>
+    <script src="/plugins/datatables-bs4/js/dataTables.bootstrap4.min.js"></script>
+    <script src="/plugins/datatables-responsive/js/dataTables.responsive.min.js"></script>
+    <script src="/plugins/datatables-responsive/js/responsive.bootstrap4.min.js"></script>
+    
     <script>
         let currentModel = '';
+        let currentServer = '';
         
-        function testModel(modelName) {
-            currentModel = modelName;
-            $('#testModelName').text(modelName);
-            $('#testResult').hide();
+        $(document).ready(function() {
+            $('#modelsTable').DataTable({
+                "responsive": true,
+                "lengthChange": true,
+                "autoWidth": false,
+                "language": {
+                    "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Czech.json"
+                },
+                "pageLength": 25,
+                "order": [[0, "asc"]]
+            });
+        });
+        
+        function testModel(model, server) {
+            currentModel = model;
+            currentServer = server;
+            $('#testModelName').text(model);
             $('#testModal').modal('show');
         }
         
-        function warmupModel(modelName) {
-            $.post('@Url.Action("WarmupModel")', { model: modelName }, function(data) {
+        function loadModel(modelName, serverName) {
+            $.post('@Url.Action("LoadModel")', { model: modelName, server: serverName }, function(data) {
                 if (data.success) {
-                    toastr.success(data.message);
+                    toastr.success('Model úspěšně načten');
+                    setTimeout(() => location.reload(), 1000);
                 } else {
-                    toastr.error(data.error);
+                    toastr.error(data.error || 'Chyba při načítání modelu');
                 }
+            });
+        }
+        
+        function unloadModel(modelName, serverName) {
+            $.post('@Url.Action("UnloadModel")', { model: modelName, server: serverName }, function(data) {
+                if (data.success) {
+                    toastr.success('Model úspěšně uvolněn');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    toastr.error(data.error || 'Chyba při uvolňování modelu');
+                }
+            });
+        }
+        
+        function deleteModel(modelName, serverName) {
+            if (confirm('Opravdu chcete smazat model ' + modelName + '?')) {
+                $.post('@Url.Action("DeleteModel")', { model: modelName, server: serverName }, function(data) {
+                    if (data.success) {
+                        toastr.success('Model úspěšně smazán');
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        toastr.error(data.error || 'Chyba při mazání modelu');
+                    }
+                });
+            }
+        }
+        
+        function downloadModel() {
+            const server = $('#downloadServer').val();
+            const modelName = $('#downloadModelName').val();
+            
+            if (!server || !modelName) {
+                toastr.error('Vyplňte všechna pole');
+                return;
+            }
+            
+            $('#downloadProgress').show();
+            $('#downloadModal .btn').prop('disabled', true);
+            
+            $.post('@Url.Action("DownloadModel")', { model: modelName, server: server }, function(data) {
+                if (data.success) {
+                    toastr.success('Model úspěšně stažen');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    toastr.error(data.error || 'Chyba při stahování modelu');
+                }
+            }).fail(function() {
+                toastr.error('Chyba při stahování modelu');
+            }).always(function() {
+                $('#downloadProgress').hide();
+                $('#downloadModal .btn').prop('disabled', false);
             });
         }
         
@@ -243,9 +413,11 @@
             
             const prompt = $('#testPrompt').val();
             $('#testResult').hide();
+            $('#testForm button').prop('disabled', true);
             
             $.post('@Url.Action("TestModel")', { 
                 model: currentModel, 
+                server: currentServer,
                 prompt: prompt 
             }, function(data) {
                 if (data.success) {
@@ -254,72 +426,18 @@
                     $('#tokensPerSecond').text(data.metrics.tokensPerSecond.toFixed(1));
                     $('#testResult').show();
                 } else {
-                    toastr.error(data.error);
+                    toastr.error(data.error || 'Chyba při testování modelu');
                 }
+            }).always(function() {
+                $('#testForm button').prop('disabled', false);
             });
         });
         
-        // Include toastr if not already included
-        if (typeof toastr === 'undefined') {
-            $('head').append('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">');
-            $.getScript('https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js');
+        function syncAllModels() {
+            toastr.info('Synchronizuji modely se servery...');
+            
+            // Reload page to trigger sync in controller
+            location.reload();
         }
-        
-        function deleteModel(modelName) {
-            if (confirm('Are you sure you want to delete ' + modelName + '?')) {
-                $.post('@Url.Action("DeleteModel")', { model: modelName }, function(data) {
-                    if (data.success) {
-                        toastr.success(data.message);
-                        setTimeout(() => location.reload(), 2000);
-                    } else {
-                        toastr.error(data.error);
-                    }
-                });
-            }
-        }
-        
-        $('#settingsForm').on('submit', function(e) {
-            e.preventDefault();
-            
-            const settings = {
-                keepAlive: $('#keepAlive').val() + 'm',
-                contextSize: $('#contextSize').val(),
-                numThreads: $('#numThreads').val(),
-                temperature: $('#temperature').val()
-            };
-            
-            $.post('@Url.Action("UpdateSettings")', settings, function(data) {
-                if (data.success) {
-                    toastr.success('Settings updated successfully');
-                } else {
-                    toastr.error(data.error || 'Failed to update settings');
-                }
-            });
-        });
-        
-        $('#downloadForm').on('submit', function(e) {
-            e.preventDefault();
-            
-            const modelName = $('#modelName').val();
-            if (!modelName) {
-                toastr.error('Please enter a model name');
-                return;
-            }
-            
-            $('#downloadProgress').show();
-            
-            $.post('@Url.Action("DownloadModel")', { model: modelName }, function(data) {
-                if (data.success) {
-                    toastr.success('Model downloaded successfully');
-                    setTimeout(() => location.reload(), 2000);
-                } else {
-                    toastr.error(data.error || 'Failed to download model');
-                }
-                $('#downloadProgress').hide();
-            }).fail(function() {
-                toastr.error('Failed to download model');
-                $('#downloadProgress').hide();
-            });
-        });
     </script>
 }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OAI.DataLayer.Context;
@@ -11,9 +12,11 @@ using OAI.DataLayer.Context;
 namespace OAI.DataLayer.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250618123154_AddAiServerEntity")]
+    partial class AddAiServerEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -183,81 +186,6 @@ namespace OAI.DataLayer.Migrations
                         .HasDatabaseName("IX_AdapterExecution_CreatedAt");
 
                     b.ToTable("AdapterExecutions");
-                });
-
-            modelBuilder.Entity("OAI.Core.Entities.AiModel", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<Guid>("AiServerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Family")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("FilePath")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsAvailable")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastUsedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Metadata")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("ParameterSize")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("QuantizationLevel")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<long>("SizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Tag")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AiServerId");
-
-                    b.HasIndex("CreatedAt")
-                        .HasDatabaseName("IX_AiModel_CreatedAt");
-
-                    b.ToTable("AiModels");
                 });
 
             modelBuilder.Entity("OAI.Core.Entities.AiServer", b =>
@@ -2312,17 +2240,6 @@ namespace OAI.DataLayer.Migrations
                     b.Navigation("AdapterDefinition");
                 });
 
-            modelBuilder.Entity("OAI.Core.Entities.AiModel", b =>
-                {
-                    b.HasOne("OAI.Core.Entities.AiServer", "AiServer")
-                        .WithMany("Models")
-                        .HasForeignKey("AiServerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AiServer");
-                });
-
             modelBuilder.Entity("OAI.Core.Entities.Business.Request", b =>
                 {
                     b.HasOne("OAI.Core.Entities.Projects.Project", "Project")
@@ -2640,11 +2557,6 @@ namespace OAI.DataLayer.Migrations
                         .IsRequired();
 
                     b.Navigation("ToolDefinition");
-                });
-
-            modelBuilder.Entity("OAI.Core.Entities.AiServer", b =>
-                {
-                    b.Navigation("Models");
                 });
 
             modelBuilder.Entity("OAI.Core.Entities.Business.Request", b =>
