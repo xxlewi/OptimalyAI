@@ -1,73 +1,8 @@
 @model OptimalyAI.ViewModels.WorkflowGraphViewModel
 
-<!-- I/O Configuration Modal -->
-<div class="modal fade" id="ioConfigModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Konfigurace vstupů a výstupů workflow</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <!-- Input Configuration -->
-                <h6><i class="fas fa-sign-in-alt"></i> Konfigurace vstupu</h6>
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label>Typ vstupu</label>
-                            <select class="form-control" id="modalInputType" onchange="updateInputConfig()">
-                                <option value="files">📁 Soubory</option>
-                                <option value="images">🖼️ Obrázky</option>
-                                <option value="api">🌐 API</option>
-                                <option value="database">🗄️ Databáze</option>
-                                <option value="csv">📊 CSV</option>
-                                <option value="manual">✏️ Manuální</option>
-                            </select>
-                        </div>
-                        
-                        <div id="inputConfigDetails">
-                            <!-- Dynamic content based on input type -->
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Output Configuration -->
-                <h6><i class="fas fa-sign-out-alt"></i> Konfigurace výstupu</h6>
-                <div class="card">
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label>Typ výstupu</label>
-                            <select class="form-control" id="modalOutputType" onchange="updateOutputConfig()">
-                                <option value="excel">📊 Excel</option>
-                                <option value="json">📄 JSON</option>
-                                <option value="csv">📊 CSV</option>
-                                <option value="api">📤 API</option>
-                                <option value="database">💿 Databáze</option>
-                                <option value="email">📧 Email</option>
-                            </select>
-                        </div>
-                        
-                        <div id="outputConfigDetails">
-                            <!-- Dynamic content based on output type -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                <button type="button" class="btn btn-primary" onclick="saveIOConfig()">
-                    <i class="fas fa-save"></i> Uložit konfiguraci
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Node Edit Modal -->
 <div class="modal fade" id="nodeEditModal" tabindex="-1" style="z-index: 9999;">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Upravit uzel</h5>
@@ -77,14 +12,32 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editingNodeId">
-                <div class="form-group">
-                    <label>Název</label>
-                    <input type="text" class="form-control" id="nodeName">
-                </div>
-                <div class="form-group">
-                    <label>Popis</label>
-                    <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
-                </div>
+                
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs" role="tablist" id="nodeEditTabs" style="display: none;">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#configTab">
+                            <i class="fas fa-cog"></i> Konfigurace
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#testTab">
+                            <i class="fas fa-flask"></i> Test
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- Tab panes -->
+                <div class="tab-content">
+                    <div id="configTab" class="tab-pane active pt-3">
+                        <div class="form-group">
+                            <label>Název</label>
+                            <input type="text" class="form-control" id="nodeName">
+                        </div>
+                        <div class="form-group">
+                            <label>Popis</label>
+                            <textarea class="form-control" id="nodeDescription" rows="3"></textarea>
+                        </div>
                 <div class="form-group" id="toolSection">
                     <label>Nástroj</label>
                     <select class="form-control" id="nodeToolSelect">
@@ -132,20 +85,44 @@
                     </div>
                 </div>
                 
-                <!-- Adapter Configuration Section -->
-                <div class="form-group" id="adapterConfigSection" style="display: none;">
-                    <label><i class="fas fa-plug"></i> Konfigurace adaptéru</label>
-                    <div id="adapterConfigContainer">
-                        <!-- Adapter configuration will be loaded here -->
+                        <!-- Adapter Configuration Section -->
+                        <div class="form-group" id="adapterConfigSection" style="display: none;">
+                            <label><i class="fas fa-plug"></i> Konfigurace adaptéru</label>
+                            <div id="adapterConfigContainer">
+                                <!-- Adapter configuration will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Test Tab -->
+                    <div id="testTab" class="tab-pane pt-3">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> Zde můžete otestovat nástroj s aktuálními parametry
+                        </div>
+                        
+                        <div id="testParameters">
+                            <!-- Test parameters will be shown here -->
+                        </div>
+                        
+                        <div class="form-group mt-3">
+                            <button type="button" class="btn btn-primary" onclick="runToolTest()">
+                                <i class="fas fa-play"></i> Spustit test
+                            </button>
+                        </div>
+                        
+                        <div id="testResults" style="display: none;">
+                            <hr>
+                            <h6>Výsledky testu:</h6>
+                            <div id="testResultContent">
+                                <!-- Results will be displayed here -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger" onclick="deleteCurrentNode()">
                     <i class="fas fa-trash"></i> Smazat
-                </button>
-                <button type="button" class="btn btn-info" id="testToolBtn" onclick="testCurrentTool()" style="display: none;">
-                    <i class="fas fa-flask"></i> Test nástroje
                 </button>
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
                 <button type="button" class="btn btn-primary" onclick="updateCurrentNode()">
@@ -375,7 +352,9 @@
     }
     
     /* Fix for parameter inputs */
-    #dynamicParameters input.form-control {
+    #dynamicParameters input.form-control,
+    #inputConfigDetails input.form-control,
+    #outputConfigDetails input.form-control {
         width: 100% !important;
         height: 38px !important;
         padding: 6px 12px !important;
@@ -390,7 +369,20 @@
         display: block !important;
     }
     
-    #dynamicParameters .form-group {
+    #dynamicParameters .form-group,
+    #inputConfigDetails .form-group,
+    #outputConfigDetails .form-group {
         margin-bottom: 15px !important;
+    }
+    
+    /* Adapter parameter styles */
+    .adapter-parameters select.form-control,
+    .adapter-parameters textarea.form-control {
+        width: 100% !important;
+        display: block !important;
+    }
+    
+    .adapter-parameters .custom-control-label {
+        cursor: pointer;
     }
 </style>

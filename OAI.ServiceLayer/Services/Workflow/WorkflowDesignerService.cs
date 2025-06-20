@@ -56,7 +56,8 @@ namespace OAI.ServiceLayer.Services.Workflow
                         
                         var deserializerOptions = new JsonSerializerOptions
                         {
-                            PropertyNameCaseInsensitive = true
+                            PropertyNameCaseInsensitive = true,
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                         };
                         
                         var dto = JsonSerializer.Deserialize<WorkflowDesignerDto>(workflow.StepsDefinition, deserializerOptions);
@@ -128,9 +129,14 @@ namespace OAI.ServiceLayer.Services.Workflow
                     {
                         ProjectId = projectId,
                         Name = workflowData.Name ?? $"Workflow {DateTime.Now:yyyy-MM-dd HH:mm}",
-                        Description = workflowData.Description,
-                        WorkflowType = "visual", // Visual workflow designer
+                        Description = workflowData.Description ?? string.Empty,
+                        WorkflowType = "Visual", // Visual workflow designer
                         IsActive = true,
+                        TriggerType = "Manual", // Default trigger type
+                        CronExpression = string.Empty, // Required field, empty for manual trigger
+                        Version = 1, // Initial version
+                        ExecutionCount = 0,
+                        SuccessCount = 0,
                         CreatedAt = DateTime.UtcNow
                     };
                     await _workflowRepository.AddAsync(workflow);

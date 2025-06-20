@@ -34,22 +34,9 @@
         <hr>
         
         <h6>AI Nástroje</h6>
-        @if (ViewBag.ToolsByCategory != null)
-        {
-            var toolsByCategory = ViewBag.ToolsByCategory as Dictionary<string, List<OAI.Core.Interfaces.Tools.ITool>>;
-            if (toolsByCategory != null)
-            {
-                @foreach(var category in toolsByCategory)
-                {
-                    <h6 style="font-size: 0.9em; margin-top: 10px;">@category.Key</h6>
-                    @foreach(var tool in category.Value)
-                    {
-                        <div class="tool-item" data-type="tool" data-tool="@tool.Id" draggable="true" title="@tool.Description">
-                            <i class="fas fa-robot"></i> @tool.Name
-                        </div>
-                    }
-                }
-            }
-        }
+        <div class="tool-item" data-type="tool" draggable="true">
+            <i class="fas fa-robot"></i> AI Tool
+            <small style="display: block; font-size: 10px; color: #666;">Nástroj</small>
+        </div>
     </div>
 }

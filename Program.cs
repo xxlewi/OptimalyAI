@@ -3,16 +3,12 @@ using OptimalyAI.Configuration;
 using OptimalyAI.Hubs;
 using OAI.ServiceLayer.Services.Tools;
 using OAI.ServiceLayer.Services.Adapters;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog
-builder.ConfigureSerilog();
-
 try
 {
-    Log.Information("Starting OptimalyAI application");
+    Console.WriteLine("Starting OptimalyAI application");
 
     // Add services to the container
     builder.Services.AddControllersWithViews()
@@ -61,14 +57,10 @@ try
     app.MapHub<ChatHub>("/chatHub");
     // app.MapHub<WorkflowHub>("/workflowHub"); // Removed
 
-    Log.Information("OptimalyAI application started successfully");
+    Console.WriteLine("OptimalyAI application started successfully");
     app.Run();
 }
 catch (Exception ex)
 {
-    Log.Fatal(ex, "OptimalyAI application terminated unexpectedly");
-}
-finally
-{
-    Log.CloseAndFlush();
+    Console.WriteLine($"OptimalyAI application terminated unexpectedly: {ex}");
 }

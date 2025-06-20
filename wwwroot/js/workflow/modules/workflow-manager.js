@@ -180,7 +180,7 @@ export class WorkflowManager {
         const node = {
             id: nodeId,
             type: type,
-            name: tool ? tool : this.getNodeTypeName(type),
+            name: this.getNodeTypeName(type),
             x: x,
             y: y,
             tool: tool || null,
@@ -256,6 +256,14 @@ export class WorkflowManager {
     }
     
     /**
+     * Mark workflow as modified
+     */
+    markAsModified() {
+        // Emit event or update UI to indicate changes
+        console.log('Workflow marked as modified');
+    }
+    
+    /**
      * Update node
      */
     updateNode(nodeId, updates) {
@@ -274,7 +282,7 @@ export class WorkflowManager {
             'OutputAdapter': 'Output Adaptér',
             'condition': 'Rozhodnutí',
             'parallel': 'Paralelní brána',
-            'tool': 'Nástroj'
+            'tool': 'AI Tool'
         };
         return names[type] || type;
     }

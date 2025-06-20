@@ -62,6 +62,13 @@
     window.zoomOut = () => app.zoomOut();
     window.zoomReset = () => app.zoomReset();
     
+    // Expose modal functions
+    window.updateCurrentNode = () => app.updateCurrentNode();
+    window.deleteCurrentNode = () => app.deleteCurrentNode();
+    window.testCurrentTool = () => app.testCurrentTool();
+    window.runToolTest = () => app.runToolTest();
+    
+    
     // Expose showAdapterConfiguration globally for now
     window.showAdapterConfiguration = function(node) {
         app.canvasRenderer.onNodeEdit(node);

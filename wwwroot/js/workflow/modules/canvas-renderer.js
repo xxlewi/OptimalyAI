@@ -125,6 +125,25 @@ export class CanvasRenderer {
             $contentWrapper.append($toolDiv);
         }
         
+        // Adapter configuration badge
+        if ((node.type === 'InputAdapter' || node.type === 'OutputAdapter') && node.selectedAdapter) {
+            const $adapterDiv = $('<div>').addClass('node-adapter');
+            const $adapterBadge = $('<span>')
+                .addClass('adapter-badge')
+                .html('<i class="fas fa-check-circle"></i> Nakonfigurováno')
+                .css({
+                    background: '#28a745',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '3px',
+                    fontSize: '11px',
+                    display: 'inline-block',
+                    marginTop: '5px'
+                });
+            $adapterDiv.append($adapterBadge);
+            $contentWrapper.append($adapterDiv);
+        }
+        
         // ReAct badge
         if (node.useReAct) {
             const $reactBadge = $('<span>')

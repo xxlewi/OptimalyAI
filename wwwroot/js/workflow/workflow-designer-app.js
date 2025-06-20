@@ -279,6 +279,7 @@ export class WorkflowDesignerApp {
         
         // Show/hide sections based on type
         if (node.type === 'condition' || node.type === 'parallel') {
+            $('#nodeEditTabs').hide();
             $('#toolSection').hide();
             $('#executionSection').hide();
             $('#parametersSection').hide();
@@ -287,18 +288,24 @@ export class WorkflowDesignerApp {
                 $('#nodeCondition').val(node.condition || '');
             }
         } else if (node.type === 'InputAdapter' || node.type === 'OutputAdapter') {
+            $('#nodeEditTabs').hide();
             $('#toolSection').hide();
             $('#executionSection').hide();
             $('#parametersSection').hide();
             $('#conditionSection').hide();
             $('#adapterConfigSection').show();
+            console.log('Editing adapter node, config:', node.adapterConfiguration);
             // Load adapter configuration
+            this.loadAdapterConfiguration(node);
         } else if (node.type === 'tool' || node.type === 'task') {
             $('#toolSection').show();
             $('#executionSection').show();
             $('#parametersSection').show();
             $('#conditionSection').hide();
             $('#adapterConfigSection').hide();
+            
+            // Show tabs for tool nodes
+            $('#nodeEditTabs').show();
             
             $('#nodeToolSelect').val(node.tool || '');
             $('#nodeUseReAct').prop('checked', node.useReAct || false);
@@ -321,6 +328,11 @@ export class WorkflowDesignerApp {
         console.log('Bootstrap modal function available:', typeof $.fn.modal);
         
         try {
+            // Reset to config tab
+            $('#nodeEditTabs a[href="#configTab"]').tab('show');
+            $('#testResults').hide();
+            $('#testResultContent').empty();
+            
             // Bootstrap 4 modal show
             $('#nodeEditModal').modal('show');
             console.log('Modal show command sent');
@@ -351,6 +363,7 @@ export class WorkflowDesignerApp {
             
             // Collect parameters
             updates.configuration = {};
+            console.log('Collecting tool parameters...');
             $('#dynamicParameters [data-param]').each(function() {
                 const paramName = $(this).data('param');
                 let value;
@@ -364,7 +377,46 @@ export class WorkflowDesignerApp {
                 }
                 
                 updates.configuration[paramName] = value;
+                console.log(`Tool param ${paramName}: ${value}`);
             });
+            console.log('Final tool configuration:', updates.configuration);
+            console.log('All updates being saved:', updates);
+        } else if (node.type === 'InputAdapter' || node.type === 'OutputAdapter') {
+            // Save adapter selection
+            updates.selectedAdapter = $('#nodeAdapterSelect').val();
+            
+            // Collect adapter parameters
+            updates.adapterConfiguration = {};
+            $('#nodeAdapterParameters [data-param]').each(function() {
+                const paramName = $(this).data('param');
+                let value;
+                
+                if ($(this).attr('type') === 'checkbox') {
+                    value = $(this).is(':checked');
+                } else if ($(this).attr('type') === 'number') {
+                    value = parseFloat($(this).val()) || 0;
+                } else if ($(this).is('textarea')) {
+                    const textValue = $(this).val().trim();
+                    // Try to parse JSON
+                    if (textValue) {
+                        try {
+                            value = JSON.parse(textValue);
+                        } catch {
+                            value = textValue;
+                        }
+                    } else {
+                        value = null;
+                    }
+                } else {
+                    value = $(this).val();
+                }
+                
+                if (value !== null && value !== '') {
+                    updates.adapterConfiguration[paramName] = value;
+                }
+            });
+            
+            console.log('Saving adapter configuration:', updates.adapterConfiguration);
         }
         
         this.workflowManager.updateNode(nodeId, updates);
@@ -391,7 +443,12 @@ export class WorkflowDesignerApp {
         try {
             const response = await fetch(`/api/tools/${toolId}/parameters`);
             const parameters = await response.json();
-            this.renderToolParameters(parameters);
+            
+            // Get current node to access existing configuration
+            const nodeId = $('#editingNodeId').val();
+            const node = this.workflowManager.getNode(nodeId);
+            
+            this.renderToolParameters(parameters, node);
         } catch (error) {
             $('#dynamicParameters').html('<div class="alert alert-warning">Nepodařilo se načíst parametry nástroje</div>');
         }
@@ -400,7 +457,7 @@ export class WorkflowDesignerApp {
     /**
      * Render tool parameters
      */
-    renderToolParameters(parameters) {
+    renderToolParameters(parameters, node) {
         if (!parameters || parameters.length === 0) {
             $('#dynamicParameters').html('<div class="text-muted">Tento nástroj nemá žádné parametry</div>');
             return;
@@ -408,7 +465,16 @@ export class WorkflowDesignerApp {
         
         let html = '';
         parameters.forEach(param => {
-            html += this.renderParameter(param);
+            // Create a copy of param to avoid modifying the original
+            const paramCopy = {...param};
+            
+            // Set current value if exists
+            if (node && node.configuration && node.configuration[param.name] !== undefined) {
+                paramCopy.defaultValue = node.configuration[param.name];
+                console.log(`Loading tool param ${param.name}: ${paramCopy.defaultValue}`);
+            }
+            
+            html += this.renderParameter(paramCopy);
         });
         
         $('#dynamicParameters').html(html);
@@ -507,11 +573,345 @@ export class WorkflowDesignerApp {
     }
     
     /**
-     * Test current tool
+     * Load adapter configuration for node
      */
-    testCurrentTool() {
-        // Implementation for tool testing
-        toastr.info('Test nástroje - funkce bude implementována');
+    async loadAdapterConfiguration(node) {
+        const $container = $('#adapterConfigContainer');
+        const adapterType = node.type === 'InputAdapter' ? 'Input' : 'Output';
+        
+        // Show loading
+        $container.html(`
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin"></i> Načítám adaptéry...
+            </div>
+        `);
+        
+        try {
+            // Load adapters
+            const response = await fetch(`/api/adapters?type=${adapterType}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                // Create select for adapters
+                let html = `
+                    <div class="form-group">
+                        <label>Vyberte ${adapterType === 'Input' ? 'vstupní' : 'výstupní'} adaptér</label>
+                        <select class="form-control" id="nodeAdapterSelect">
+                            <option value="">-- Vyberte adaptér --</option>
+                `;
+                
+                // Group by category
+                const categories = {};
+                data.data.forEach(adapter => {
+                    const category = adapter.category || 'Ostatní';
+                    if (!categories[category]) {
+                        categories[category] = [];
+                    }
+                    categories[category].push(adapter);
+                });
+                
+                // Add options
+                Object.entries(categories).forEach(([category, adapters]) => {
+                    html += `<optgroup label="${category}">`;
+                    adapters.forEach(adapter => {
+                        const selected = node.selectedAdapter === adapter.id ? 'selected' : '';
+                        html += `<option value="${adapter.id}" ${selected}>${adapter.name}</option>`;
+                    });
+                    html += `</optgroup>`;
+                });
+                
+                html += `</select></div>`;
+                html += `<div id="nodeAdapterParameters"></div>`;
+                
+                $container.html(html);
+                
+                // Store adapters for later use
+                this.currentAdapters = data.data;
+                
+                // Handle adapter selection
+                $('#nodeAdapterSelect').on('change', (e) => {
+                    const adapterId = $(e.target).val();
+                    this.loadAdapterParameters(adapterId, node);
+                });
+                
+                // If adapter is already selected, load its parameters
+                if (node.selectedAdapter) {
+                    this.loadAdapterParameters(node.selectedAdapter, node);
+                }
+            } else {
+                $container.html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Chyba při načítání adaptérů
+                    </div>
+                `);
+            }
+        } catch (error) {
+            console.error('Error loading adapters:', error);
+            $container.html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Chyba při načítání adaptérů
+                </div>
+            `);
+        }
+    }
+    
+    /**
+     * Load adapter parameters
+     */
+    loadAdapterParameters(adapterId, node) {
+        const $container = $('#nodeAdapterParameters');
+        
+        if (!adapterId) {
+            $container.empty();
+            return;
+        }
+        
+        const adapter = this.currentAdapters.find(a => a.id === adapterId);
+        if (!adapter) return;
+        
+        let html = '';
+        
+        if (!adapter.parameters || adapter.parameters.length === 0) {
+            html = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Tento adaptér nemá žádné parametry
+                </div>
+            `;
+        } else {
+            html = '<h6>Parametry adaptéru</h6>';
+            adapter.parameters.forEach(param => {
+                // Create a copy of param to avoid modifying the original
+                const paramCopy = {...param};
+                
+                // Set current value if exists
+                if (node.adapterConfiguration && node.adapterConfiguration[param.name] !== undefined) {
+                    paramCopy.defaultValue = node.adapterConfiguration[param.name];
+                    console.log(`Loading adapter param ${param.name}: ${paramCopy.defaultValue}`);
+                }
+                html += this.renderParameter(paramCopy, 'nodeAdapter_');
+            });
+        }
+        
+        $container.html(html);
+    }
+    
+    /**
+     * Run tool test from test tab
+     */
+    async runToolTest() {
+        const nodeId = $('#editingNodeId').val();
+        const node = this.workflowManager.getNode(nodeId);
+        
+        if (!node || !node.tool) {
+            toastr.error('Nejprve vyberte nástroj');
+            return;
+        }
+        
+        // Collect current parameters from config tab
+        const configuration = {};
+        $('#dynamicParameters [data-param]').each(function() {
+            const paramName = $(this).data('param');
+            let value;
+            
+            if ($(this).attr('type') === 'checkbox') {
+                value = $(this).is(':checked');
+            } else if ($(this).attr('type') === 'number') {
+                value = parseFloat($(this).val()) || 0;
+            } else {
+                value = $(this).val();
+            }
+            
+            configuration[paramName] = value;
+        });
+        
+        // Show parameters in test tab
+        let paramsHtml = '<h6>Testovací parametry:</h6><pre class="bg-light p-3">' + 
+                        JSON.stringify(configuration, null, 2) + '</pre>';
+        $('#testParameters').html(paramsHtml);
+        
+        // Show loading
+        $('#testResults').show();
+        $('#testResultContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Spouštím test...</div>');
+        
+        try {
+            const response = await fetch(`/api/tools/${node.tool}/execute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(configuration)
+            });
+            
+            const result = await response.json();
+            
+            let resultHtml = '';
+            if (result.success) {
+                resultHtml = `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> Test proběhl úspěšně
+                    </div>
+                    <h6>Výstup:</h6>
+                    <pre class="bg-light p-3" style="max-height: 400px; overflow-y: auto;">`;
+                
+                const output = result.data?.output || result.data || 'Test proběhl úspěšně';
+                resultHtml += typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+                resultHtml += '</pre>';
+                
+                if (result.duration) {
+                    resultHtml += `<small class="text-muted">Doba zpracování: ${result.duration}ms</small>`;
+                }
+            } else {
+                // Parse error message for better display
+                const errorMessage = result.error || result.message || 'Neznámá chyba';
+                const errors = errorMessage.split(';').map(e => e.trim());
+                
+                resultHtml = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Test selhal
+                    </div>`;
+                
+                if (errors.length > 1) {
+                    resultHtml += '<h6>Chyby:</h6><ul class="text-danger">';
+                    errors.forEach(error => {
+                        if (error.includes('Extraction Instruction is required')) {
+                            resultHtml += '<li><strong>Instruction je povinný parametr</strong> - zadejte, co chcete z webu extrahovat (např. "Získej všechny ceny produktů")</li>';
+                        } else if (error.includes('command injection')) {
+                            resultHtml += '<li><strong>URL obsahuje nepovolené znaky</strong> - zkuste jednodušší URL bez query parametrů (?, &, =)</li>';
+                        } else {
+                            resultHtml += `<li>${error}</li>`;
+                        }
+                    });
+                    resultHtml += '</ul>';
+                } else {
+                    resultHtml += `<p><strong>Chyba:</strong> ${errorMessage}</p>`;
+                }
+                
+                // Add helpful hints
+                resultHtml += `
+                    <div class="alert alert-info mt-3">
+                        <h6><i class="fas fa-lightbulb"></i> Tipy:</h6>
+                        <ul class="mb-0">
+                            <li>Pro <strong>instruction</strong> zadejte např: "Extrahuj názvy a ceny produktů"</li>
+                            <li>Pro <strong>URL</strong> zkuste např: https://example.com nebo https://www.google.com</li>
+                            <li>Query parametry v URL (?, &) mohou být blokovány bezpečnostní kontrolou</li>
+                        </ul>
+                    </div>`;
+                
+                if (result.data) {
+                    resultHtml += '<details class="mt-3"><summary>Debug informace</summary>';
+                    resultHtml += '<pre class="bg-light p-3 mt-2">' + JSON.stringify(result.data, null, 2) + '</pre>';
+                    resultHtml += '</details>';
+                }
+            }
+            
+            $('#testResultContent').html(resultHtml);
+            
+        } catch (error) {
+            console.error('Error testing tool:', error);
+            $('#testResultContent').html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Chyba při komunikaci se serverem
+                </div>
+                <p>${error.message}</p>
+            `);
+        }
+    }
+    
+    /**
+     * Test current tool (old version - kept for compatibility)
+     */
+    async testCurrentTool() {
+        const nodeId = $('#editingNodeId').val();
+        const node = this.workflowManager.getNode(nodeId);
+        
+        if (!node || !node.tool) {
+            toastr.error('Nejprve vyberte nástroj');
+            return;
+        }
+        
+        // Collect current parameters
+        const configuration = {};
+        $('#dynamicParameters [data-param]').each(function() {
+            const paramName = $(this).data('param');
+            let value;
+            
+            if ($(this).attr('type') === 'checkbox') {
+                value = $(this).is(':checked');
+            } else if ($(this).attr('type') === 'number') {
+                value = parseFloat($(this).val()) || 0;
+            } else {
+                value = $(this).val();
+            }
+            
+            configuration[paramName] = value;
+        });
+        
+        // Show loading
+        const $btn = $('#testToolBtn');
+        const originalText = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testuji...');
+        
+        try {
+            const response = await fetch(`/api/tools/${node.tool}/execute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(configuration)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Show result in a modal or alert
+                const output = result.data?.output || result.data || 'Test proběhl úspěšně';
+                
+                // Create result modal
+                const resultHtml = `
+                    <div class="modal fade" id="testResultModal" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        <i class="fas fa-flask"></i> Výsledek testu nástroje
+                                    </h5>
+                                    <button type="button" class="close" data-dismiss="modal">
+                                        <span>&times;</span>
+                                    </button>
+                                </div>
+                                <div class="modal-body">
+                                    <pre style="max-height: 400px; overflow-y: auto;">${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}</pre>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Remove existing modal if any
+                $('#testResultModal').remove();
+                
+                // Add and show modal
+                $('body').append(resultHtml);
+                $('#testResultModal').modal('show');
+                
+                // Clean up modal after close
+                $('#testResultModal').on('hidden.bs.modal', function() {
+                    $(this).remove();
+                });
+                
+                toastr.success('Test nástroje proběhl úspěšně');
+            } else {
+                toastr.error(result.message || 'Test nástroje selhal');
+            }
+        } catch (error) {
+            console.error('Error testing tool:', error);
+            toastr.error('Chyba při testování nástroje');
+        } finally {
+            $btn.prop('disabled', false).html(originalText);
+        }
     }
     
     /**
