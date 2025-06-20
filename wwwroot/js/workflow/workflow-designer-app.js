@@ -184,6 +184,11 @@ export class WorkflowDesignerApp {
                     if (this.workflowManager.selectedNode) {
                         this.workflowManager.removeNode(this.workflowManager.selectedNode);
                         this.canvasRenderer.render();
+                    } else if (this.workflowManager.selectedConnection) {
+                        const conn = this.workflowManager.selectedConnection;
+                        this.workflowManager.removeConnection(conn.from, conn.to, conn.branch);
+                        this.workflowManager.deselectAll();
+                        this.canvasRenderer.render();
                     }
                 }
             }

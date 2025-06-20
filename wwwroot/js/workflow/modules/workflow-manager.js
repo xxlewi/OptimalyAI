@@ -9,6 +9,7 @@ export class WorkflowManager {
         this.nodes = {};
         this.connections = [];
         this.selectedNode = null;
+        this.selectedConnection = null;
         this.nodeIdCounter = 1;
         this.currentZoom = 1.0;
         
@@ -57,18 +58,8 @@ export class WorkflowManager {
             const response = await fetch(this.apiEndpoints.get);
             const result = await response.json();
             
-            console.log('Load workflow response:', result);
-            
             if (result.success && result.data) {
-                console.log('Loading workflow data:', result.data);
-                console.log('Steps in data:', result.data.steps);
-                console.log('Metadata:', result.data.metadata);
-                
                 this.loadFromOrchestratorFormat(result.data);
-                console.log('Loaded nodes:', this.nodes);
-                console.log('Loaded connections:', this.connections);
-            } else {
-                console.log('No workflow data found');
             }
         } catch (error) {
             console.error('Error loading workflow:', error);
@@ -86,9 +77,6 @@ export class WorkflowManager {
         }
         
         const workflowData = this.convertToOrchestratorFormat();
-        console.log('Saving workflow data:', workflowData);
-        console.log('Current nodes before save:', this.nodes);
-        console.log('Current connections before save:', this.connections);
         
         try {
             const response = await fetch(this.apiEndpoints.save, {
@@ -172,6 +160,23 @@ export class WorkflowManager {
     }
     
     /**
+     * Update node ID counter based on existing nodes
+     */
+    updateNodeIdCounter() {
+        let maxId = 0;
+        Object.keys(this.nodes).forEach(nodeId => {
+            const match = nodeId.match(/node_(\d+)/);
+            if (match) {
+                const id = parseInt(match[1]);
+                if (id > maxId) {
+                    maxId = id;
+                }
+            }
+        });
+        this.nodeIdCounter = maxId + 1;
+    }
+    
+    /**
      * Add node
      */
     addNode(type, x, y, tool = null) {
@@ -229,9 +234,25 @@ export class WorkflowManager {
      * Remove connection
      */
     removeConnection(from, to, branch = null) {
-        this.connections = this.connections.filter(c => 
-            !(c.from === from && c.to === to && c.branch === branch)
-        );
+        console.log('Removing connection:', from, '->', to, 'branch:', branch);
+        console.log('Connections before:', this.connections.length);
+        this.connections = this.connections.filter(c => {
+            // Handle both null and undefined for branch comparison
+            const branchMatch = (c.branch === branch) || (c.branch == null && branch == null);
+            const isMatch = c.from === from && c.to === to && branchMatch;
+            if (isMatch) {
+                console.log('Found matching connection to remove');
+            }
+            return !isMatch;
+        });
+        console.log('Connections after:', this.connections.length);
+    }
+    
+    /**
+     * Remove connection between two nodes (alias for removeConnection)
+     */
+    removeConnectionBetween(fromId, toId, branch = null) {
+        this.removeConnection(fromId, toId, branch);
     }
     
     /**
@@ -239,6 +260,17 @@ export class WorkflowManager {
      */
     selectNode(nodeId) {
         this.selectedNode = nodeId;
+        this.selectedConnection = null;
+    }
+    
+    /**
+     * Select connection
+     */
+    selectConnection(from, to, branch = null) {
+        console.log('Selecting connection:', from, '->', to, 'branch:', branch);
+        this.selectedNode = null;
+        this.selectedConnection = { from, to, branch };
+        console.log('Selected connection set to:', this.selectedConnection);
     }
     
     /**
@@ -246,6 +278,20 @@ export class WorkflowManager {
      */
     deselectAll() {
         this.selectedNode = null;
+        this.selectedConnection = null;
+    }
+    
+    /**
+     * Is connection selected
+     */
+    isConnectionSelected(from, to, branch = null) {
+        if (!this.selectedConnection) return false;
+        // Handle both null and undefined for branch comparison
+        const branchMatch = (this.selectedConnection.branch === branch) || 
+                          (this.selectedConnection.branch == null && branch == null);
+        return this.selectedConnection.from === from && 
+               this.selectedConnection.to === to && 
+               branchMatch;
     }
     
     /**
@@ -313,12 +359,8 @@ export class WorkflowManager {
         const steps = [];
         const nodeMap = {};
         
-        console.log('Converting to orchestrator format, nodes:', this.nodes);
-        console.log('Number of nodes:', Object.keys(this.nodes).length);
-        
         // First pass - create steps
         Object.values(this.nodes).forEach((node, index) => {
-            console.log('Processing node:', node);
             const step = {
                 id: node.id,
                 name: node.name,
@@ -346,15 +388,17 @@ export class WorkflowManager {
                 };
             } else if (node.type === 'parallel') {
                 step.branches = [];
+            } else if (node.type === 'orchestrator') {
+                step.orchestratorType = node.orchestratorType || null;
+                step.useReAct = node.useReAct || false;
+                step.timeoutSeconds = node.timeoutSeconds || 600;
+                step.retryCount = node.retryCount || 2;
+                step.configuration = node.configuration || {};
             }
             
             steps.push(step);
             nodeMap[node.id] = step;
-            console.log('Added step to array:', step);
         });
-        
-        console.log('Total steps created:', steps.length);
-        console.log('Steps array:', steps);
         
         // Second pass - build connections
         const nodesWithIncoming = new Set(this.connections.map(c => c.to));
@@ -418,31 +462,20 @@ export class WorkflowManager {
             }
         };
         
-        console.log('Final orchestrator format result:', result);
-        console.log('Result steps array:', result.steps);
-        console.log('Result steps length:', result.steps.length);
-        
         return result;
     }
     
     /**
      * Load from orchestrator format
      */
-    loadFromOrchestratorFormat(data) {
-        console.log('Loading from orchestrator format, data:', data);
-        
+    loadFromOrchestratorFormat(data, clearExisting = true) {
         if (!data) {
-            console.log('No data provided to loadFromOrchestratorFormat');
             return;
         }
         
         if (!data.steps) {
-            console.log('No steps in data');
             return;
         }
-        
-        console.log('Number of steps to load:', data.steps.length);
-        console.log('Steps data:', data.steps);
         
         // Load I/O configuration
         if (data.input) {
@@ -452,8 +485,10 @@ export class WorkflowManager {
             this.workflowIOConfig.output = data.output;
         }
         
-        // Clear existing
-        this.clearWorkflow();
+        // Clear existing only if requested (default for initial load)
+        if (clearExisting) {
+            this.clearWorkflow();
+        }
         
         // Get node positions from metadata
         const positions = data.metadata?.nodePositions || {};
@@ -469,9 +504,11 @@ export class WorkflowManager {
             let nodeType = 'task';
             if (step.type === 'decision') nodeType = 'condition';
             else if (step.type === 'parallel-gateway') nodeType = 'parallel';
+            else if (step.type === 'merge') nodeType = 'merge';
             else if (step.type === 'tool') nodeType = 'tool';
             else if (step.type === 'input-adapter') nodeType = 'InputAdapter';
             else if (step.type === 'output-adapter') nodeType = 'OutputAdapter';
+            else if (step.type === 'orchestrator') nodeType = 'orchestrator';
             
             // Create the node
             this.nodes[step.id] = {
@@ -488,12 +525,14 @@ export class WorkflowManager {
                 retryCount: step.retryCount,
                 configuration: step.configuration || {},
                 selectedAdapter: step.adapterId,
-                adapterConfiguration: step.adapterConfiguration
+                adapterConfiguration: step.adapterConfiguration,
+                orchestratorType: step.orchestratorType
             };
         });
         
-        console.log('Nodes created after loading:', this.nodes);
-        console.log('Number of nodes created:', Object.keys(this.nodes).length);
+        
+        // Update node ID counter to avoid conflicts with new nodes
+        this.updateNodeIdCounter();
         
         // Recreate connections
         data.steps.forEach(step => {
@@ -542,8 +581,10 @@ export class WorkflowManager {
             'tool': 'tool',
             'condition': 'decision',
             'parallel': 'parallel-gateway',
+            'merge': 'merge',
             'InputAdapter': 'input-adapter',
-            'OutputAdapter': 'output-adapter'
+            'OutputAdapter': 'output-adapter',
+            'orchestrator': 'orchestrator'
         };
         return typeMap[nodeType] || nodeType;
     }

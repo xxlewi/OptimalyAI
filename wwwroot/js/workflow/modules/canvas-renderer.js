@@ -99,9 +99,6 @@ export class CanvasRenderer {
         const $header = $('<div>').addClass('node-header');
         $header.append($('<span>').html(`<i class="${this.getNodeIcon(node.type)}"></i> ${node.name}`));
         
-        // Close button
-        $header.append($('<span>').addClass('node-close').html('×'));
-        
         $contentWrapper.append($header);
         
         // Description
@@ -144,6 +141,25 @@ export class CanvasRenderer {
             $contentWrapper.append($adapterDiv);
         }
         
+        // Orchestrator configuration badge
+        if (node.type === 'orchestrator' && node.orchestratorType) {
+            const $orchestratorDiv = $('<div>').addClass('node-orchestrator');
+            const $orchestratorBadge = $('<span>')
+                .addClass('orchestrator-badge')
+                .html(`<i class="fas fa-brain"></i> ${node.orchestratorType}`)
+                .css({
+                    background: '#6f42c1',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '3px',
+                    fontSize: '11px',
+                    display: 'inline-block',
+                    marginTop: '5px'
+                });
+            $orchestratorDiv.append($orchestratorBadge);
+            $contentWrapper.append($orchestratorDiv);
+        }
+        
         // ReAct badge
         if (node.useReAct) {
             const $reactBadge = $('<span>')
@@ -159,7 +175,14 @@ export class CanvasRenderer {
         }
         
         // Connection dots
-        $node.append($('<div>').addClass('connection-dot input'));
+        if (node.type === 'merge') {
+            // Merge node can have multiple inputs
+            $node.append($('<div>').addClass('connection-dot input').css('top', '20%'));
+            $node.append($('<div>').addClass('connection-dot input').css('top', '50%'));
+            $node.append($('<div>').addClass('connection-dot input').css('top', '80%'));
+        } else {
+            $node.append($('<div>').addClass('connection-dot input'));
+        }
         
         if (node.type === 'condition') {
             $node.append($('<div>')
@@ -214,12 +237,6 @@ export class CanvasRenderer {
             }
         });
         
-        // Close button
-        $node.find('.node-close').on('click', (e) => {
-            e.stopPropagation();
-            this.workflowManager.removeNode(node.id);
-            this.render();
-        });
         
         // Make draggable
         this.makeDraggable($node, node);
@@ -317,8 +334,19 @@ export class CanvasRenderer {
         line.setAttribute('y1', y1);
         line.setAttribute('x2', x2);
         line.setAttribute('y2', y2);
-        line.setAttribute('class', 'connection-line');
+        
+        // Check if this connection is selected
+        const isSelected = this.workflowManager.isConnectionSelected(conn.from, conn.to, conn.branch);
+        line.setAttribute('class', isSelected ? 'connection-line selected' : 'connection-line');
+        
         line.setAttribute('marker-end', 'url(#arrowhead)');
+        
+        // Add data attributes for identification
+        line.setAttribute('data-from', conn.from);
+        line.setAttribute('data-to', conn.to);
+        if (conn.branch) {
+            line.setAttribute('data-branch', conn.branch);
+        }
         
         // Color code branches
         if (conn.branch === 'true') {
@@ -329,7 +357,44 @@ export class CanvasRenderer {
             line.setAttribute('marker-end', 'url(#arrowhead-red)');
         }
         
+        // Create invisible hit area for easier clicking
+        const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        hitArea.setAttribute('x1', x1);
+        hitArea.setAttribute('y1', y1);
+        hitArea.setAttribute('x2', x2);
+        hitArea.setAttribute('y2', y2);
+        hitArea.setAttribute('stroke', 'rgba(0,0,0,0.01)'); // Nearly transparent but not fully
+        hitArea.setAttribute('stroke-width', '20');
+        hitArea.style.cursor = 'pointer';
+        hitArea.style.pointerEvents = 'stroke';
+        
+        // Add data attributes for identification
+        hitArea.setAttribute('data-from', conn.from);
+        hitArea.setAttribute('data-to', conn.to);
+        if (conn.branch) {
+            hitArea.setAttribute('data-branch', conn.branch);
+        }
+        
+        // Add click handler to hit area
+        $(hitArea).on('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('Connection clicked:', conn.from, '->', conn.to, 'branch:', conn.branch);
+            
+            // Select the connection
+            this.workflowManager.selectConnection(conn.from, conn.to, conn.branch);
+            this.render();
+            return false;
+        });
+        
+        // Also add hover effect for debugging
+        $(hitArea).on('mouseenter', () => {
+            console.log('Hovering over connection:', conn.from, '->', conn.to);
+        });
+        
+        // Append both - first the visible line, then the hit area
         this.$svg[0].appendChild(line);
+        this.$svg[0].appendChild(hitArea);
     }
     
     /**
@@ -340,7 +405,9 @@ export class CanvasRenderer {
             'task': 'fas fa-tasks',
             'condition': 'fas fa-question-circle',
             'parallel': 'fas fa-code-branch',
+            'merge': 'fas fa-compress-arrows-alt',
             'tool': 'fas fa-robot',
+            'orchestrator': 'fas fa-brain',
             'InputAdapter': 'fas fa-download',
             'OutputAdapter': 'fas fa-upload'
         };
