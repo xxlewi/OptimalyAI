@@ -149,12 +149,12 @@
                                                     }
                                                 </small>
                                             </td>
-                                            <td>
-                                                <div id="actions-@server.Id" class="btn-group" role="group" data-server-type="@server.ServerType">
+                                            <td class="text-nowrap">
+                                                <div id="actions-@server.Id" data-server-type="@server.ServerType">
                                                     @if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama || 
                                                          server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
                                                     {
-                                                        <span id="server-control-@server.Id">
+                                                        <span id="server-control-@server.Id" class="mr-1">
                                                             @if (server.IsRunning)
                                                             {
                                                                 <button class="btn btn-sm btn-danger stop-server-btn" data-id="@server.Id" title="Zastavit server">
@@ -169,10 +169,10 @@
                                                             }
                                                         </span>
                                                     }
-                                                    <button class="btn btn-sm btn-info test-connection-btn" data-id="@server.Id">
+                                                    <button class="btn btn-sm btn-info test-connection-btn mr-1" data-id="@server.Id">
                                                         <i class="fas fa-plug"></i> Test
                                                     </button>
-                                                    <a asp-action="Edit" asp-route-id="@server.Id" class="btn btn-sm btn-warning">
+                                                    <a asp-action="Edit" asp-route-id="@server.Id" class="btn btn-sm btn-warning mr-1">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
                                                     <a asp-action="Delete" asp-route-id="@server.Id" class="btn btn-sm btn-danger">
