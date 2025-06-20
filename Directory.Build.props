@@ -1,0 +1,113 @@
+<Project>
+  <!-- Global build optimization settings for all projects -->
+  
+  <!-- Build Performance Optimizations -->
+  <PropertyGroup>
+    <!-- Enable parallel builds -->
+    <BuildInParallel>true</BuildInParallel>
+    <MaxCpuCount>0</MaxCpuCount>
+    
+    <!-- Incremental build optimizations -->
+    <DisableFastUpToDateCheck>false</DisableFastUpToDateCheck>
+    <FastUpToDateCheckEnabled>true</FastUpToDateCheckEnabled>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+    
+    <!-- Reduce build output verbosity -->
+    <MSBuildWarningsAsMessages>MSB3243;MSB3245;MSB3026</MSBuildWarningsAsMessages>
+    <NoWarn>$(NoWarn);CS1591;CS1701;CS1702;CS1573</NoWarn>
+    
+    <!-- Optimize compilation -->
+    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    
+    <!-- Skip unnecessary targets -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
+    
+    <!-- Optimize file copying -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+    <PreserveCompilationReferences>false</PreserveCompilationReferences>
+    
+    <!-- Language version -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    
+    <!-- Output path optimization -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+  
+  <!-- Debug Configuration Optimizations -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <!-- Disable analyzers in Debug builds for faster compilation -->
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <RunAnalyzersDuringLiveAnalysis>false</RunAnalyzersDuringLiveAnalysis>
+    <RunAnalyzers>false</RunAnalyzers>
+    
+    <!-- Optimize debug builds -->
+    <DebugType>embedded</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
+    
+    <!-- Skip code contracts -->
+    <CodeContractsEnableRuntimeChecking>false</CodeContractsEnableRuntimeChecking>
+    
+    <!-- Razor optimizations -->
+    <RazorCompileOnBuild>false</RazorCompileOnBuild>
+    <RazorCompileOnPublish>true</RazorCompileOnPublish>
+    <MvcRazorCompileOnPublish>true</MvcRazorCompileOnPublish>
+    <UseRazorBuildServer>false</UseRazorBuildServer>
+  </PropertyGroup>
+  
+  <!-- Release Configuration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <RunAnalyzers>true</RunAnalyzers>
+    <RazorCompileOnBuild>true</RazorCompileOnBuild>
+  </PropertyGroup>
+  
+  <!-- NuGet Optimization -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+  </PropertyGroup>
+  
+  <!-- Source Link -->
+  <PropertyGroup>
+    <EnableSourceLink>false</EnableSourceLink>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+  </PropertyGroup>
+  
+  <!-- Assembly Info Generation -->
+  <PropertyGroup>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+  </PropertyGroup>
+  
+  <!-- Common Item Groups -->
+  <ItemGroup>
+    <!-- Exclude common files from build -->
+    <None Remove="**\*.log" />
+    <None Remove="**\*.tmp" />
+    <None Remove="**\*.cache" />
+    <None Remove="**\.DS_Store" />
+  </ItemGroup>
+  
+  <!-- Conditional MSBuild Features -->
+  <PropertyGroup>
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <EnableDefaultItems>true</EnableDefaultItems>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+</Project>

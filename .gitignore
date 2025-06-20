@@ -342,3 +342,6 @@ logs/
 backups/
 *.sql
 .aider*
+
+# NuGet packages
+.nuget/

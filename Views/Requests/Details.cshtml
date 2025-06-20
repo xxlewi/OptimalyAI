@@ -169,6 +169,11 @@
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-sticky-note"></i> Poznámka k požadavku
+                            <span id="noteSaveStatus" class="ml-2" style="display: none;">
+                                <i class="fas fa-check-circle text-success save-success" style="display: none; animation: checkmark 0.5s ease-in-out;"></i>
+                                <i class="fas fa-spinner fa-spin text-primary save-loading" style="display: none;"></i>
+                                <i class="fas fa-exclamation-circle text-danger save-error" style="display: none;"></i>
+                            </span>
                         </h3>
                         <div class="card-tools">
                             <button type="button" class="btn btn-tool" data-card-widget="maximize">
@@ -192,6 +197,9 @@
                             </button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="insertBullet()">
                                 <i class="fas fa-list"></i> Odrážka
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" onclick="insertLink()">
+                                <i class="fas fa-link"></i> Vložit odkaz
                             </button>
                         </div>
                         <div id="quickNote" 
@@ -389,23 +397,67 @@
             let saveTimeout;
             let originalNote = $('#quickNote').html();
             
+            // Funkce pro zobrazení stavu ukládání
+            function showSaveStatus(status) {
+                const $saveStatus = $('#noteSaveStatus');
+                const $icons = $saveStatus.find('i');
+                
+                // Skryj všechny ikony
+                $icons.hide();
+                
+                // Zobraz správnou ikonu podle stavu
+                switch(status) {
+                    case 'loading':
+                        $saveStatus.show();
+                        $saveStatus.find('.save-loading').show();
+                        break;
+                    case 'success':
+                        $saveStatus.show();
+                        $saveStatus.find('.save-success').show();
+                        // Přidáme animaci rotace pro opakované uložení
+                        $saveStatus.find('.save-success').addClass('rotate-animation');
+                        setTimeout(() => {
+                            $saveStatus.find('.save-success').removeClass('rotate-animation');
+                        }, 500);
+                        // Skryj po 3 sekundách
+                        setTimeout(() => {
+                            $saveStatus.fadeOut();
+                        }, 3000);
+                        break;
+                    case 'error':
+                        $saveStatus.show();
+                        $saveStatus.find('.save-error').show();
+                        // Přidáme třesení pro chybu
+                        $saveStatus.find('.save-error').addClass('shake-animation');
+                        setTimeout(() => {
+                            $saveStatus.find('.save-error').removeClass('shake-animation');
+                        }, 500);
+                        // Skryj po 5 sekundách
+                        setTimeout(() => {
+                            $saveStatus.fadeOut();
+                        }, 5000);
+                        break;
+                }
+            }
+            
             $('#quickNote').on('blur', function() {
                 const currentNote = $(this).html();
                 const requestId = $(this).data('request-id');
                 
                 // Uložit pouze pokud se změnila
                 if (currentNote !== originalNote) {
+                    showSaveStatus('loading');
                     $.ajax({
                         url: `/api/requestsapi/${requestId}/metadata`,
                         method: 'PUT',
                         contentType: 'application/json',
                         data: JSON.stringify({ metadata: currentNote }),
                         success: function() {
-                            toastr.success('Poznámka byla uložena');
+                            showSaveStatus('success');
                             originalNote = currentNote;
                         },
                         error: function() {
-                            toastr.error('Nepodařilo se uložit poznámku');
+                            showSaveStatus('error');
                         }
                     });
                 }
@@ -420,17 +472,18 @@
                 // Uložit po 2 sekundách nečinnosti
                 saveTimeout = setTimeout(function() {
                     if (currentNote !== originalNote) {
+                        showSaveStatus('loading');
                         $.ajax({
                             url: `/api/requestsapi/${requestId}/metadata`,
                             method: 'PUT',
                             contentType: 'application/json',
                             data: JSON.stringify({ metadata: currentNote }),
                             success: function() {
-                                toastr.success('Poznámka byla uložena');
+                                showSaveStatus('success');
                                 originalNote = currentNote;
                             },
                             error: function() {
-                                toastr.error('Nepodařilo se uložit poznámku');
+                                showSaveStatus('error');
                             }
                         });
                     }
@@ -879,6 +932,106 @@
             
             $('#quickNote').trigger('input');
         }
+        
+        function insertLink() {
+            const editor = document.getElementById('quickNote');
+            const selection = window.getSelection();
+            
+            // Získat vybraný text
+            let selectedText = '';
+            let selectedRange = null;
+            
+            if (selection.rangeCount > 0 && selection.toString().trim()) {
+                selectedText = selection.toString();
+                selectedRange = selection.getRangeAt(0);
+            } else {
+                // Pokud není vybraný text, upozornit uživatele
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Označte text',
+                    text: 'Nejprve označte text, který chcete převést na odkaz',
+                    confirmButtonText: 'Rozumím'
+                });
+                return;
+            }
+            
+            // Dialog pro zadání URL pomocí SweetAlert2
+            Swal.fire({
+                title: 'Přidat odkaz',
+                html: `
+                    <div class="text-center mb-3">
+                        <p class="mb-1">Vybraný text:</p>
+                        <strong>"${selectedText}"</strong>
+                    </div>
+                    <div class="form-group text-left">
+                        <label for="linkUrl">URL adresa:</label>
+                        <input type="url" id="linkUrl" class="form-control" placeholder="https://example.com" value="" autofocus>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Vytvořit odkaz',
+                cancelButtonText: 'Zrušit',
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                didOpen: () => {
+                    // Focus na input po otevření
+                    document.getElementById('linkUrl').focus();
+                },
+                preConfirm: () => {
+                    const url = document.getElementById('linkUrl').value;
+                    
+                    if (!url) {
+                        Swal.showValidationMessage('Zadejte prosím URL adresu');
+                        return false;
+                    }
+                    
+                    // Validace a úprava URL
+                    let finalUrl = url;
+                    if (!url.match(/^https?:\/\//)) {
+                        finalUrl = 'https://' + url;
+                    }
+                    
+                    try {
+                        new URL(finalUrl);
+                    } catch (e) {
+                        Swal.showValidationMessage('Zadejte prosím platnou URL adresu');
+                        return false;
+                    }
+                    
+                    return { url: finalUrl };
+                }
+            }).then((result) => {
+                if (result.isConfirmed && selectedRange) {
+                    editor.focus();
+                    
+                    // Obnovit výběr
+                    selection.removeAllRanges();
+                    selection.addRange(selectedRange);
+                    
+                    // Vytvořit odkaz
+                    const link = document.createElement('a');
+                    link.href = result.value.url;
+                    link.textContent = selectedText;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.contentEditable = 'false'; // Zabránit editaci odkazu
+                    
+                    // Nahradit vybraný text odkazem
+                    selectedRange.deleteContents();
+                    selectedRange.insertNode(link);
+                    
+                    // Přesunout kurzor za odkaz
+                    const space = document.createTextNode(' ');
+                    link.parentNode.insertBefore(space, link.nextSibling);
+                    selectedRange.setStartAfter(space);
+                    selectedRange.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(selectedRange);
+                    
+                    $('#quickNote').trigger('input');
+                }
+            });
+        }
     </script>
 }
 
@@ -1013,5 +1166,89 @@
         NoteType.Solution => "check-circle",
         _ => "circle"
     };
+}
+
+@section Styles {
+    <style>
+        /* Animace pro úspěšné uložení */
+        @@keyframes checkmark {
+            0% {
+                transform: scale(0) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2) rotate(180deg);
+            }
+            100% {
+                transform: scale(1) rotate(360deg);
+                opacity: 1;
+            }
+        }
+        
+        /* Animace rotace pro opakované uložení */
+        .rotate-animation {
+            animation: rotate 0.5s ease-in-out;
+        }
+        
+        @@keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        /* Animace třesení pro chybu */
+        .shake-animation {
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        @@keyframes shake {
+            0%, 100% {
+                transform: translateX(0);
+            }
+            10%, 30%, 50%, 70%, 90% {
+                transform: translateX(-5px);
+            }
+            20%, 40%, 60%, 80% {
+                transform: translateX(5px);
+            }
+        }
+        
+        /* Styl pro status ikony */
+        #noteSaveStatus {
+            display: inline-block;
+            vertical-align: middle;
+        }
+        
+        #noteSaveStatus i {
+            font-size: 1.1em;
+        }
+        
+        /* Zvýraznění poznámky při ukládání */
+        #quickNote.saving {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        
+        /* Styly pro odkazy v editoru */
+        #quickNote a {
+            color: #007bff;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        
+        #quickNote a:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+        
+        /* Zabránit editaci odkazu při kliknutí */
+        #quickNote a[contenteditable="false"] {
+            user-select: none;
+            pointer-events: auto;
+        }
+    </style>
 }
 
