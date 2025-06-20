@@ -341,3 +341,4 @@ logs/
 # Database backups
 backups/
 *.sql
+.aider*

@@ -2,6 +2,45 @@
 @{
     ViewData["Title"] = "AI Modely";
 }
+<style>
+.action-btn-group .btn {
+  margin-right: 5px !important;
+}
+.action-btn-group .btn:last-child {
+  margin-right: 0 !important;
+}
+
+/* DataTable filter styling */
+#modelsTable thead select {
+    width: 100%;
+    padding: 2px 5px;
+    font-size: 0.875rem;
+    margin-top: 5px;
+}
+
+#modelsTable thead th {
+    vertical-align: top;
+    white-space: nowrap;
+}
+
+/* Improve header layout with filters */
+.dataTables_wrapper .dataTables_filter {
+    margin-bottom: 10px;
+}
+
+/* Badge styling in selects */
+#modelsTable_wrapper select option {
+    padding: 3px;
+}
+
+/* Responsive table improvements */
+@@media (max-width: 768px) {
+    #modelsTable thead select {
+        font-size: 0.75rem;
+        padding: 1px 3px;
+    }
+}
+</style>
 
 <!-- Content Header -->
 <section class="content-header">
@@ -70,7 +109,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-primary">
                     <div class="inner">
-                        <h3 id="loadedModelsCount">0</h3>
+                        <h3 id="loadedModelsCount">@(ViewBag.LoadedModelsCount ?? 0)</h3>
                         <p>Načtené modely</p>
                     </div>
                     <div class="icon">
@@ -138,6 +177,9 @@
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-robot"></i> Seznam modelů</h3>
                 <div class="card-tools">
+                    <button type="button" class="btn btn-sm btn-info" id="resetFilters" style="display:none;">
+                        <i class="fas fa-times"></i> Resetovat filtry
+                    </button>
                     <button type="button" class="btn btn-sm btn-success" data-toggle="modal" data-target="#downloadModal">
                         <i class="fas fa-download"></i> Stáhnout nový model
                     </button>
@@ -150,12 +192,12 @@
                         <thead>
                             <tr>
                                 <th>Model</th>
-                                <th>Server</th>
+                                <th style="min-width: 120px">Server</th>
                                 <th>Velikost</th>
-                                <th>Parametry</th>
-                                <th>Kvantizace</th>
+                                <th style="min-width: 100px">Parametry</th>
+                                <th style="min-width: 100px">Kvantizace</th>
                                 <th>Upraveno</th>
-                                <th>Stav</th>
+                                <th style="min-width: 100px">Stav</th>
                                 <th style="width: 150px">Akce</th>
                             </tr>
                         </thead>
@@ -194,7 +236,7 @@
                                         }
                                     </td>
                                     <td>
-                                        <div class="btn-group btn-group-sm">
+<div class="btn-group btn-group-sm action-btn-group">
                                             <button type="button" class="btn btn-primary" onclick="testModel('@modelItem.Name', '@modelItem.ServerName')" title="Test">
                                                 <i class="fas fa-play"></i>
                                             </button>
@@ -316,6 +358,11 @@
     </div>
 </div>
 
+@section Styles {
+    <link rel="stylesheet" href="/plugins/datatables-bs4/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="/plugins/datatables-responsive/css/responsive.bootstrap4.min.css">
+}
+
 @section Scripts {
     <script src="/plugins/datatables/jquery.dataTables.min.js"></script>
     <script src="/plugins/datatables-bs4/js/dataTables.bootstrap4.min.js"></script>
@@ -327,15 +374,133 @@
         let currentServer = '';
         
         $(document).ready(function() {
-            $('#modelsTable').DataTable({
+            // Initialize DataTable with advanced features
+            var table = $('#modelsTable').DataTable({
                 "responsive": true,
                 "lengthChange": true,
                 "autoWidth": false,
                 "language": {
-                    "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Czech.json"
+                    "decimal": "",
+                    "emptyTable": "Žádná data k dispozici",
+                    "info": "Zobrazeno _START_ až _END_ z celkem _TOTAL_ záznamů",
+                    "infoEmpty": "Zobrazeno 0 až 0 z 0 záznamů",
+                    "infoFiltered": "(filtrováno z celkem _MAX_ záznamů)",
+                    "infoPostFix": "",
+                    "thousands": " ",
+                    "lengthMenu": "Zobraz _MENU_ záznamů",
+                    "loadingRecords": "Načítám...",
+                    "processing": "Provádím...",
+                    "search": "Hledat:",
+                    "zeroRecords": "Žádné záznamy nebyly nalezeny",
+                    "paginate": {
+                        "first": "První",
+                        "last": "Poslední",
+                        "next": "Další",
+                        "previous": "Předchozí"
+                    },
+                    "aria": {
+                        "sortAscending": ": aktivujte pro řazení sloupce vzestupně",
+                        "sortDescending": ": aktivujte pro řazení sloupce sestupně"
+                    }
                 },
                 "pageLength": 25,
-                "order": [[0, "asc"]]
+                "order": [[0, "asc"]],
+                "initComplete": function () {
+                    // Add column filters
+                    this.api().columns([1, 3, 4, 6]).every(function () {
+                        var column = this;
+                        var columnHeader = $(column.header());
+                        var headerText = columnHeader.text();
+                        
+                        // Create new header structure with title and filter
+                        columnHeader.html('<div>' + headerText + '</div>');
+                        
+                        var select = $('<select class="form-control form-control-sm"><option value="">Vše</option></select>')
+                            .appendTo(columnHeader)
+                            .on('click', function (e) {
+                                e.stopPropagation(); // Prevent sorting when clicking on select
+                            })
+                            .on('change', function () {
+                                var val = $.fn.dataTable.util.escapeRegex(
+                                    $(this).val()
+                                );
+                                column
+                                    .search(val ? '^' + val + '$' : '', true, false)
+                                    .draw();
+                            });
+                        
+                        // Add options to select
+                        if (column.index() === 1) { // Server column
+                            column.data().unique().sort().each(function (d, j) {
+                                var serverName = $(d).find('.badge').text();
+                                if (serverName && select.find('option[value="' + serverName + '"]').length === 0) {
+                                    select.append('<option value="' + serverName + '">' + serverName + '</option>');
+                                }
+                            });
+                        } else if (column.index() === 6) { // Status column
+                            select.append('<option value="Načtený">Načtený</option>');
+                            select.append('<option value="Nenačtený">Nenačtený</option>');
+                        } else {
+                            column.data().unique().sort().each(function (d, j) {
+                                if (d) {
+                                    select.append('<option value="' + d + '">' + d + '</option>');
+                                }
+                            });
+                        }
+                    });
+                },
+                "columnDefs": [
+                    { "orderable": false, "targets": 7 }, // Disable sorting for Actions column
+                    { 
+                        "type": "file-size", 
+                        "targets": 2 // Size column for proper sorting
+                    }
+                ]
+            });
+            
+            // Custom sorting for file sizes
+            $.fn.dataTable.ext.type.order['file-size-pre'] = function (data) {
+                var matches = data.match(/^(\d+(?:\.\d+)?)\s*([KMGT]?B)$/);
+                var multipliers = {
+                    'B': 1,
+                    'KB': 1024,
+                    'MB': 1024 * 1024,
+                    'GB': 1024 * 1024 * 1024,
+                    'TB': 1024 * 1024 * 1024 * 1024
+                };
+                
+                if (matches) {
+                    var size = parseFloat(matches[1]);
+                    var unit = matches[2];
+                    return size * multipliers[unit];
+                }
+                return 0;
+            };
+            
+            // Reset filters button
+            $('#resetFilters').on('click', function() {
+                table.columns([1, 3, 4, 6]).every(function() {
+                    var column = this;
+                    $(column.header()).find('select').val('').trigger('change');
+                });
+                table.search('').draw();
+                $('#resetFilters').hide();
+            });
+            
+            // Show reset button when any filter is applied
+            table.on('search.dt', function() {
+                var hasFilter = false;
+                table.columns().every(function() {
+                    var column = this;
+                    if (column.search() !== '') {
+                        hasFilter = true;
+                    }
+                });
+                if (table.search() !== '' || hasFilter) {
+                    $('#resetFilters').show();
+                } else {
+                    $('#resetFilters').hide();
+                }
             });
         });
         
@@ -436,8 +601,31 @@
         function syncAllModels() {
             toastr.info('Synchronizuji modely se servery...');
             
-            // Reload page to trigger sync in controller
-            location.reload();
+            $.post('@Url.Action("SyncModels")', {}, function(data) {
+                if (data.success) {
+                    toastr.success(data.message);
+                    
+                    // Show results for each server
+                    if (data.results && data.results.length > 0) {
+                        data.results.forEach(function(result) {
+                            if (result.success) {
+                                toastr.success(result.message);
+                            } else {
+                                toastr.warning(result.message);
+                            }
+                        });
+                    }
+                    
+                    // Reload page after 2 seconds to show updated data
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    toastr.error(data.error || 'Chyba při synchronizaci');
+                }
+            }).fail(function(xhr, status, error) {
+                toastr.error('Chyba při synchronizaci: ' + xhr.responseText);
+            });
         }
     </script>
 }

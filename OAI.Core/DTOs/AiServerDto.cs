@@ -22,6 +22,8 @@ namespace OAI.Core.DTOs
         public int TotalRequests { get; set; }
         public int FailedRequests { get; set; }
         public double? AverageResponseTime { get; set; }
+        public bool IsRunning { get; set; }
+        public List<string> LoadedModels { get; set; } = new List<string>();
     }
 
     public class CreateAiServerDto : CreateGuidDtoBase

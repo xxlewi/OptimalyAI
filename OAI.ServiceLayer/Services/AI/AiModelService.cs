@@ -6,6 +6,7 @@ using OAI.ServiceLayer.Services.AI.Models;
 using OAI.ServiceLayer.Interfaces;
 using System.Text.Json;
 using System.Net.Http;
+using System.IO;
 
 namespace OAI.ServiceLayer.Services.AI;
 
@@ -67,12 +68,18 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
             if (server.ServerType == AiServerType.Ollama)
             {
                 var models = await GetOllamaModels(server.BaseUrl);
-                onlineModels = models.Select(m => (m.Name, m.Size, m.Tag, m.ModifiedAt)).ToList();
+                onlineModels = models.Select(m => {
+                    // Extract tag from name (e.g., "llama2:7b" -> tag is "7b")
+                    var parts = m.Name.Split(':');
+                    var tag = parts.Length > 1 ? parts[1] : "latest";
+                    return (m.Name, m.Size, tag, m.ModifiedAt);
+                }).ToList();
             }
             else if (server.ServerType == AiServerType.LMStudio)
             {
-                var models = await GetLMStudioModels(server.BaseUrl);
-                onlineModels = models.Select(m => (m.Name, m.Size, m.Tag, m.ModifiedAt)).ToList();
+                // For LM Studio, we only check local files
+                var localModels = await GetLMStudioLocalModels();
+                onlineModels = localModels.Select(m => (m.Name, m.Size, m.Tag ?? "latest", m.ModifiedAt)).ToList();
             }
 
             // Get existing models from database
@@ -84,20 +91,50 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
             {
                 if (!dbModelNames.Contains(name))
                 {
+                    // Find the corresponding model with full info
+                    OllamaModelInfo? modelInfo = null;
+                    
+                    if (server.ServerType == AiServerType.Ollama)
+                    {
+                        modelInfo = (await GetOllamaModels(server.BaseUrl)).FirstOrDefault(m => m.Name == name);
+                    }
+                    else if (server.ServerType == AiServerType.LMStudio)
+                    {
+                        modelInfo = (await GetLMStudioLocalModels()).FirstOrDefault(m => m.Name == name);
+                    }
+                    
                     var model = new AiModel
                     {
                         Name = name,
                         DisplayName = FormatModelName(name),
                         SizeBytes = size,
-                        Tag = tag,
-                        UpdatedAt = modified,
+                        Tag = tag ?? "latest",
+                        UpdatedAt = modified.ToUniversalTime(),
                         AiServerId = serverId,
                         IsAvailable = true,
-                        FilePath = GetModelPath(server, name)
+                        FilePath = modelInfo?.FilePath ?? GetModelPath(server, name)
                     };
 
-                    // Extract model info from name
-                    ExtractModelInfo(model);
+                    // For Ollama models, use details from API
+                    if (server.ServerType == AiServerType.Ollama && modelInfo?.Details != null)
+                    {
+                        model.Family = modelInfo.Details.Family;
+                        model.ParameterSize = modelInfo.Details.ParameterSize;
+                        model.QuantizationLevel = modelInfo.Details.QuantizationLevel;
+                    }
+                    // For LM Studio models, use extracted info
+                    else if (server.ServerType == AiServerType.LMStudio && modelInfo != null)
+                    {
+                        model.Family = modelInfo.Family;
+                        model.ParameterSize = modelInfo.ParameterSize;
+                        model.QuantizationLevel = modelInfo.QuantizationLevel;
+                    }
+                    
+                    // Extract model info from name if not already set
+                    if (string.IsNullOrEmpty(model.Family) || model.Family == "Unknown")
+                    {
+                        ExtractModelInfo(model);
+                    }
                     
                     await _repository.AddAsync(model);
                     _logger.LogInformation("Added new model {ModelName} from server {ServerName}", name, server.Name);
@@ -107,7 +144,7 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
                     // Update existing model
                     var dbModel = dbModels.First(m => m.Name == name);
                     dbModel.SizeBytes = size;
-                    dbModel.UpdatedAt = modified;
+                    dbModel.UpdatedAt = modified.ToUniversalTime();
                     dbModel.IsAvailable = true;
                     await UpdateAsync(dbModel);
                 }
@@ -133,87 +170,210 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
 
     private async Task<List<OllamaModelInfo>> GetOllamaModels(string baseUrl)
     {
-        using var httpClient = new HttpClient();
-        var response = await httpClient.GetAsync($"{baseUrl}/api/tags");
-        response.EnsureSuccessStatusCode();
-        
-        var json = await response.Content.ReadAsStringAsync();
-        var tagsResponse = JsonSerializer.Deserialize<OllamaTagsResponse>(json);
-        
-        return tagsResponse?.Models ?? new List<OllamaModelInfo>();
-    }
-
-    private async Task<List<OllamaModelInfo>> GetLMStudioModels(string baseUrl)
-    {
-        using var httpClient = new HttpClient();
-        var response = await httpClient.GetAsync($"{baseUrl}/v1/models");
-        response.EnsureSuccessStatusCode();
-        
-        var json = await response.Content.ReadAsStringAsync();
-        var modelsResponse = JsonSerializer.Deserialize<LMStudioModelsResponse>(json);
-        
         var models = new List<OllamaModelInfo>();
-        if (modelsResponse?.Data != null)
+        
+        try
         {
-            foreach (var model in modelsResponse.Data)
+            using var httpClient = new HttpClient();
+            var response = await httpClient.GetAsync($"{baseUrl}/api/tags");
+            response.EnsureSuccessStatusCode();
+            
+            var json = await response.Content.ReadAsStringAsync();
+            var tagsResponse = JsonSerializer.Deserialize<OllamaTagsResponse>(json);
+            
+            if (tagsResponse?.Models != null)
             {
-                models.Add(new OllamaModelInfo
-                {
-                    Name = model.Id,
-                    Tag = "latest",
-                    Size = 0,
-                    ModifiedAt = DateTimeOffset.FromUnixTimeSeconds(model.Created).DateTime
-                });
+                models.AddRange(tagsResponse.Models);
             }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get models from Ollama API");
         }
         
         return models;
     }
 
+
+    private async Task<List<OllamaModelInfo>> GetLMStudioLocalModels()
+    {
+        var models = new List<OllamaModelInfo>();
+        var lmStudioPath = Environment.ExpandEnvironmentVariables("~/.lmstudio/models/").Replace("~", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        
+        try
+        {
+            if (Directory.Exists(lmStudioPath))
+            {
+                // LM Studio stores models in subdirectories like:
+                // ~/.lmstudio/models/lmstudio-community/ModelName/
+                var vendorDirs = Directory.GetDirectories(lmStudioPath);
+                
+                foreach (var vendorDir in vendorDirs)
+                {
+                    var modelDirs = Directory.GetDirectories(vendorDir);
+                    var vendorName = Path.GetFileName(vendorDir);
+                    
+                    foreach (var modelDir in modelDirs)
+                    {
+                        var modelName = Path.GetFileName(modelDir);
+                        var dirInfo = new DirectoryInfo(modelDir);
+                        
+                        // Calculate total size of model directory
+                        long totalSize = 0;
+                        var files = dirInfo.GetFiles("*", SearchOption.AllDirectories);
+                        foreach (var file in files)
+                        {
+                            totalSize += file.Length;
+                        }
+                        
+                        // Create a simple name for the model
+                        var fullModelName = $"{vendorName}/{modelName}";
+                        
+                        models.Add(new OllamaModelInfo
+                        {
+                            Name = fullModelName,
+                            Tag = "latest",
+                            Size = totalSize,
+                            ModifiedAt = dirInfo.LastWriteTimeUtc,
+                            Family = ExtractFamilyFromPath(modelName),
+                            ParameterSize = ExtractSizeFromFileName(modelName),
+                            QuantizationLevel = ExtractQuantizationFromFileName(modelName),
+                            FilePath = modelDir
+                        });
+                        
+                        _logger.LogInformation("Found local LM Studio model: {ModelName} ({Size} bytes)", fullModelName, totalSize);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error scanning LM Studio local models directory");
+        }
+        
+        return await Task.FromResult(models);
+    }
+    
+    private string ExtractFamilyFromPath(string modelName)
+    {
+        modelName = modelName.ToLower();
+        if (modelName.Contains("llama")) return "Llama";
+        if (modelName.Contains("mistral")) return "Mistral";
+        if (modelName.Contains("gemma")) return "Gemma";
+        if (modelName.Contains("phi")) return "Phi";
+        if (modelName.Contains("qwen")) return "Qwen";
+        if (modelName.Contains("deepseek")) return "DeepSeek";
+        if (modelName.Contains("codellama")) return "CodeLlama";
+        return "Unknown";
+    }
+    
+    private string ExtractSizeFromFileName(string fileName)
+    {
+        // Try different patterns for size: 0.5B, 3B, 14B, 32B, etc.
+        var patterns = new[] {
+            @"(\d+(?:\.\d+)?)[Bb](?!\w)",  // 3B, 14B, 32B (not followed by word char)
+            @"-(\d+(?:\.\d+)?)[Bb]-",       // -14B-
+            @"(\d+(?:\.\d+)?)[Bb](?=[-_])" // 14B- or 14B_
+        };
+        
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(fileName, pattern);
+            if (match.Success)
+            {
+                return match.Groups[1].Value + "B";
+            }
+        }
+        return "Unknown";
+    }
+    
+    private string ExtractQuantizationFromFileName(string fileName)
+    {
+        // Try different quantization patterns
+        var patterns = new[] {
+            @"-(\d+)bit",                   // -4bit, -8bit (most common)
+            @"MLX-(\d+)bit",                // MLX-4bit
+            @"(\d+)bit",                    // 4bit, 8bit
+            @"[qQ](\d+_[KM]_[MS])",         // Q4_K_M
+            @"[qQ](\d+_\d+)",               // Q4_0
+            @"[qQ](\d+)",                   // Q4
+            @"qat-(\d+)bit"                 // qat-4bit
+        };
+        
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(fileName, pattern);
+            if (match.Success)
+            {
+                var quant = match.Groups[1].Value;
+                // Format consistently
+                if (quant.Contains("bit"))
+                {
+                    return quant;
+                }
+                else if (System.Text.RegularExpressions.Regex.IsMatch(quant, @"^\d+$"))
+                {
+                    return quant + "bit";
+                }
+                else
+                {
+                    return "Q" + quant.Replace("_", ".");
+                }
+            }
+        }
+        return "Unknown";
+    }
+
     private string GetModelPath(AiServer server, string modelName)
     {
         // Ollama models are typically stored in ~/.ollama/models
-        // LM Studio models in ~/Library/Application Support/LM Studio/models
+        // LM Studio models in ~/.lmstudio/hub/models/
         return server.ServerType switch
         {
             AiServerType.Ollama => $"~/.ollama/models/{modelName}",
-            AiServerType.LMStudio => $"~/Library/Application Support/LM Studio/models/{modelName}",
+            AiServerType.LMStudio => $"~/.lmstudio/hub/models/{modelName}",
             _ => modelName
         };
     }
 
     private void ExtractModelInfo(AiModel model)
     {
-        // Extract info from model name (e.g., "llama2:7b-chat-q4_0")
+        // Extract info from model name (e.g., "llama2:7b-chat-q4_0" or "gemma2:2b")
         var parts = model.Name.Split(':');
         if (parts.Length > 0)
         {
-            var baseName = parts[0];
+            var baseName = parts[0].ToLower();
             
             // Extract family
             if (baseName.Contains("llama")) model.Family = "Llama";
             else if (baseName.Contains("mistral")) model.Family = "Mistral";
             else if (baseName.Contains("gemma")) model.Family = "Gemma";
             else if (baseName.Contains("phi")) model.Family = "Phi";
-            else if (baseName.Contains("qwen")) model.Family = "Qwen";
+            else if (baseName.Contains("qwen") || baseName.Contains("qwq")) model.Family = "Qwen";
+            else if (baseName.Contains("deepseek")) model.Family = "DeepSeek";
+            else if (baseName.Contains("codellama")) model.Family = "CodeLlama";
             
             if (parts.Length > 1)
             {
                 var variant = parts[1];
                 
-                // Extract parameter size
-                var sizeMatch = System.Text.RegularExpressions.Regex.Match(variant, @"(\d+(?:\.\d+)?)[bB]");
-                if (sizeMatch.Success)
+                // Extract parameter size using the improved method
+                if (string.IsNullOrEmpty(model.ParameterSize) || model.ParameterSize == "Unknown")
                 {
-                    model.ParameterSize = sizeMatch.Groups[1].Value + "B";
+                    model.ParameterSize = ExtractSizeFromFileName(variant);
                 }
                 
-                // Extract quantization
-                var quantMatch = System.Text.RegularExpressions.Regex.Match(variant, @"[qQ](\d+_\d+|\d+)");
-                if (quantMatch.Success)
+                // Extract quantization using the improved method
+                if (string.IsNullOrEmpty(model.QuantizationLevel) || model.QuantizationLevel == "Unknown")
                 {
-                    model.QuantizationLevel = "Q" + quantMatch.Groups[1].Value.Replace("_", ".");
+                    model.QuantizationLevel = ExtractQuantizationFromFileName(variant);
                 }
+            }
+            
+            // Also try to extract from base name if not found in variant
+            if ((string.IsNullOrEmpty(model.ParameterSize) || model.ParameterSize == "Unknown") && parts.Length == 1)
+            {
+                model.ParameterSize = ExtractSizeFromFileName(baseName);
             }
         }
     }

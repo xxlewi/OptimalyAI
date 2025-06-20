@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -7,6 +11,7 @@ using OAI.Core.DTOs;
 using OAI.Core.Entities;
 using OAI.ServiceLayer.Services.AI;
 using OAI.ServiceLayer.Mapping.AI;
+using OAI.ServiceLayer.Services.AI.Models;
 
 namespace OptimalyAI.Controllers
 {
@@ -29,8 +34,68 @@ namespace OptimalyAI.Controllers
         public async Task<IActionResult> Index()
         {
             var servers = await _aiServerService.GetAllAsync();
-            var serverDtos = servers.Select(s => _mapper.ToDto(s));
+            var serverDtos = new List<AiServerDto>();
+            
+            foreach (var server in servers)
+            {
+                var dto = _mapper.ToDto(server);
+                dto.IsRunning = await _aiServerService.IsServerRunningAsync(server.Id);
+                
+                // Get loaded models if server is running and active
+                if (dto.IsRunning && server.IsActive)
+                {
+                    dto.LoadedModels = await GetLoadedModelsForServer(server);
+                }
+                
+                serverDtos.Add(dto);
+            }
+            
             return View(serverDtos);
+        }
+
+        private async Task<List<string>> GetLoadedModelsForServer(AiServer server)
+        {
+            var loadedModels = new List<string>();
+            
+            try
+            {
+                using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                
+                if (server.ServerType == AiServerType.Ollama)
+                {
+                    // Get loaded Ollama models
+                    var response = await httpClient.GetAsync($"{server.BaseUrl}/api/ps");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var psResponse = JsonSerializer.Deserialize<OllamaProcessResponse>(json);
+                        if (psResponse?.Models != null)
+                        {
+                            loadedModels.AddRange(psResponse.Models.Select(m => m.Name));
+                        }
+                    }
+                }
+                else if (server.ServerType == AiServerType.LMStudio)
+                {
+                    // Get loaded LM Studio models
+                    var response = await httpClient.GetAsync($"{server.BaseUrl}/v1/models");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var lmResponse = JsonSerializer.Deserialize<LMStudioModelsResponse>(json);
+                        if (lmResponse?.Data != null)
+                        {
+                            loadedModels.AddRange(lmResponse.Data.Select(m => m.Id));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get loaded models for server {ServerName}", server.Name);
+            }
+            
+            return loadedModels;
         }
 
         public IActionResult Create()
@@ -194,6 +259,79 @@ namespace OptimalyAI.Controllers
                 _logger.LogError(ex, "Error checking health for server {Id}", id);
                 return Json(new { success = false, error = ex.Message });
             }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> StartServer(Guid id)
+        {
+            try
+            {
+                var result = await _aiServerService.StartServerAsync(id);
+                return Json(new { success = result.success, message = result.message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error starting server {Id}", id);
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> StopServer(Guid id)
+        {
+            try
+            {
+                var result = await _aiServerService.StopServerAsync(id);
+                return Json(new { success = result.success, message = result.message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error stopping server {Id}", id);
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+        
+        // Response classes for API calls
+        private class OllamaProcessResponse
+        {
+            [JsonPropertyName("models")]
+            public List<OllamaRunningModel>? Models { get; set; }
+        }
+        
+        private class OllamaRunningModel
+        {
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = string.Empty;
+            
+            [JsonPropertyName("model")]
+            public string Model { get; set; } = string.Empty;
+            
+            [JsonPropertyName("size")]
+            public long Size { get; set; }
+            
+            [JsonPropertyName("digest")]
+            public string Digest { get; set; } = string.Empty;
+            
+            [JsonPropertyName("expires_at")]
+            public DateTime ExpiresAt { get; set; }
+        }
+        
+        private class LMStudioModelsResponse
+        {
+            [JsonPropertyName("data")]
+            public List<LMStudioModel>? Data { get; set; }
+        }
+        
+        private class LMStudioModel
+        {
+            [JsonPropertyName("id")]
+            public string Id { get; set; } = string.Empty;
+            
+            [JsonPropertyName("object")]
+            public string Object { get; set; } = string.Empty;
+            
+            [JsonPropertyName("owned_by")]
+            public string OwnedBy { get; set; } = string.Empty;
         }
     }
 }

@@ -8,6 +8,8 @@ using OptimalyAI.ViewModels;
 using System.Diagnostics;
 using OAI.Core.Interfaces.AI;
 using OAI.Core.DTOs;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace OptimalyAI.Controllers;
 
@@ -42,22 +44,94 @@ public class ModelsController : Controller
         {
             // Get all servers
             var servers = await _aiServerService.GetAllAsync();
+            var serverHealthStatus = new Dictionary<Guid, bool>();
             
-            // Sync models from active servers
-            foreach (var server in servers.Where(s => s.IsActive))
+            // Check server health and sync models only from online servers
+            foreach (var server in servers)
             {
-                try
+                bool isHealthy = false;
+                
+                if (server.IsActive)
                 {
-                    await _aiModelService.SyncModelsFromServerAsync(server.Id);
+                    try
+                    {
+                        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        var healthCheckUrl = server.ServerType == OAI.Core.Entities.AiServerType.Ollama 
+                            ? $"{server.BaseUrl}/api/tags" 
+                            : $"{server.BaseUrl}/v1/models";
+                        
+                        var response = await httpClient.GetAsync(healthCheckUrl);
+                        isHealthy = response.IsSuccessStatusCode;
+                        
+                        // Sync models only if server is healthy
+                        if (isHealthy)
+                        {
+                            await _aiModelService.SyncModelsFromServerAsync(server.Id);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Server {ServerName} is not accessible", server.Name);
+                        isHealthy = false;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to sync models from server {ServerName}", server.Name);
-                }
+                
+                serverHealthStatus[server.Id] = isHealthy;
             }
             
             // Get all models from database
             var models = await _aiModelService.GetAvailableModelsAsync();
+            
+            // Get loaded models only from online servers
+            var loadedOllamaModels = new HashSet<string>();
+            var loadedLMStudioModels = new HashSet<string>();
+            
+            foreach (var server in servers.Where(s => s.IsActive && serverHealthStatus.GetValueOrDefault(s.Id, false)))
+            {
+                try
+                {
+                    if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama)
+                    {
+                        // Get loaded Ollama models
+                        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        var response = await httpClient.GetAsync($"{server.BaseUrl}/api/ps");
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var json = await response.Content.ReadAsStringAsync();
+                            var psResponse = JsonSerializer.Deserialize<OllamaProcessResponse>(json);
+                            if (psResponse?.Models != null)
+                            {
+                                foreach (var model in psResponse.Models)
+                                {
+                                    loadedOllamaModels.Add(model.Name);
+                                }
+                            }
+                        }
+                    }
+                    else if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+                    {
+                        // Get loaded LM Studio models
+                        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        var response = await httpClient.GetAsync($"{server.BaseUrl}/v1/models");
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var json = await response.Content.ReadAsStringAsync();
+                            var lmResponse = JsonSerializer.Deserialize<LMStudioModelsResponse>(json);
+                            if (lmResponse?.Data != null)
+                            {
+                                foreach (var model in lmResponse.Data)
+                                {
+                                    loadedLMStudioModels.Add(model.Id);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get loaded models from server {ServerName}", server.Name);
+                }
+            }
             
             // Create view model
             var viewModel = new ModelsIndexViewModel
@@ -78,7 +152,10 @@ public class ModelsController : Controller
                     QuantizationLevel = m.QuantizationLevel ?? "Unknown",
                     ModifiedAt = m.UpdatedAt ?? m.CreatedAt,
                     IsDefault = m.IsDefault,
-                    IsLoaded = false, // TODO: Check if model is loaded
+                    IsLoaded = serverHealthStatus.GetValueOrDefault(m.AiServerId, false) && 
+                        (m.AiServer?.ServerType == OAI.Core.Entities.AiServerType.Ollama 
+                            ? loadedOllamaModels.Contains(m.Name)
+                            : loadedLMStudioModels.Contains(m.Name)),
                     FilePath = m.FilePath
                 }).ToList(),
                 Servers = servers.Select(s => new ServerStatusViewModel
@@ -88,7 +165,7 @@ public class ModelsController : Controller
                     ServerType = s.ServerType.ToString(),
                     BaseUrl = s.BaseUrl,
                     IsActive = s.IsActive,
-                    IsHealthy = s.IsActive, // TODO: Check actual health
+                    IsHealthy = serverHealthStatus.GetValueOrDefault(s.Id, false),
                     ModelCount = models.Count(m => m.AiServerId == s.Id)
                 }).ToList(),
                 TotalModels = models.Count(),
@@ -96,6 +173,9 @@ public class ModelsController : Controller
                 TotalServers = servers.Count(),
                 TotalSize = FormatFileSize(models.Sum(m => m.SizeBytes))
             };
+            
+            // Update loaded models count
+            ViewBag.LoadedModelsCount = viewModel.Models.Count(m => m.IsLoaded);
             
             return View(viewModel);
         }
@@ -237,8 +317,46 @@ public class ModelsController : Controller
     {
         try
         {
-            // Ollama doesn't have explicit unload, it's handled automatically
-            return Json(new { success = true, message = $"Model {model} bude automaticky uvolněn" });
+            // Find the server
+            var servers = await _aiServerService.GetAllAsync();
+            var aiServer = servers.FirstOrDefault(s => s.Name == server);
+            
+            if (aiServer == null)
+            {
+                return Json(new { success = false, error = $"Server {server} nenalezen" });
+            }
+            
+            if (aiServer.ServerType == OAI.Core.Entities.AiServerType.Ollama)
+            {
+                // Ollama unload model by setting keep_alive to 0
+                using var httpClient = new HttpClient();
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{aiServer.BaseUrl}/api/generate");
+                var content = new 
+                { 
+                    model = model,
+                    keep_alive = "0"
+                };
+                request.Content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(content),
+                    System.Text.Encoding.UTF8,
+                    "application/json"
+                );
+                
+                var response = await httpClient.SendAsync(request);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    return Json(new { success = false, error = $"Chyba při uvolňování modelu: {error}" });
+                }
+                
+                return Json(new { success = true, message = $"Model {model} byl úspěšně uvolněn z paměti" });
+            }
+            else
+            {
+                // LM Studio doesn't have unload endpoint
+                return Json(new { success = true, message = $"Model {model} bude automaticky uvolněn serverem" });
+            }
         }
         catch (Exception ex)
         {
@@ -281,6 +399,51 @@ public class ModelsController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting model");
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+    
+    [HttpPost]
+    public async Task<IActionResult> SyncModels()
+    {
+        try
+        {
+            var servers = await _aiServerService.GetAllAsync();
+            var syncResults = new List<object>();
+            
+            foreach (var server in servers.Where(s => s.IsActive))
+            {
+                try
+                {
+                    await _aiModelService.SyncModelsFromServerAsync(server.Id);
+                    syncResults.Add(new { 
+                        serverId = server.Id,
+                        serverName = server.Name, 
+                        success = true,
+                        message = $"Synchronizace serveru {server.Name} dokončena"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to sync models from server {ServerName}", server.Name);
+                    syncResults.Add(new { 
+                        serverId = server.Id,
+                        serverName = server.Name, 
+                        success = false,
+                        message = $"Chyba při synchronizaci serveru {server.Name}: {ex.Message}"
+                    });
+                }
+            }
+            
+            return Json(new { 
+                success = true, 
+                message = "Synchronizace dokončena",
+                results = syncResults
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during model synchronization");
             return Json(new { success = false, error = ex.Message });
         }
     }
@@ -353,5 +516,30 @@ public class ModelsController : Controller
             _logger.LogError(ex, "Error downloading model");
             return Json(new { success = false, error = ex.Message });
         }
+    }
+    
+    // Response classes for API calls
+    private class OllamaProcessResponse
+    {
+        [JsonPropertyName("models")]
+        public List<OllamaRunningModel>? Models { get; set; }
+    }
+    
+    private class OllamaRunningModel
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+        
+        [JsonPropertyName("model")]
+        public string Model { get; set; } = string.Empty;
+        
+        [JsonPropertyName("size")]
+        public long Size { get; set; }
+        
+        [JsonPropertyName("digest")]
+        public string Digest { get; set; } = string.Empty;
+        
+        [JsonPropertyName("expires_at")]
+        public DateTime ExpiresAt { get; set; }
     }
 }
