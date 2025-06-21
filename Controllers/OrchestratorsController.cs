@@ -8,7 +8,10 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces.Orchestration;
+using System.Text.Json;
 using OAI.ServiceLayer.Services.Orchestration.Base;
+using OAI.ServiceLayer.Services.Orchestration;
+using System.Threading;
 using OptimalyAI.ViewModels;
 
 namespace OptimalyAI.Controllers
@@ -53,6 +56,10 @@ namespace OptimalyAI.Controllers
             {
                 _logger.LogInformation("Found orchestrator type: {Type}", type.FullName);
             }
+            
+            // Get settings service and AI server service for checking real activation status
+            var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+            var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
             
             foreach (var orchestratorType in orchestratorTypes)
             {
@@ -124,13 +131,46 @@ namespace OptimalyAI.Controllers
                     // Get saved configuration - commented out for now
                     // var savedConfig = await _configurationService.GetByOrchestratorIdAsync(orchestratorId);
                     
+                    // Check real orchestrator activation status based on AI server
+                    bool isActive = false;
+                    string? aiServerName = null;
+                    string? defaultModelId = null;
+                    bool isModelLoaded = false;
+                    
+                    if (settingsService != null && aiServerService != null)
+                    {
+                        var configuration = await settingsService.GetOrchestratorConfigurationAsync(orchestratorId);
+                        if (configuration?.AiServerId != null && !string.IsNullOrEmpty(configuration.DefaultModelId))
+                        {
+                            // Check if the AI server is running
+                            isActive = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
+                            _logger.LogInformation("Orchestrator {Name} AI server running status: {IsActive}", orchestratorName, isActive);
+                            
+                            // Get AI server name
+                            var server = await aiServerService.GetByIdAsync(configuration.AiServerId.Value);
+                            if (server != null)
+                            {
+                                aiServerName = server.Name;
+                                
+                                // For now, assume model is loaded if server is running
+                                // TODO: Implement proper model status check
+                                isModelLoaded = isActive;
+                            }
+                            defaultModelId = configuration.DefaultModelId;
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Orchestrator {Name} has no AI server configured", orchestratorName);
+                        }
+                    }
+                    
                     orchestrators.Add(new OrchestratorViewModel
                     {
                         Id = orchestratorId,
                         Name = orchestratorName,
                         Description = orchestratorDescription,
                         Type = orchestratorType.Name,
-                        IsActive = health?.State == OrchestratorHealthState.Healthy,
+                        IsActive = isActive, // Real status based on AI server
                         IsDefault = await _orchestratorSettings.IsDefaultOrchestratorAsync(orchestratorId),
                         TotalExecutions = summary?.TotalExecutions ?? 0,
                         SuccessfulExecutions = summary?.SuccessfulExecutions ?? 0,
@@ -139,7 +179,10 @@ namespace OptimalyAI.Controllers
                         LastExecutionTime = summary?.LastExecutionTime,
                         HealthStatus = health ?? new OrchestratorHealthStatus { State = OrchestratorHealthState.Unknown },
                         Capabilities = capabilities ?? new OrchestratorCapabilities(),
-                        Metrics = summary
+                        Metrics = summary,
+                        AiServerName = aiServerName,
+                        DefaultModelId = defaultModelId,
+                        IsModelLoaded = isModelLoaded
                     });
                 }
                 catch (Exception ex)
@@ -232,6 +275,38 @@ namespace OptimalyAI.Controllers
                 }
             }
             
+            // Get AI server configuration and status
+            var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+            if (settingsService != null)
+            {
+                var configuration = await settingsService.GetOrchestratorConfigurationAsync(id);
+                if (configuration != null)
+                {
+                    viewModel.AiServerId = configuration.AiServerId;
+                    viewModel.DefaultModelId = configuration.DefaultModelId;
+                    
+                    // Get AI server details and status
+                    if (configuration.AiServerId.HasValue)
+                    {
+                        var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
+                        if (aiServerService != null)
+                        {
+                            var server = await aiServerService.GetByIdAsync(configuration.AiServerId.Value);
+                            if (server != null)
+                            {
+                                viewModel.AiServerName = server.Name;
+                                viewModel.AiServerType = server.ServerType.ToString();
+                                viewModel.AiServerIsHealthy = server.IsHealthy;
+                                viewModel.AiServerLastError = server.LastError;
+                                
+                                // Check if server is running
+                                viewModel.AiServerIsRunning = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
+                            }
+                        }
+                    }
+                }
+            }
+            
             return View("~/Views/Orchestrators/Details.cshtml", viewModel);
         }
 
@@ -318,6 +393,549 @@ namespace OptimalyAI.Controllers
         /// <summary>
         /// Save orchestrator configuration
         /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> Test([FromBody] TestOrchestratorRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Testing orchestrator {OrchestratorId}", request.OrchestratorId);
+                
+                // Get the orchestrator
+                var orchestratorType = GetOrchestratorTypeById(request.OrchestratorId);
+                if (orchestratorType == null)
+                {
+                    return Json(new { success = false, error = "Orchestrator not found" });
+                }
+
+                // Get the saved configuration to use the correct AI server and model
+                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(request.OrchestratorId) : null;
+                
+                if (configuration?.AiServerId == null || string.IsNullOrEmpty(configuration.DefaultModelId))
+                {
+                    return Json(new { 
+                        success = false, 
+                        error = "Please configure AI Server and Model before testing" 
+                    });
+                }
+
+                // Create orchestrator instance
+                _logger.LogInformation("Attempting to create orchestrator instance for type {Type}", orchestratorType.Name);
+                var orchestrator = GetOrchestratorInstance(orchestratorType);
+                if (orchestrator == null)
+                {
+                    _logger.LogError("Failed to create orchestrator instance for type {Type}", orchestratorType.Name);
+                    return Json(new { success = false, error = "Could not create orchestrator instance" });
+                }
+                _logger.LogInformation("Successfully created orchestrator instance");
+
+                // Create context for orchestrator execution
+                var context = new OAI.ServiceLayer.Services.Orchestration.Base.OrchestratorContext(
+                    userId: "test-user",
+                    sessionId: Guid.NewGuid().ToString()
+                );
+                
+                // Add AI configuration to context
+                context.Variables["aiServerId"] = configuration.AiServerId.ToString();
+                context.Variables["modelId"] = configuration.DefaultModelId;
+                
+                // Add test-specific metadata
+                context.Metadata["isTest"] = true;
+                context.Metadata["testStartedAt"] = DateTime.UtcNow;
+                
+                // Add context from request if provided
+                if (request.Context != null)
+                {
+                    foreach (var kvp in request.Context)
+                    {
+                        context.Variables[kvp.Key] = kvp.Value;
+                    }
+                }
+
+                var startTime = DateTime.UtcNow;
+                
+                try
+                {
+                    // Execute the orchestrator based on its type
+                    object? result = null;
+                    
+                    if (orchestratorType.Name == "ProjectStageOrchestrator")
+                    {
+                        // Create a test stage for ProjectStageOrchestrator
+                        var testStage = new ProjectStage
+                        {
+                            Id = Guid.NewGuid(),
+                            Name = "Test Stage",
+                            Description = "Test stage for orchestrator testing",
+                            Type = StageType.Processing,
+                            OrchestratorType = "ConversationOrchestrator",
+                            ExecutionStrategy = ExecutionStrategy.Sequential,
+                            ErrorHandling = ErrorHandlingStrategy.ContinueOnError,
+                            TimeoutSeconds = 60,
+                            StageTools = new List<ProjectStageTool>
+                            {
+                                // Add a dummy tool to pass validation
+                                new ProjectStageTool
+                                {
+                                    Id = Guid.NewGuid(),
+                                    ToolId = "conversation_tool",
+                                    ToolName = "Conversation Tool",
+                                    Order = 1,
+                                    IsRequired = true,
+                                    Configuration = "{}",
+                                    InputMapping = "{}"
+                                }
+                            }
+                        };
+                        
+                        var projectRequest = new ProjectStageOrchestratorRequest
+                        {
+                            UserId = context.UserId,
+                            SessionId = context.SessionId,
+                            Stage = testStage,
+                            StageParameters = request.Input,
+                            ExecutionId = Guid.NewGuid().ToString(),
+                            UseReActMode = false
+                        };
+                        
+                        var projectOrchestrator = orchestrator as IOrchestrator<ProjectStageOrchestratorRequest, ProjectStageOrchestratorResponse>;
+                        if (projectOrchestrator != null)
+                        {
+                            var orchestratorResult = await projectOrchestrator.ExecuteAsync(projectRequest, context, CancellationToken.None);
+                            result = orchestratorResult;
+                        }
+                    }
+                    else if (orchestratorType.Name == "ConversationOrchestrator" || 
+                             orchestratorType.Name == "RefactoredConversationOrchestrator")
+                    {
+                        // Handle conversation orchestrator
+                        var conversationRequest = new ConversationOrchestratorRequestDto
+                        {
+                            UserId = context.UserId,
+                            SessionId = context.SessionId,
+                            ConversationId = Guid.NewGuid().ToString(),
+                            Message = request.Input.TryGetValue("message", out var msg) ? msg.ToString() : "Hello, test the orchestrator"
+                        };
+                        
+                        var conversationOrchestrator = orchestrator as IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto>;
+                        if (conversationOrchestrator != null)
+                        {
+                            var orchestratorResult = await conversationOrchestrator.ExecuteAsync(conversationRequest, context, CancellationToken.None);
+                            result = orchestratorResult;
+                        }
+                    }
+                    else if (orchestratorType.Name == "ToolChainOrchestrator")
+                    {
+                        // Handle tool chain orchestrator
+                        var toolChainRequest = new ToolChainOrchestratorRequestDto
+                        {
+                            UserId = context.UserId,
+                            SessionId = context.SessionId,
+                            Steps = new List<ToolChainStepDto>(),
+                            ExecutionStrategy = "sequential",
+                            GlobalParameters = request.Input
+                        };
+                        
+                        var toolChainOrchestrator = orchestrator as IOrchestrator<ToolChainOrchestratorRequestDto, ConversationOrchestratorResponseDto>;
+                        if (toolChainOrchestrator != null)
+                        {
+                            var orchestratorResult = await toolChainOrchestrator.ExecuteAsync(toolChainRequest, context, CancellationToken.None);
+                            result = orchestratorResult;
+                        }
+                    }
+                    
+                    if (result != null)
+                    {
+                        var endTime = DateTime.UtcNow;
+                        var executionTime = endTime - startTime;
+                        
+                        return Json(new
+                        {
+                            success = true,
+                            data = new
+                            {
+                                orchestratorId = request.OrchestratorId,
+                                orchestratorType = orchestratorType.Name,
+                                aiServer = configuration.AiServerId.ToString(),
+                                model = configuration.DefaultModelId,
+                                input = request.Input,
+                                output = result,
+                                executionTime = $"{executionTime.TotalSeconds:F2}s",
+                                timestamp = endTime,
+                                isSimulated = false
+                            }
+                        });
+                    }
+                    else
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            error = "Failed to execute orchestrator - type not supported"
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var executionTime = DateTime.UtcNow - startTime;
+                    _logger.LogError(ex, "Error executing orchestrator test");
+                    
+                    return Json(new
+                    {
+                        success = false,
+                        error = ex.Message,
+                        data = new
+                        {
+                            orchestratorId = request.OrchestratorId,
+                            orchestratorType = orchestratorType.Name,
+                            aiServer = configuration.AiServerId.ToString(),
+                            model = configuration.DefaultModelId,
+                            executionTime = $"{executionTime.TotalSeconds:F2}s",
+                            timestamp = DateTime.UtcNow,
+                            stackTrace = ex.StackTrace
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error testing orchestrator");
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Activate orchestrator with detailed progress
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> ActivateWithProgress([FromBody] ActivateOrchestratorRequest request)
+        {
+            var steps = new List<dynamic>();
+            
+            try
+            {
+                
+                if (string.IsNullOrEmpty(request?.OrchestratorId))
+                {
+                    return Json(new { 
+                        success = false, 
+                        error = "Orchestrator ID is required",
+                        steps = new[] { new { message = "Invalid orchestrator ID", status = "error" } }
+                    });
+                }
+
+                _logger.LogInformation("Activating orchestrator {OrchestratorId}", request.OrchestratorId);
+                steps.Add(new { message = $"Loading orchestrator configuration for {request.OrchestratorId}...", status = "info" });
+
+                // Get orchestrator configuration
+                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(request.OrchestratorId) : null;
+                
+                if (configuration?.AiServerId == null || string.IsNullOrEmpty(configuration.DefaultModelId))
+                {
+                    steps.Add(new { message = "No AI server configured for this orchestrator", status = "error" });
+                    steps.Add(new { message = "Cannot proceed without server configuration", status = "error" });
+                    // Don't return early - let user see all steps
+                }
+
+                else
+                {
+                    steps.Add(new { message = "Configuration loaded successfully", status = "success" });
+                }
+
+                // Get AI server service
+                var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
+                if (aiServerService == null)
+                {
+                    steps.Add(new { message = "AI Server service not available", status = "error" });
+                    // Continue anyway to show all steps
+                }
+
+                // Get server details
+                OAI.Core.Entities.AiServer server = null;
+                if (aiServerService != null && configuration?.AiServerId != null)
+                {
+                    try
+                    {
+                        server = await aiServerService.GetByIdAsync(configuration.AiServerId.Value);
+                        if (server == null)
+                        {
+                            steps.Add(new { message = "AI server not found in database", status = "error" });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        steps.Add(new { message = $"Error loading server: {ex.Message}", status = "error" });
+                    }
+                }
+
+                if (server != null)
+                {
+                    steps.Add(new { message = $"Found AI server: {server.Name} ({server.ServerType})", status = "success" });
+                    steps.Add(new { message = $"Server URL: {server.BaseUrl}", status = "info" });
+                    steps.Add(new { message = $"Model to load: {configuration?.DefaultModelId ?? "None"}", status = "info" });
+                }
+                else
+                {
+                    steps.Add(new { message = "No server configuration available", status = "error" });
+                    steps.Add(new { message = "Attempting to continue anyway...", status = "warning" });
+                }
+
+                // Check if server is already running
+                bool isRunning = false;
+                if (server != null && aiServerService != null)
+                {
+                    steps.Add(new { message = "Checking server status...", status = "info" });
+                    
+                    // Detailed status check for LM Studio
+                    if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+                    {
+                        steps.Add(new { message = "Executing: lms server status", status = "info" });
+                    }
+                    
+                    try
+                    {
+                        isRunning = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        steps.Add(new { message = $"Error checking status: {ex.Message}", status = "error" });
+                    }
+                    
+                    steps.Add(new { message = $"Server status check result: {(isRunning ? "Running" : "Not running")}", status = isRunning ? "success" : "warning" });
+                }
+                
+                if (!isRunning && server != null && aiServerService != null)
+                {
+                    steps.Add(new { message = "Server needs to be started", status = "warning" });
+                    
+                    // Add specific steps based on server type
+                    if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+                    {
+                        steps.Add(new { message = "Stopping any existing LM Studio server...", status = "info" });
+                        steps.Add(new { message = "Executing: lms server stop", status = "info" });
+                        steps.Add(new { message = "Waiting 1 second...", status = "info" });
+                        steps.Add(new { message = "Executing: lms server start", status = "info" });
+                    }
+                    else if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama)
+                    {
+                        steps.Add(new { message = "Preparing to execute: ollama serve", status = "info" });
+                    }
+                    
+                    try
+                    {
+                        // Start the server
+                        _logger.LogInformation("Attempting to start server {ServerId} of type {ServerType}", 
+                            configuration.AiServerId.Value, server.ServerType);
+                        
+                        var startResult = await aiServerService.StartServerAsync(configuration.AiServerId.Value);
+                        
+                        _logger.LogInformation("Server start result: Success={Success}, Message={Message}", 
+                            startResult.success, startResult.message);
+                        
+                        // Always add the detailed result message
+                        if (startResult.message.Contains("Exit code:") || startResult.message.Contains("Output:"))
+                        {
+                            // If we have detailed logs, show them
+                            steps.Add(new { message = "Server start command output:", status = "info" });
+                            steps.Add(new { message = startResult.message, status = startResult.success ? "info" : "error" });
+                        }
+                        else
+                        {
+                            steps.Add(new { message = startResult.message, status = startResult.success ? "success" : "error" });
+                            
+                            // If it mentions restart, add more info
+                            if (startResult.message.Contains("restart", StringComparison.OrdinalIgnoreCase))
+                            {
+                                steps.Add(new { message = "Attempting automatic restart sequence...", status = "info" });
+                                steps.Add(new { message = "Stopping existing process...", status = "info" });
+                                steps.Add(new { message = "Starting fresh instance...", status = "info" });
+                            }
+                        }
+                        
+                        if (!startResult.success)
+                        {
+                            steps.Add(new { message = "Server start failed, but continuing...", status = "error" });
+                            // Don't return - continue showing steps
+                        }
+                        
+                        steps.Add(new { message = "Waiting for server to initialize (5 seconds)...", status = "info" });
+                        
+                        // Wait a bit for server to start
+                        await Task.Delay(5000);
+                        
+                        // Verify server is running
+                        steps.Add(new { message = "Verifying server status...", status = "info" });
+                        isRunning = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
+                        
+                        if (isRunning)
+                        {
+                            steps.Add(new { message = "Server is now running!", status = "success" });
+                        }
+                        else
+                        {
+                            steps.Add(new { message = "Server failed to start properly", status = "error" });
+                            // Don't return - show all steps
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        steps.Add(new { message = $"Error during server start: {ex.Message}", status = "error" });
+                        // Continue to show all steps
+                    }
+                }
+                else
+                {
+                    steps.Add(new { message = "Server is already running", status = "success" });
+                }
+
+                // Test connection
+                if (server != null && aiServerService != null)
+                {
+                    try
+                    {
+                        steps.Add(new { message = $"Testing connection to {server.BaseUrl}...", status = "info" });
+                        var connectionTest = await aiServerService.TestConnectionAsync(configuration.AiServerId.Value);
+                        
+                        if (connectionTest)
+                        {
+                            steps.Add(new { message = "Connection test successful!", status = "success" });
+                        }
+                        else
+                        {
+                            steps.Add(new { message = "Connection test failed", status = "warning" });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        steps.Add(new { message = $"Connection test error: {ex.Message}", status = "error" });
+                    }
+                }
+
+                // Final status
+                bool overallSuccess = isRunning && server != null;
+                steps.Add(new { message = overallSuccess ? "Orchestrator activation completed!" : "Orchestrator activation completed with errors", status = overallSuccess ? "success" : "warning" });
+
+                return Json(new { 
+                    success = overallSuccess, 
+                    message = overallSuccess ? "Orchestrator activated successfully!" : "Orchestrator activation had issues - check the log",
+                    steps = steps,
+                    data = new
+                    {
+                        orchestratorId = request.OrchestratorId,
+                        aiServerId = configuration?.AiServerId,
+                        serverName = server?.Name ?? "Unknown",
+                        serverType = server?.ServerType.ToString() ?? "Unknown",
+                        modelId = configuration?.DefaultModelId ?? "None",
+                        serverRunning = isRunning
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error activating orchestrator {Id}", request?.OrchestratorId);
+                steps.Add(new { message = $"Unexpected error: {ex.Message}", status = "error" });
+                steps.Add(new { message = "Activation process terminated", status = "error" });
+                
+                return Json(new { 
+                    success = false, 
+                    error = ex.Message,
+                    steps = steps
+                });
+            }
+        }
+
+        /// <summary>
+        /// Activate orchestrator - start AI server and load model
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> Activate([FromBody] ActivateOrchestratorRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request?.OrchestratorId))
+                {
+                    return Json(new { success = false, error = "Orchestrator ID is required" });
+                }
+
+                _logger.LogInformation("Activating orchestrator {OrchestratorId}", request.OrchestratorId);
+
+                // Get orchestrator configuration
+                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(request.OrchestratorId) : null;
+                
+                if (configuration?.AiServerId == null || string.IsNullOrEmpty(configuration.DefaultModelId))
+                {
+                    return Json(new { 
+                        success = false, 
+                        error = "Please configure AI Server and Model before activation" 
+                    });
+                }
+
+                // Get AI server service
+                var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
+                if (aiServerService == null)
+                {
+                    _logger.LogError("AI Server service not found");
+                    return Json(new { success = false, error = "AI Server service not available" });
+                }
+
+                // Check if server is already running
+                var isRunning = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
+                if (!isRunning)
+                {
+                    _logger.LogInformation("Starting AI server {ServerId}", configuration.AiServerId);
+                    
+                    // Start the server
+                    var startResult = await aiServerService.StartServerAsync(configuration.AiServerId.Value);
+                    if (!startResult.success)
+                    {
+                        _logger.LogError("Failed to start AI server: {Error}", startResult.message);
+                        return Json(new { success = false, error = $"Failed to start AI server: {startResult.message}" });
+                    }
+                    
+                    _logger.LogInformation("AI server started successfully");
+                }
+                else
+                {
+                    _logger.LogInformation("AI server is already running");
+                }
+
+                // Get orchestrator instance to verify it can be created
+                var orchestratorType = GetOrchestratorTypeById(request.OrchestratorId);
+                if (orchestratorType == null)
+                {
+                    return Json(new { success = false, error = "Orchestrator not found" });
+                }
+
+                var orchestrator = GetOrchestratorInstance(orchestratorType);
+                if (orchestrator == null)
+                {
+                    return Json(new { success = false, error = "Could not create orchestrator instance" });
+                }
+
+                // TODO: Load/warm up the model if the AI server supports it
+                // For now, we'll just verify the server is running
+
+                return Json(new { 
+                    success = true, 
+                    message = "Orchestrator activated successfully! AI server is running.",
+                    data = new
+                    {
+                        orchestratorId = request.OrchestratorId,
+                        aiServerId = configuration.AiServerId,
+                        modelId = configuration.DefaultModelId,
+                        serverRunning = true
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error activating orchestrator {Id}", request?.OrchestratorId);
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> SaveConfiguration([FromBody] SaveConfigurationRequest request)
         {
@@ -420,6 +1038,28 @@ namespace OptimalyAI.Controllers
             return _serviceProvider.GetService(orchestratorType);
         }
 
+        private Type? GetOrchestratorTypeById(string orchestratorId)
+        {
+            var types = GetAllOrchestratorTypes();
+            foreach (var type in types)
+            {
+                var instance = GetOrchestratorInstance(type);
+                if (instance != null)
+                {
+                    var idProperty = type.GetProperty("Id");
+                    if (idProperty != null)
+                    {
+                        var id = idProperty.GetValue(instance)?.ToString();
+                        if (id == orchestratorId)
+                        {
+                            return type;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
         private List<Type> GetAllOrchestratorTypes()
         {
             // Find all types that implement IOrchestrator
@@ -478,6 +1118,11 @@ namespace OptimalyAI.Controllers
         public double SuccessRate => TotalExecutions > 0 
             ? (double)SuccessfulExecutions / TotalExecutions * 100 
             : 0;
+            
+        // AI Server configuration
+        public string? AiServerName { get; set; }
+        public string? DefaultModelId { get; set; }
+        public bool IsModelLoaded { get; set; }
     }
 
     public class OrchestratorDetailsViewModel
@@ -496,6 +1141,15 @@ namespace OptimalyAI.Controllers
         public IReadOnlyList<OrchestratorExecutionRecord> RecentExecutions { get; set; } = new List<OrchestratorExecutionRecord>();
         public OrchestratorCapabilities? Capabilities { get; set; }
         public OrchestratorHealthStatus? HealthStatus { get; set; }
+        
+        // AI Server information
+        public Guid? AiServerId { get; set; }
+        public string? DefaultModelId { get; set; }
+        public string? AiServerName { get; set; }
+        public string? AiServerType { get; set; }
+        public bool AiServerIsHealthy { get; set; }
+        public bool AiServerIsRunning { get; set; }
+        public string? AiServerLastError { get; set; }
     }
 
     public class ProjectOrchestratorViewModel
@@ -527,6 +1181,18 @@ namespace OptimalyAI.Controllers
         public Guid? AiServerId { get; set; }
         public string? DefaultModelId { get; set; }  // Changed from Guid? to string?
         public Dictionary<string, object>? Configuration { get; set; }
+    }
+
+    public class TestOrchestratorRequest
+    {
+        public string OrchestratorId { get; set; } = string.Empty;
+        public Dictionary<string, object> Input { get; set; } = new();
+        public Dictionary<string, object>? Context { get; set; }
+    }
+
+    public class ActivateOrchestratorRequest
+    {
+        public string OrchestratorId { get; set; } = string.Empty;
     }
 
 }

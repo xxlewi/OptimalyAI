@@ -3,6 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Interfaces.Orchestration;
+using OAI.Core.Interfaces.AI;
+using Microsoft.Extensions.DependencyInjection;
+using System.Linq;
+using System.Net.Http;
+using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.ServiceLayer.Services.AI;
+using OAI.Core.Entities;
 
 namespace OAI.ServiceLayer.Services.Orchestration.Base
 {
@@ -15,6 +22,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Base
     {
         protected readonly ILogger<BaseOrchestrator<TRequest, TResponse>> _logger;
         protected readonly IOrchestratorMetrics _metrics;
+        protected readonly IServiceProvider _serviceProvider;
 
         public abstract string Id { get; }
         public abstract string Name { get; }
@@ -23,10 +31,12 @@ namespace OAI.ServiceLayer.Services.Orchestration.Base
 
         protected BaseOrchestrator(
             ILogger<BaseOrchestrator<TRequest, TResponse>> logger,
-            IOrchestratorMetrics metrics)
+            IOrchestratorMetrics metrics,
+            IServiceProvider serviceProvider = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<IOrchestratorResult<TResponse>> ExecuteAsync(
@@ -62,6 +72,9 @@ namespace OAI.ServiceLayer.Services.Orchestration.Base
                         validationResult.Errors);
                 }
 
+                // Ensure AI server and model are ready if configured
+                await EnsureAiServerAndModelReadyAsync(context, cancellationToken);
+                
                 // Execute the orchestration logic
                 var response = await ExecuteCoreAsync(request, context, result, cancellationToken);
                 
@@ -167,21 +180,230 @@ namespace OAI.ServiceLayer.Services.Orchestration.Base
         /// <summary>
         /// Override to implement custom health checks
         /// </summary>
-        protected virtual Task<OrchestratorHealthStatus> CheckHealthAsync()
+        protected virtual async Task<OrchestratorHealthStatus> CheckHealthAsync()
         {
-            return Task.FromResult(new OrchestratorHealthStatus
+            var details = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["enabled"] = IsEnabled
+            };
+
+            // Check AI server health if configured
+            if (_serviceProvider != null)
+            {
+                var settingsService = _serviceProvider.GetService<IOrchestratorSettings>() as OrchestratorSettingsService;
+                var aiServerService = _serviceProvider.GetService<IAiServerService>();
+                
+                if (settingsService != null && aiServerService != null)
+                {
+                    var configuration = await settingsService.GetOrchestratorConfigurationAsync(Id);
+                    if (configuration?.AiServerId != null)
+                    {
+                        details["aiServerId"] = configuration.AiServerId;
+                        details["modelId"] = configuration.DefaultModelId ?? "none";
+                        
+                        var isRunning = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
+                        details["aiServerRunning"] = isRunning;
+                        
+                        if (!isRunning)
+                        {
+                            return new OrchestratorHealthStatus
+                            {
+                                State = OrchestratorHealthState.Unhealthy,
+                                Message = "AI server is not running",
+                                LastChecked = DateTime.UtcNow,
+                                Details = details
+                            };
+                        }
+                    }
+                    else
+                    {
+                        details["aiServerConfigured"] = false;
+                    }
+                }
+            }
+
+            return new OrchestratorHealthStatus
             {
                 State = OrchestratorHealthState.Healthy,
                 Message = "Orchestrator is healthy",
                 LastChecked = DateTime.UtcNow,
-                Details = new System.Collections.Generic.Dictionary<string, object>
-                {
-                    ["enabled"] = IsEnabled
-                }
-            });
+                Details = details
+            };
         }
 
         public abstract OrchestratorCapabilities GetCapabilities();
+        
+        /// <summary>
+        /// Ensures the AI server is running and model is loaded before orchestration
+        /// </summary>
+        protected async Task EnsureAiServerAndModelReadyAsync(IOrchestratorContext context, CancellationToken cancellationToken)
+        {
+            if (_serviceProvider == null)
+            {
+                _logger.LogDebug("Service provider not available, skipping AI server check");
+                return;
+            }
+
+            // Check if AI server and model are configured in context
+            if (!context.Variables.TryGetValue("aiServerId", out var aiServerIdObj) || 
+                !context.Variables.TryGetValue("modelId", out var modelIdObj))
+            {
+                _logger.LogDebug("AI server or model not configured in context, skipping check");
+                return;
+            }
+
+            var aiServerId = aiServerIdObj?.ToString();
+            var modelId = modelIdObj?.ToString();
+
+            if (string.IsNullOrEmpty(aiServerId) || string.IsNullOrEmpty(modelId))
+            {
+                _logger.LogDebug("AI server or model ID is empty, skipping check");
+                return;
+            }
+
+            try
+            {
+                // Get AI server service
+                var aiServerService = _serviceProvider.GetService<IAiServerService>();
+                if (aiServerService == null)
+                {
+                    _logger.LogWarning("IAiServerService not available, cannot check server status");
+                    return;
+                }
+
+                // Parse server ID
+                if (!Guid.TryParse(aiServerId, out var serverGuid))
+                {
+                    _logger.LogWarning("Invalid AI server ID format: {ServerId}", aiServerId);
+                    return;
+                }
+
+                // Get server details
+                var server = await aiServerService.GetByIdAsync(serverGuid);
+                if (server == null)
+                {
+                    _logger.LogWarning("AI server not found: {ServerId}", serverGuid);
+                    return;
+                }
+
+                _logger.LogInformation("Checking AI server {ServerName} ({ServerType}) status", server.Name, server.ServerType);
+                context.AddBreadcrumb($"Checking AI server: {server.Name}");
+
+                // Check if server is running
+                var isRunning = await aiServerService.IsServerRunningAsync(serverGuid);
+                
+                if (!isRunning)
+                {
+                    _logger.LogInformation("AI server {ServerName} is not running, attempting to start", server.Name);
+                    context.AddBreadcrumb($"Starting AI server: {server.Name}");
+                    
+                    // Try to start the server
+                    var startResult = await aiServerService.StartServerAsync(serverGuid);
+                    if (!startResult.success)
+                    {
+                        var errorMessage = $"Failed to start AI server '{server.Name}': {startResult.message}";
+                        _logger.LogError(errorMessage);
+                        context.AddBreadcrumb($"Failed to start AI server: {server.Name}");
+                        
+                        // For local servers (Ollama, LM Studio), throw exception if can't start
+                        if (server.ServerType == AiServerType.Ollama || server.ServerType == AiServerType.LMStudio)
+                        {
+                            throw new InvalidOperationException(errorMessage);
+                        }
+                        // For remote servers, log warning but continue
+                        _logger.LogWarning("Continuing despite server start failure - server may be remote");
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Successfully started AI server {ServerName}", server.Name);
+                        context.AddBreadcrumb($"Started AI server: {server.Name}");
+                        
+                        // Give server time to fully start
+                        await Task.Delay(2000, cancellationToken);
+                        
+                        // Verify server is actually running after start
+                        isRunning = await aiServerService.IsServerRunningAsync(serverGuid);
+                        if (!isRunning)
+                        {
+                            throw new InvalidOperationException($"AI server '{server.Name}' failed to start properly");
+                        }
+                    }
+                }
+
+                // Server-specific initialization based on type
+                switch (server.ServerType)
+                {
+                    case AiServerType.Ollama:
+                        // For Ollama servers, check if model needs to be warmed up
+                        var ollamaService = _serviceProvider.GetService<IWebOllamaService>();
+                        if (ollamaService != null)
+                        {
+                            try
+                            {
+                                _logger.LogInformation("Checking if Ollama model {ModelId} is loaded", modelId);
+                                context.AddBreadcrumb($"Checking Ollama model: {modelId}");
+
+                                // Get running models
+                                var runningModels = await ollamaService.GetRunningModelsAsync();
+                                var isModelLoaded = runningModels?.Any(m => m.Name == modelId || m.Model == modelId) ?? false;
+
+                                if (!isModelLoaded)
+                                {
+                                    _logger.LogInformation("Ollama model {ModelId} is not loaded, warming up", modelId);
+                                    context.AddBreadcrumb($"Warming up Ollama model: {modelId}");
+                                    
+                                    // Warm up the model
+                                    await ollamaService.WarmupModelAsync(modelId);
+                                    
+                                    _logger.LogInformation("Successfully warmed up Ollama model {ModelId}", modelId);
+                                    context.AddBreadcrumb($"Ollama model ready: {modelId}");
+                                }
+                                else
+                                {
+                                    _logger.LogInformation("Ollama model {ModelId} is already loaded", modelId);
+                                }
+                            }
+                            catch (HttpRequestException httpEx)
+                            {
+                                // Network error - server is likely not accessible
+                                var errorMessage = $"Cannot connect to Ollama server: {httpEx.Message}";
+                                _logger.LogError(httpEx, errorMessage);
+                                throw new InvalidOperationException(errorMessage, httpEx);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to check/warmup Ollama model {ModelId}", modelId);
+                                // Non-critical error - log but continue
+                            }
+                        }
+                        break;
+                        
+                    case AiServerType.LMStudio:
+                        // LM Studio specific initialization if needed
+                        _logger.LogInformation("LM Studio server {ServerName} ready", server.Name);
+                        context.AddBreadcrumb($"LM Studio server ready: {server.Name}");
+                        break;
+                        
+                    case AiServerType.OpenAI:
+                        // OpenAI doesn't need model warmup
+                        _logger.LogInformation("OpenAI server {ServerName} ready", server.Name);
+                        context.AddBreadcrumb($"OpenAI server ready: {server.Name}");
+                        break;
+                        
+                    default:
+                        _logger.LogInformation("Custom server {ServerName} ready", server.Name);
+                        context.AddBreadcrumb($"Custom server ready: {server.Name}");
+                        break;
+                }
+
+                context.AddBreadcrumb("AI server and model ready");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ensuring AI server and model ready");
+                // Don't fail the orchestration - continue with best effort
+            }
+        }
 
         /// <summary>
         /// Calculate performance metrics from the result

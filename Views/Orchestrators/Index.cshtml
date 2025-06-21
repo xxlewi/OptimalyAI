@@ -79,6 +79,27 @@
             background-color: #495057;
             color: #e9ecef;
         }
+        
+        .server-status-indicator {
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+        
+        .server-status-indicator.active {
+            animation: pulse-success 2s infinite;
+        }
+        
+        @@keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        @@keyframes pulse-success {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
     </style>
 }
 
@@ -151,7 +172,7 @@
             @foreach (var orchestrator in Model)
             {
                 <div class="col-lg-6 col-xl-4 mb-4">
-                    <div class="card orchestrator-card @(orchestrator.IsActive ? "active" : "inactive") h-100" style="cursor: pointer;" onclick="viewDetail('@orchestrator.Id')">
+                    <div class="card orchestrator-card @(orchestrator.IsActive ? "active" : "inactive") h-100">
                         <div class="card-header">
                             <h3 class="card-title">
                                 <i class="fas fa-robot mr-2"></i>@orchestrator.Name
@@ -171,6 +192,46 @@
                         </div>
                         <div class="card-body">
                             <p class="text-muted mb-3">@orchestrator.Description</p>
+                            
+                            @if (!string.IsNullOrEmpty(orchestrator.AiServerName) && !string.IsNullOrEmpty(orchestrator.DefaultModelId))
+                            {
+                                <div class="mb-3">
+                                    <small class="text-muted">
+                                        @if (orchestrator.IsActive)
+                                        {
+                                            <i class="fas fa-circle text-success mr-1 server-status-indicator active" title="Server is running"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="fas fa-circle text-danger mr-1 server-status-indicator" title="Server is not running"></i>
+                                        }
+                                        <i class="fas fa-server mr-1"></i> @orchestrator.AiServerName
+                                        <span class="mx-2">|</span>
+                                        @if (orchestrator.IsActive && orchestrator.IsModelLoaded)
+                                        {
+                                            <i class="fas fa-circle text-success mr-1 server-status-indicator active" title="Model is loaded"></i>
+                                        }
+                                        else if (orchestrator.IsActive && !orchestrator.IsModelLoaded)
+                                        {
+                                            <i class="fas fa-circle text-warning mr-1 server-status-indicator" title="Model not loaded"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="fas fa-circle text-secondary mr-1" title="Server offline"></i>
+                                        }
+                                        <i class="fas fa-brain mr-1"></i> @orchestrator.DefaultModelId
+                                    </small>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="mb-3">
+                                    <small class="text-warning">
+                                        <i class="fas fa-circle text-warning mr-1"></i>
+                                        <i class="fas fa-exclamation-triangle mr-1"></i> No AI server configured
+                                    </small>
+                                </div>
+                            }
                             
                             <div class="row text-center mb-3">
                                 <div class="col-4">
@@ -230,6 +291,16 @@
                                     }
                                 </div>
                             }
+                        </div>
+                        <div class="card-footer">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); activateOrchestrator('@orchestrator.Id');">
+                                    <i class="fas fa-play mr-1"></i> Activate
+                                </button>
+                                <button type="button" class="btn btn-sm btn-info" onclick="event.stopPropagation(); viewDetail('@orchestrator.Id');">
+                                    <i class="fas fa-info-circle mr-1"></i> Details
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -320,32 +391,215 @@
         
         let currentOrchestratorId = null;
         
+        // Function to copy log to clipboard
+        function copyActivationLog() {
+            const statusLog = document.querySelector('.status-log');
+            if (!statusLog) return;
+            
+            // Get all log entries
+            const logEntries = statusLog.querySelectorAll('.log-entry');
+            let logText = '';
+            
+            logEntries.forEach(entry => {
+                // Remove icon and get text
+                const text = entry.textContent.trim();
+                logText += text + '\n';
+            });
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(logText).then(() => {
+                toastr.success('Log copied to clipboard!');
+            }).catch(() => {
+                toastr.error('Failed to copy log');
+            });
+        }
+        
+        function activateOrchestrator(orchestratorId) {
+            if (!orchestratorId) {
+                toastr.error('Invalid orchestrator ID');
+                return;
+            }
+            
+            // Global references
+            let statusLog = null;
+            let progressBar = null;
+            let isCompleted = false;
+            
+            // Create dialog once
+            Swal.fire({
+                title: 'Activating Orchestrator',
+                html: `
+                    <div class="activation-progress">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="progress flex-grow-1" style="height: 25px; margin-right: 10px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="copyActivationLog()" title="Copy log to clipboard" style="min-width: 40px;">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        <div class="status-log" style="text-align: left; font-family: monospace; font-size: 0.9em; max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 15px; border-radius: 5px; border: 1px solid #dee2e6;">
+                            <div class="log-entry"><i class="fas fa-circle-notch fa-spin"></i> Initializing activation process...</div>
+                        </div>
+                        <div class="mt-3 text-center" style="display: none;" id="completion-buttons">
+                            <button class="btn btn-primary" onclick="location.reload()">OK</button>
+                        </div>
+                    </div>
+                `,
+                width: '700px',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                showCloseButton: false
+            });
+            
+            // Get references after dialog opens
+            setTimeout(() => {
+                statusLog = document.querySelector('.status-log');
+                progressBar = document.querySelector('.progress-bar');
+                
+                // Function to add log
+                function addLog(message, icon = 'fa-circle-notch fa-spin', color = '') {
+                    if (!statusLog) return;
+                    const entry = document.createElement('div');
+                    entry.className = 'log-entry mb-1';
+                    entry.style.color = color;
+                    entry.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
+                    statusLog.appendChild(entry);
+                    statusLog.scrollTop = statusLog.scrollHeight;
+                }
+                
+                // Function to update progress
+                function setProgress(percent) {
+                    if (progressBar) {
+                        progressBar.style.width = percent + '%';
+                    }
+                }
+                
+                // Function to finish
+                function finishProcess(success) {
+                    if (!isCompleted) {
+                        isCompleted = true;
+                        addLog('');
+                        addLog('=== PROCESS COMPLETE ===', 'fa-flag-checkered', 'black');
+                        addLog('');
+                        addLog('Click OK to refresh the page', 'fa-info-circle', 'blue');
+                        
+                        // Show buttons
+                        const buttons = document.getElementById('completion-buttons');
+                        if (buttons) {
+                            buttons.style.display = 'block';
+                        }
+                    }
+                }
+                
+                // Start
+                setProgress(10);
+                addLog('Contacting server...');
+                
+                // AJAX call
+                $.ajax({
+                    url: '/Orchestrators/ActivateWithProgress',
+                    type: 'POST',
+                    data: JSON.stringify({ orchestratorId: orchestratorId }),
+                    contentType: 'application/json',
+                    success: function(response) {
+                        if (response.steps && response.steps.length > 0) {
+                            let currentStep = 0;
+                            const totalSteps = response.steps.length;
+                            
+                            function processNextStep() {
+                                if (currentStep < totalSteps) {
+                                    const step = response.steps[currentStep];
+                                    const progress = 10 + (currentStep / totalSteps) * 80;
+                                    setProgress(progress);
+                                    
+                                    let icon = 'fa-circle-notch fa-spin';
+                                    let color = '';
+                                    
+                                    if (step.status === 'success') {
+                                        icon = 'fa-check-circle';
+                                        color = 'green';
+                                    } else if (step.status === 'warning') {
+                                        icon = 'fa-exclamation-triangle';
+                                        color = 'orange';
+                                    } else if (step.status === 'error') {
+                                        icon = 'fa-times-circle';
+                                        color = 'red';
+                                    }
+                                    
+                                    addLog(step.message, icon, color);
+                                    
+                                    currentStep++;
+                                    setTimeout(processNextStep, 150);
+                                } else {
+                                    // Done
+                                    setProgress(100);
+                                    
+                                    if (response.success) {
+                                        addLog('');
+                                        addLog('SUCCESS!', 'fa-check-circle', 'green');
+                                        if (response.data) {
+                                            addLog(`Server: ${response.data.serverName}`, 'fa-server', 'blue');
+                                            addLog(`Model: ${response.data.modelId}`, 'fa-cube', 'blue');
+                                        }
+                                    } else {
+                                        addLog('');
+                                        addLog('FAILED!', 'fa-times-circle', 'red');
+                                    }
+                                    
+                                    finishProcess(response.success);
+                                }
+                            }
+                            
+                            processNextStep();
+                        } else {
+                            setProgress(100);
+                            if (response.success) {
+                                addLog('Server activated!', 'fa-check-circle', 'green');
+                            } else {
+                                addLog(`Error: ${response.error || 'Unknown'}`, 'fa-times-circle', 'red');
+                            }
+                            finishProcess(response.success);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        setProgress(100);
+                        addLog('Network error!', 'fa-times-circle', 'red');
+                        addLog(`Status: ${status}`, 'fa-exclamation-circle', 'red');
+                        addLog(`Error: ${error}`, 'fa-exclamation-circle', 'red');
+                        
+                        if (xhr.responseText) {
+                            try {
+                                const err = JSON.parse(xhr.responseText);
+                                if (err.error) {
+                                    addLog(`Details: ${err.error}`, 'fa-exclamation-circle', 'red');
+                                }
+                            } catch (e) {
+                                addLog(`Response: ${xhr.responseText.substring(0, 100)}...`, 'fa-exclamation-circle', 'red');
+                            }
+                        }
+                        
+                        finishProcess(false);
+                    }
+                });
+            }, 100);
+        }
+        
         function viewDetail(orchestratorId) {
             currentOrchestratorId = orchestratorId;
-            $('#detailModal').modal('show');
             
-            // Show config tab by default
-            $('#config-tab').tab('show');
+            // Reset modal
+            $('#detailModal .nav-link').removeClass('active');
+            $('#detailModal .tab-pane').removeClass('show active');
+            $('#config-tab').addClass('active');
+            $('#configContent').addClass('show active');
+            
+            // Load configuration tab by default
             loadConfigTab(orchestratorId);
             
-            // Setup tab change handlers
-            $('#config-tab').off('shown.bs.tab').on('shown.bs.tab', function() {
-                loadConfigTab(orchestratorId);
-                $('#saveConfigBtn').show();
-                $('#executeTestBtn').hide();
-            });
-            
-            $('#test-tab').off('shown.bs.tab').on('shown.bs.tab', function() {
-                loadTestTab(orchestratorId);
-                $('#saveConfigBtn').hide();
-                $('#executeTestBtn').show();
-            });
-            
-            $('#metrics-tab').off('shown.bs.tab').on('shown.bs.tab', function() {
-                loadMetricsTab(orchestratorId);
-                $('#saveConfigBtn').hide();
-                $('#executeTestBtn').hide();
-            });
+            // Show modal
+            $('#detailModal').modal('show');
         }
         
         function loadConfigTab(orchestratorId) {
@@ -965,7 +1219,7 @@
             const startTime = Date.now();
             
             try {
-                const response = await fetch('/api/orchestrators/execute', {
+                const response = await fetch('/Orchestrators/Test', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1022,6 +1276,23 @@
                 toastr.error('Failed to execute test: ' + error.message);
             }
         }
+        
+        // Tab switching handlers
+        $('#config-tab').on('click', function() {
+            loadConfigTab(currentOrchestratorId);
+        });
+        
+        $('#test-tab').on('click', function() {
+            $('#saveConfigBtn').hide();
+            $('#executeTestBtn').show();
+            loadTestTab(currentOrchestratorId);
+        });
+        
+        $('#metrics-tab').on('click', function() {
+            $('#saveConfigBtn').hide();
+            $('#executeTestBtn').hide();
+            loadMetricsTab(currentOrchestratorId);
+        });
         
         // Auto-refresh disabled - was causing page reload issues
     </script>

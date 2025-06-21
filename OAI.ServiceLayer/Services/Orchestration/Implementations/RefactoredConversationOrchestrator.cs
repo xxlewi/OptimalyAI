@@ -150,7 +150,13 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                     await ExecuteStandardModeAsync(request, response, context, cancellationToken);
                 }
 
-                // Update conversation history
+                // Check if the response indicates failure
+                if (!response.Success)
+                {
+                    throw new InvalidOperationException($"Orchestration failed: {response.ErrorMessage ?? "Unknown error"}");
+                }
+
+                // Update conversation history only if successful
                 await _contextManager.UpdateConversationAsync(
                     conversationId,
                     request.Message,

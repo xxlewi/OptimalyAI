@@ -44,8 +44,9 @@ namespace OAI.ServiceLayer.Services.Orchestration
             IReActAgent reActAgent,
             IToolRegistry toolRegistry,
             IOrchestratorMetrics metrics,
-            ILogger<ProjectStageOrchestrator> logger)
-            : base(logger, metrics)
+            ILogger<ProjectStageOrchestrator> logger,
+            IServiceProvider serviceProvider)
+            : base(logger, metrics, serviceProvider)
         {
             _toolChainOrchestrator = toolChainOrchestrator;
             _conversationOrchestrator = conversationOrchestrator;

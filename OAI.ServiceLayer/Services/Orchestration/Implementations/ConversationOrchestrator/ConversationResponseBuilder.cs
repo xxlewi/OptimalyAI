@@ -75,6 +75,17 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOr
                     evalDuration = aiResponse.EvalDuration
                 };
             }
+            else
+            {
+                // If AI response is null, mark as failed
+                response.Success = false;
+                response.Response = "Failed to generate AI response - AI server may be unavailable";
+                response.FinishReason = "ai_server_error";
+                response.ErrorMessage = "AI server did not respond";
+                response.ErrorCode = "AI_SERVER_UNAVAILABLE";
+                
+                _logger.LogError("AI response was null - server likely unavailable");
+            }
 
             // Add tool execution information
             if (toolExecutions.Any())

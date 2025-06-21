@@ -339,30 +339,37 @@ namespace OAI.ServiceLayer.Services.AI
         {
             try
             {
-                // First check if LM Studio server is already running
-                var statusInfo = new ProcessStartInfo
+                _logger.LogInformation("Starting LM Studio server...");
+                
+                // First, always try to stop any existing server
+                _logger.LogInformation("Stopping any existing LM Studio server...");
+                try
                 {
-                    FileName = "lms",
-                    Arguments = "server status",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var statusProcess = Process.Start(statusInfo);
-                if (statusProcess != null)
-                {
-                    await statusProcess.WaitForExitAsync();
-                    var output = await statusProcess.StandardOutput.ReadToEndAsync();
-                    
-                    if (output.Contains("running") || statusProcess.ExitCode == 0)
+                    var stopInfo = new ProcessStartInfo
                     {
-                        return (true, "LM Studio server is already running");
+                        FileName = "lms",
+                        Arguments = "server stop",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    };
+                    
+                    using var stopProcess = Process.Start(stopInfo);
+                    if (stopProcess != null)
+                    {
+                        await stopProcess.WaitForExitAsync();
+                        await Task.Delay(1000); // Give it time to stop
                     }
                 }
+                catch
+                {
+                    // Ignore stop errors
+                }
 
-                // Start LM Studio server
+                // Now start the server
+                _logger.LogInformation("Starting LM Studio server...");
+                
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "lms",
@@ -376,26 +383,37 @@ namespace OAI.ServiceLayer.Services.AI
                 using var process = Process.Start(startInfo);
                 if (process != null)
                 {
-                    await process.WaitForExitAsync();
+                    var hasExited = process.WaitForExit(5000);
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    var error = await process.StandardError.ReadToEndAsync();
                     
-                    if (process.ExitCode == 0)
+                    _logger.LogInformation("LM Studio start - Output: {Output}, Error: {Error}", output, error);
+                    
+                    // Wait for server to initialize
+                    await Task.Delay(3000);
+                    
+                    // The most reliable check is to verify if it's actually running
+                    if (await IsLMStudioRunning())
                     {
-                        // Give it time to fully start
-                        await Task.Delay(3000);
                         return (true, "LM Studio server started successfully");
+                    }
+                    else if (output.Contains("Success!", StringComparison.OrdinalIgnoreCase) || 
+                             output.Contains("running on port", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Sometimes it says success but needs more time
+                        await Task.Delay(2000);
+                        if (await IsLMStudioRunning())
+                        {
+                            return (true, "LM Studio server started successfully (after delay)");
+                        }
+                        else
+                        {
+                            return (false, "LM Studio reported success but server is not responding");
+                        }
                     }
                     else
                     {
-                        var error = await process.StandardError.ReadToEndAsync();
-                        var output = await process.StandardOutput.ReadToEndAsync();
-                        
-                        // Check if it's already running
-                        if (error.Contains("already running") || output.Contains("already running"))
-                        {
-                            return (true, "LM Studio server is already running");
-                        }
-                        
-                        return (false, $"Failed to start LM Studio server: {error}");
+                        return (false, $"LM Studio server failed to start: {output} {error}");
                     }
                 }
                 
@@ -530,10 +548,21 @@ namespace OAI.ServiceLayer.Services.AI
                     var output = await process.StandardOutput.ReadToEndAsync();
                     var error = await process.StandardError.ReadToEndAsync();
                     
-                    // Server is running if status command returns 0 or output contains "running"
-                    return process.ExitCode == 0 || 
-                           output.Contains("running", StringComparison.OrdinalIgnoreCase) ||
-                           !error.Contains("not running", StringComparison.OrdinalIgnoreCase);
+                    // LM Studio returns "The server is not running." when server is off
+                    // Check if output explicitly says server is running
+                    var fullOutput = output + " " + error;
+                    
+                    if (fullOutput.Contains("The server is not running", StringComparison.OrdinalIgnoreCase) ||
+                        fullOutput.Contains("server is not running", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                    
+                    // Server is running if output contains "running" (but not "not running")
+                    // IMPORTANT: Exit code is 0 for both running and not running states!
+                    return (fullOutput.Contains("is running", StringComparison.OrdinalIgnoreCase) ||
+                            fullOutput.Contains("server running", StringComparison.OrdinalIgnoreCase)) &&
+                           !fullOutput.Contains("not running", StringComparison.OrdinalIgnoreCase);
                 }
                 
                 return false;

@@ -139,6 +139,74 @@
             </div>
         </div>
 
+        <!-- AI Server Status -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-server"></i> AI Server Configuration
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.AiServerId.HasValue)
+                        {
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Server:</strong> @(Model.AiServerName ?? "Unknown")</p>
+                                    <p><strong>Type:</strong> @(Model.AiServerType ?? "Unknown")</p>
+                                    <p><strong>Model:</strong> @(Model.DefaultModelId ?? "Not configured")</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <strong class="mr-2">Status:</strong>
+                                        @if (Model.AiServerIsRunning)
+                                        {
+                                            <span class="badge badge-success">
+                                                <i class="fas fa-check-circle"></i> Running
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-danger">
+                                                <i class="fas fa-times-circle"></i> Stopped
+                                            </span>
+                                        }
+                                        
+                                        @if (Model.AiServerIsHealthy)
+                                        {
+                                            <span class="badge badge-success ml-2">
+                                                <i class="fas fa-heart"></i> Healthy
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-warning ml-2">
+                                                <i class="fas fa-exclamation-triangle"></i> Unhealthy
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(Model.AiServerLastError))
+                                    {
+                                        <div class="alert alert-danger alert-sm mt-2 mb-0">
+                                            <i class="fas fa-exclamation-circle"></i> Last Error: @Model.AiServerLastError
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle"></i> No AI server configured for this orchestrator.
+                                <a href="#" data-toggle="modal" data-target="#configModal" class="alert-link">Configure now</a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <!-- Capabilities -->
             <div class="col-md-4">
