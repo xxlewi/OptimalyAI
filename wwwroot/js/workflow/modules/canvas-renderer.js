@@ -88,7 +88,7 @@ export class CanvasRenderer {
         
         // Create wrapper for diamond-shaped nodes
         let $contentWrapper;
-        if (node.type === 'condition' || node.type === 'parallel') {
+        if (node.type === 'condition' || node.type === 'parallel' || node.type === 'merge') {
             $contentWrapper = $('<div>').addClass('node-content-wrapper');
             $node.append($contentWrapper);
         } else {
