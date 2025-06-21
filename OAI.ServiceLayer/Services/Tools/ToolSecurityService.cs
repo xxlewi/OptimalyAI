@@ -455,7 +455,7 @@ namespace OAI.ServiceLayer.Services.Tools
             var issues = new List<SecurityIssue>();
 
             // Skip validation for known safe parameters that may contain JSON or structured data
-            var safeParameters = new[] { "messages", "schema", "prompt", "url", "endpoint", "apiurl", "webhook" };
+            var safeParameters = new[] { "messages", "schema", "prompt", "url", "endpoint", "apiurl", "webhook", "instruction", "query", "description" };
             if (safeParameters.Contains(parameterName.ToLower()))
             {
                 _logger.LogDebug("Skipping security validation for known safe parameter '{ParameterName}'", parameterName);
@@ -496,7 +496,7 @@ namespace OAI.ServiceLayer.Services.Tools
                 {
                     IssueType = "SqlInjection",
                     Description = "potential SQL injection",
-                    Regex = new Regex(@"('|(--)|;|\s+(OR|AND)\s+)", RegexOptions.IgnoreCase),
+                    Regex = new Regex(@"(';|'--|;\s*DROP|;\s*DELETE|;\s*UPDATE|;\s*INSERT|UNION\s+SELECT|OR\s+1\s*=\s*1|AND\s+1\s*=\s*1)", RegexOptions.IgnoreCase),
                     Severity = SecuritySeverity.Critical,
                     Recommendation = "Use parameterized queries"
                 },

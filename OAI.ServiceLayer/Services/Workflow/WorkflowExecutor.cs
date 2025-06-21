@@ -169,6 +169,7 @@ namespace OAI.ServiceLayer.Services.Workflow
 
                     var stepResult = await ExecuteStepAsync(step, context, cancellationToken);
                     stepResults.Add(stepResult);
+                    context.StepResults.Add(stepResult); // Also store in context for real-time access
 
                     if (!stepResult.Success && step.Type != "decision")
                     {
@@ -730,6 +731,124 @@ namespace OAI.ServiceLayer.Services.Workflow
                 HasErrors = e.Status == ExecutionStatus.Failed
             });
         }
+
+        public async Task<WorkflowExecutionResult> GetExecutionResultAsync(Guid executionId)
+        {
+            // First check if execution is still active
+            if (_activeExecutions.TryGetValue(executionId, out var context))
+            {
+                return new WorkflowExecutionResult
+                {
+                    ExecutionId = executionId,
+                    WorkflowId = context.WorkflowId,
+                    ProjectId = context.ProjectId,
+                    Success = false,
+                    Message = "Execution is still running",
+                    StartedAt = context.StartedAt,
+                    ItemsProcessed = context.ItemsProcessed,
+                    StepResults = context.StepResults
+                };
+            }
+            
+            // Check database for completed executions
+            var repository = _unitOfWork.GetGuidRepository<ProjectExecution>();
+            var execution = await repository.GetByIdAsync(executionId);
+            
+            if (execution != null)
+            {
+                var result = new WorkflowExecutionResult
+                {
+                    ExecutionId = executionId,
+                    WorkflowId = execution.WorkflowId ?? Guid.Empty,
+                    ProjectId = execution.ProjectId,
+                    Success = execution.Status == ExecutionStatus.Completed,
+                    Message = execution.Status == ExecutionStatus.Failed 
+                        ? execution.ErrorMessage 
+                        : "Execution completed successfully",
+                    StartedAt = execution.StartedAt,
+                    CompletedAt = execution.CompletedAt,
+                    DurationSeconds = execution.DurationSeconds,
+                    ItemsProcessed = execution.ItemsProcessedCount,
+                    ExecutionCost = execution.ExecutionCost
+                };
+
+                // Parse output data if available
+                if (!string.IsNullOrEmpty(execution.OutputData))
+                {
+                    try
+                    {
+                        result.OutputData = JsonSerializer.Deserialize<Dictionary<string, object>>(execution.OutputData);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to deserialize output data for execution {ExecutionId}", executionId);
+                    }
+                }
+
+                // Parse execution log to extract step results
+                if (!string.IsNullOrEmpty(execution.ExecutionLog))
+                {
+                    result.StepResults = ParseStepResultsFromLog(execution.ExecutionLog);
+                }
+
+                // Add errors if any
+                if (!string.IsNullOrEmpty(execution.ErrorMessage))
+                {
+                    result.Errors.Add(execution.ErrorMessage);
+                }
+
+                return result;
+            }
+            
+            return null;
+        }
+
+        private List<WorkflowStepResult> ParseStepResultsFromLog(string executionLog)
+        {
+            var stepResults = new List<WorkflowStepResult>();
+            
+            // Simple parsing - in real implementation this should be more robust
+            var lines = executionLog.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            WorkflowStepResult currentStep = null;
+            
+            foreach (var line in lines)
+            {
+                if (line.Contains("Executing step:"))
+                {
+                    if (currentStep != null)
+                    {
+                        stepResults.Add(currentStep);
+                    }
+                    
+                    var stepName = line.Substring(line.IndexOf("Executing step:") + 15).Trim();
+                    currentStep = new WorkflowStepResult
+                    {
+                        StepName = stepName,
+                        StartedAt = DateTime.UtcNow // This is approximate
+                    };
+                }
+                else if (line.Contains("Step completed:") && currentStep != null)
+                {
+                    currentStep.Success = true;
+                    currentStep.CompletedAt = DateTime.UtcNow; // This is approximate
+                    currentStep.DurationSeconds = (currentStep.CompletedAt - currentStep.StartedAt).TotalSeconds;
+                }
+                else if (line.Contains("Step failed:") && currentStep != null)
+                {
+                    currentStep.Success = false;
+                    currentStep.CompletedAt = DateTime.UtcNow;
+                    currentStep.DurationSeconds = (currentStep.CompletedAt - currentStep.StartedAt).TotalSeconds;
+                    currentStep.ErrorMessage = line.Substring(line.IndexOf("Step failed:") + 12).Trim();
+                }
+            }
+            
+            if (currentStep != null)
+            {
+                stepResults.Add(currentStep);
+            }
+            
+            return stepResults;
+        }
         
         private async Task<IToolResult> ExecuteInputAdapterStepAsync(
             WorkflowStep step,
@@ -986,6 +1105,7 @@ namespace OAI.ServiceLayer.Services.Workflow
         public int TotalSteps { get; set; }
         public string CurrentMessage { get; set; }
         public int ItemsProcessed { get; set; }
+        public List<WorkflowStepResult> StepResults { get; } = new();
 
         public WorkflowExecutionContext(Guid executionId, Guid workflowId, string initiatedBy, DateTime startedAt)
         {

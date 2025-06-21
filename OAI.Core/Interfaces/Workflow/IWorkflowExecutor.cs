@@ -45,6 +45,11 @@ namespace OAI.Core.Interfaces.Workflow
             Guid workflowId, 
             int page = 1, 
             int pageSize = 20);
+
+        /// <summary>
+        /// Get detailed execution result
+        /// </summary>
+        Task<WorkflowExecutionResult> GetExecutionResultAsync(Guid executionId);
     }
 
     /// <summary>

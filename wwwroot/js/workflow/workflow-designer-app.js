@@ -15,11 +15,13 @@ export class WorkflowDesignerApp {
     constructor(options) {
         this.options = options;
         this.projectId = options.projectId;
+        this.projectName = options.projectName || 'unknown-project';
         
         // Initialize modules
         this.workflowManager = new WorkflowManager({
             projectId: this.projectId,
-            workflowId: options.workflowId
+            workflowId: options.workflowId,
+            projectName: this.projectName
         });
         
         this.canvasRenderer = new CanvasRenderer('workflow-canvas', this.workflowManager);

@@ -34,7 +34,8 @@
     // Initialize workflow designer application
     const app = new WorkflowDesignerApp({
         projectId: '@Model.ProjectId',
-        workflowId: '@Model.WorkflowId'
+        workflowId: '@Model.WorkflowId',
+        projectName: '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ProjectName))'
     });
     
     // Initialize on DOM ready

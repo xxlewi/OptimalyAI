@@ -337,7 +337,8 @@
         border: 1px solid #dee2e6;
         border-radius: 4px;
         padding: 10px;
-        max-height: 150px;
+        max-height: 300px;
+        min-height: 200px;
         overflow-y: auto;
         font-family: monospace;
         font-size: 12px;
@@ -345,18 +346,28 @@
     
     .log-entry {
         margin-bottom: 2px;
+        padding: 2px 5px;
+        border-radius: 3px;
     }
     
     .log-entry.error {
         color: #dc3545;
+        background-color: #f8d7da;
     }
     
     .log-entry.warning {
-        color: #ffc107;
+        color: #856404;
+        background-color: #fff3cd;
     }
     
     .log-entry.info {
-        color: #17a2b8;
+        color: #0c5460;
+        background-color: #d1ecf1;
+    }
+    
+    .log-entry.success {
+        color: #155724;
+        background-color: #d4edda;
     }
     
     /* Fix for parameter inputs */

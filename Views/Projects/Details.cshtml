@@ -258,38 +258,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- AI & Orchestrator -->
-                <div class="card collapsed-card">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-robot"></i> AI & Orchestrator</h3>
-                        <div class="card-tools">
-                            <button type="button" class="btn btn-tool" onclick="showOrchestratorModal()">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body" style="display: none;">
-                        <dl class="row" id="orchestratorDisplay">
-                            <dt class="col-sm-5">Orchestrator:</dt>
-                            <dd class="col-sm-7">
-                                <span class="badge badge-primary">ReAct</span>
-                            </dd>
-                            <dt class="col-sm-5">Model:</dt>
-                            <dd class="col-sm-7">Llama 3.1 (70B)</dd>
-                            <dt class="col-sm-5">Temperature:</dt>
-                            <dd class="col-sm-7">0.7</dd>
-                        </dl>
-                        <div class="form-group mb-0">
-                            <label>System Prompt:</label>
-                            <div class="border rounded p-2 bg-light">
-                                <small id="systemPromptDisplay">You are a helpful AI assistant that orchestrates workflow execution using the ReAct pattern (Reasoning + Acting).</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
                 
             </div>
             
@@ -865,11 +833,8 @@
         // Old renderWorkflowSteps function removed - using the new one defined earlier
         
         function loadOrchestratorSettings() {
-            // Load from project data if available
-            if (@Html.Raw(Model.OrchestratorSettings != null ? "true" : "false")) {
-                const settings = @Html.Raw(Model.OrchestratorSettings != null ? Json.Serialize(Model.OrchestratorSettings) : "{}");
-                updateOrchestratorDisplay(settings);
-            }
+            // Orchestrator settings are now part of workflow, not project
+            // This function is kept for backward compatibility but does nothing
         }
         
         function updateOrchestratorDisplay(settings) {
@@ -1015,41 +980,22 @@
         
         function showOrchestratorModal() {
             // Load current settings
-            if (@Html.Raw(Model.OrchestratorSettings != null ? "true" : "false")) {
-                const settings = @Html.Raw(Model.OrchestratorSettings != null ? Json.Serialize(Model.OrchestratorSettings) : "{}");
-                $('#orchestratorType').val(settings.type || 'react');
-                $('#orchestratorModel').val(settings.model || 'llama3.1:70b');
-                $('#orchestratorTemp').val(settings.temperature || 0.7);
-                $('#systemPrompt').val(settings.systemPrompt || 'You are a helpful AI assistant that orchestrates workflow execution using the ReAct pattern (Reasoning + Acting).');
-                $('#useToolValidation').prop('checked', settings.useToolValidation !== false);
-            }
+            // Orchestrator settings are now part of workflow, not project
+            // Set default values
+            $('#orchestratorType').val('react');
+            $('#orchestratorModel').val('llama3.1:70b');
+            $('#orchestratorTemp').val(0.7);
+            $('#systemPrompt').val('You are a helpful AI assistant that orchestrates workflow execution using the ReAct pattern (Reasoning + Acting).');
+            $('#useToolValidation').prop('checked', true);
             
             $('#orchestratorModal').modal('show');
         }
         
         function saveOrchestratorSettings() {
-            const settings = {
-                type: $('#orchestratorType').val(),
-                model: $('#orchestratorModel').val(),
-                temperature: parseFloat($('#orchestratorTemp').val()),
-                systemPrompt: $('#systemPrompt').val(),
-                useToolValidation: $('#useToolValidation').is(':checked')
-            };
-            
-            $.ajax({
-                url: `/api/projects/${projectId}/orchestrator-settings`,
-                type: 'PUT',
-                contentType: 'application/json',
-                data: JSON.stringify(settings),
-                success: function() {
-                    $('#orchestratorModal').modal('hide');
-                    toastr.success('Orchestrator settings saved successfully');
-                    updateOrchestratorDisplay(settings);
-                },
-                error: function() {
-                    toastr.error('Failed to save orchestrator settings');
-                }
-            });
+            // Orchestrator settings are now part of workflow, not project
+            // This function is kept for backward compatibility
+            $('#orchestratorModal').modal('hide');
+            toastr.info('Orchestrátor se nyní konfiguruje ve workflow designeru');
         }
         
         function exportWorkflow() {

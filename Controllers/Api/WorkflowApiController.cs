@@ -2,9 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using OAI.Core.DTOs;
 using OAI.Core.DTOs.Workflow;
 using OAI.Core.Interfaces.Workflow;
+using OAI.Core.Interfaces;
+using OAI.Core.Entities.Projects;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.IO;
 using Microsoft.Extensions.Logging;
 
 namespace OptimalyAI.Controllers.Api
@@ -19,13 +22,16 @@ namespace OptimalyAI.Controllers.Api
     {
         private readonly IWorkflowExecutor _workflowExecutor;
         private readonly ILogger<WorkflowApiController> _logger;
+        private readonly IUnitOfWork _unitOfWork;
 
         public WorkflowApiController(
             IWorkflowExecutor workflowExecutor,
-            ILogger<WorkflowApiController> logger)
+            ILogger<WorkflowApiController> logger,
+            IUnitOfWork unitOfWork)
         {
             _workflowExecutor = workflowExecutor;
             _logger = logger;
+            _unitOfWork = unitOfWork;
         }
 
         /// <summary>
@@ -188,6 +194,113 @@ namespace OptimalyAI.Controllers.Api
                 return StatusCode(500, ApiResponse.ErrorResponse($"Internal error: {ex.Message}"));
             }
         }
+
+        /// <summary>
+        /// Get detailed workflow execution results
+        /// </summary>
+        [HttpGet("execution/{executionId}/details")]
+        public async Task<IActionResult> GetExecutionDetails(Guid executionId)
+        {
+            try
+            {
+                var result = await _workflowExecutor.GetExecutionResultAsync(executionId);
+                
+                if (result == null)
+                {
+                    return NotFound(ApiResponse.ErrorResponse("Execution not found"));
+                }
+
+                return Ok(ApiResponse<WorkflowExecutionResult>.SuccessResponse(
+                    result, 
+                    "Execution details retrieved successfully"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting execution details for {ExecutionId}", executionId);
+                return StatusCode(500, ApiResponse.ErrorResponse($"Internal error: {ex.Message}"));
+            }
+        }
+
+        /// <summary>
+        /// Save workflow execution log
+        /// </summary>
+        [HttpPost("execution/{executionId}/log")]
+        public async Task<IActionResult> SaveExecutionLog(Guid executionId, [FromBody] SaveLogRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrWhiteSpace(request.LogContent))
+                {
+                    return BadRequest(ApiResponse.ErrorResponse("Log content is required"));
+                }
+
+                // Get workflow info to determine project
+                var execution = await _workflowExecutor.GetExecutionResultAsync(executionId);
+                if (execution == null)
+                {
+                    return NotFound(ApiResponse.ErrorResponse("Execution not found"));
+                }
+
+                // Get project info
+                var projectRepo = _unitOfWork.GetGuidRepository<Project>();
+                var project = await projectRepo.GetByIdAsync(execution.ProjectId);
+                if (project == null)
+                {
+                    return NotFound(ApiResponse.ErrorResponse("Project not found"));
+                }
+
+                // Create log directory structure: logs/projects/{project-name}/{year-month}/
+                var projectNameSafe = SanitizeFileName(project.Name);
+                var logDirectory = Path.Combine(
+                    "logs", 
+                    "projects", 
+                    projectNameSafe,
+                    DateTime.Now.ToString("yyyy-MM")
+                );
+
+                if (!Directory.Exists(logDirectory))
+                {
+                    Directory.CreateDirectory(logDirectory);
+                }
+
+                // Create log filename with timestamp
+                var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                var logFileName = $"workflow-{projectNameSafe}-{timestamp}-{executionId.ToString().Substring(0, 8)}.log";
+                var logFilePath = Path.Combine(logDirectory, logFileName);
+
+                // Write log content
+                await System.IO.File.WriteAllTextAsync(logFilePath, request.LogContent);
+
+                _logger.LogInformation("Saved workflow execution log to {FilePath}", logFilePath);
+
+                return Ok(ApiResponse<object>.SuccessResponse(
+                    new { filePath = logFilePath }, 
+                    "Log saved successfully"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving execution log for {ExecutionId}", executionId);
+                return StatusCode(500, ApiResponse.ErrorResponse($"Internal error: {ex.Message}"));
+            }
+        }
+
+        private string SanitizeFileName(string fileName)
+        {
+            // Remove invalid characters for file names
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            
+            // Replace spaces with underscores
+            sanitized = sanitized.Replace(" ", "_");
+            
+            // Limit length
+            if (sanitized.Length > 50)
+            {
+                sanitized = sanitized.Substring(0, 50);
+            }
+
+            return sanitized.ToLower();
+        }
     }
 
     /// <summary>
@@ -199,5 +312,14 @@ namespace OptimalyAI.Controllers.Api
         public Dictionary<string, object> InputParameters { get; set; } = new();
         public bool EnableDebugLogging { get; set; }
         public int? TimeoutSeconds { get; set; }
+    }
+
+    /// <summary>
+    /// Request to save execution log
+    /// </summary>
+    public class SaveLogRequest
+    {
+        public string LogContent { get; set; }
+        public string ProjectName { get; set; }
     }
 }

@@ -6,6 +6,7 @@ export class WorkflowManager {
     constructor(options = {}) {
         this.projectId = options.projectId;
         this.workflowId = options.workflowId || null;
+        this.projectName = options.projectName || 'unknown-project';
         this.nodes = {};
         this.connections = [];
         this.selectedNode = null;
