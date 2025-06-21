@@ -234,29 +234,47 @@ namespace OAI.ServiceLayer.Services.AI
                 using var process = Process.Start(startInfo);
                 if (process != null)
                 {
-                    // Give it time to start
-                    await Task.Delay(3000);
+                    // Don't wait for exit as Ollama runs in background
+                    // Just give it a moment to start
+                    await Task.Delay(2000);
                     
-                    // Check if the process is still running and if Ollama is responding
-                    if (!process.HasExited || await IsOllamaRunning())
+                    // Check if Ollama is responding
+                    if (await IsOllamaRunning())
                     {
                         return (true, "Ollama server started successfully");
                     }
-                    else
+                    
+                    // If not running, check if process exited with error
+                    if (process.HasExited)
                     {
                         var error = await process.StandardError.ReadToEndAsync();
                         var output = await process.StandardOutput.ReadToEndAsync();
                         
+                        _logger.LogInformation("Ollama start attempt - Output: {Output}, Error: {Error}", output, error);
+                        
                         // If there's an error about already running, that's actually success
                         if (error.Contains("address already in use") || 
                             error.Contains("bind: address already in use") ||
-                            output.Contains("Ollama is running"))
+                            output.Contains("address already in use"))
                         {
-                            return (true, "Ollama server is already running");
+                            // Double check if it's actually running
+                            if (await IsOllamaRunning())
+                            {
+                                return (true, "Ollama server is already running");
+                            }
                         }
                         
                         return (false, $"Ollama server failed to start: {error}");
                     }
+                    
+                    // Process started but API not responding yet, wait a bit more
+                    await Task.Delay(3000);
+                    if (await IsOllamaRunning())
+                    {
+                        return (true, "Ollama server started successfully");
+                    }
+                    
+                    return (false, "Ollama process started but API is not responding");
                 }
                 
                 return (false, "Failed to start Ollama process");
@@ -279,50 +297,56 @@ namespace OAI.ServiceLayer.Services.AI
         {
             try
             {
-                // Try pkill first
-                var pkillInfo = new ProcessStartInfo
+                // Use killall which is more reliable on macOS
+                var killallInfo = new ProcessStartInfo
                 {
-                    FileName = "pkill",
-                    Arguments = "-f ollama",
+                    FileName = "killall",
+                    Arguments = "ollama",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-
-                using var pkillProcess = Process.Start(pkillInfo);
-                if (pkillProcess != null)
+                
+                using var killallProcess = Process.Start(killallInfo);
+                if (killallProcess != null)
                 {
-                    await pkillProcess.WaitForExitAsync();
+                    await killallProcess.WaitForExitAsync();
                     
-                    if (pkillProcess.ExitCode == 0)
+                    // Wait a moment for the process to fully terminate
+                    await Task.Delay(1000);
+                    
+                    // Check if Ollama is still running
+                    if (!await IsOllamaRunning())
                     {
                         return (true, "Ollama server stopped successfully");
                     }
-                    else if (pkillProcess.ExitCode == 1)
+                    else
                     {
-                        // Try killall as fallback
-                        var killallInfo = new ProcessStartInfo
+                        // If still running, try pkill as fallback
+                        var pkillInfo = new ProcessStartInfo
                         {
-                            FileName = "killall",
-                            Arguments = "ollama",
+                            FileName = "pkill",
+                            Arguments = "-f ollama",
                             UseShellExecute = false,
                             RedirectStandardOutput = true,
                             RedirectStandardError = true,
                             CreateNoWindow = true
                         };
-                        
-                        using var killallProcess = Process.Start(killallInfo);
-                        if (killallProcess != null)
+
+                        using var pkillProcess = Process.Start(pkillInfo);
+                        if (pkillProcess != null)
                         {
-                            await killallProcess.WaitForExitAsync();
-                            if (killallProcess.ExitCode == 0)
+                            await pkillProcess.WaitForExitAsync();
+                            await Task.Delay(1000);
+                            
+                            if (!await IsOllamaRunning())
                             {
-                                return (true, "Ollama server stopped successfully");
+                                return (true, "Ollama server stopped successfully (using pkill)");
                             }
                         }
                         
-                        return (false, "No Ollama processes found to stop");
+                        return (false, "Failed to stop Ollama server");
                     }
                 }
                 
@@ -499,25 +523,23 @@ namespace OAI.ServiceLayer.Services.AI
         {
             try
             {
-                // Check if Ollama process is running
-                var psInfo = new ProcessStartInfo
+                // Try to check if Ollama API is responding
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+                try
                 {
-                    FileName = "pgrep",
-                    Arguments = "-f ollama",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psInfo);
-                if (process != null)
-                {
-                    await process.WaitForExitAsync();
-                    return process.ExitCode == 0; // Exit code 0 means process found
+                    var response = await client.GetAsync("http://localhost:11434/api/tags");
+                    return response.IsSuccessStatusCode;
                 }
-                
-                return false;
+                catch (HttpRequestException)
+                {
+                    // API not responding, server not running
+                    return false;
+                }
+                catch (TaskCanceledException)
+                {
+                    // Timeout, server not running
+                    return false;
+                }
             }
             catch (Exception ex)
             {
