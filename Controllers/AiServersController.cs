@@ -77,16 +77,40 @@ namespace OptimalyAI.Controllers
                 }
                 else if (server.ServerType == AiServerType.LMStudio)
                 {
-                    // Get loaded LM Studio models
-                    var response = await httpClient.GetAsync($"{server.BaseUrl}/v1/models");
-                    if (response.IsSuccessStatusCode)
+                    // For LM Studio, we need to use CLI to get actually loaded models
+                    try
                     {
-                        var json = await response.Content.ReadAsStringAsync();
-                        var lmResponse = JsonSerializer.Deserialize<LMStudioModelsResponse>(json);
-                        if (lmResponse?.Data != null)
+                        var psi = new System.Diagnostics.ProcessStartInfo
                         {
-                            loadedModels.AddRange(lmResponse.Data.Select(m => m.Id));
+                            FileName = "lms",
+                            Arguments = "ps",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        };
+                        
+                        using var process = System.Diagnostics.Process.Start(psi);
+                        if (process != null)
+                        {
+                            var output = await process.StandardOutput.ReadToEndAsync();
+                            await process.WaitForExitAsync();
+                            
+                            // Parse the output to find loaded models
+                            var lines = output.Split('\n');
+                            foreach (var line in lines)
+                            {
+                                if (line.StartsWith("Identifier:"))
+                                {
+                                    var modelName = line.Replace("Identifier:", "").Trim();
+                                    loadedModels.Add(modelName);
+                                }
+                            }
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get loaded models from LM Studio using CLI");
                     }
                 }
             }
