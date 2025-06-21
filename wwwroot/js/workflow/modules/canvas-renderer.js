@@ -142,11 +142,12 @@ export class CanvasRenderer {
         }
         
         // Orchestrator configuration badge
-        if (node.type === 'orchestrator' && node.orchestratorType) {
+        if (node.type === 'orchestrator' && node.selectedOrchestrator) {
             const $orchestratorDiv = $('<div>').addClass('node-orchestrator');
+            const orchestratorName = this.getOrchestratorName(node.selectedOrchestrator);
             const $orchestratorBadge = $('<span>')
                 .addClass('orchestrator-badge')
-                .html(`<i class="fas fa-brain"></i> ${node.orchestratorType}`)
+                .html(`<i class="fas fa-brain"></i> ${orchestratorName}`)
                 .css({
                     background: '#6f42c1',
                     color: 'white',
@@ -422,6 +423,22 @@ export class CanvasRenderer {
         this.$canvas.css('transform-origin', '0 0');
         this.$svg.css('transform', `scale(${zoom})`);
         this.$svg.css('transform-origin', '0 0');
+    }
+    
+    /**
+     * Get orchestrator name by ID
+     */
+    getOrchestratorName(orchestratorId) {
+        // For now, just return the ID
+        // In future, we could cache orchestrator names
+        const orchestratorMap = {
+            'RefactoredConversationOrchestrator': 'Conversation',
+            'ToolChainOrchestrator': 'Tool Chain',
+            'WebScrapingOrchestrator': 'Web Scraping',
+            'ProjectStageOrchestrator': 'Project Stage',
+            'ProductScrapingOrchestrator': 'Product Scraping'
+        };
+        return orchestratorMap[orchestratorId] || orchestratorId;
     }
     
     /**

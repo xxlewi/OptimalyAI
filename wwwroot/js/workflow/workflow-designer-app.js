@@ -302,12 +302,24 @@ export class WorkflowDesignerApp {
             console.log('Editing adapter node, config:', node.adapterConfiguration);
             // Load adapter configuration
             this.loadAdapterConfiguration(node);
-        } else if (node.type === 'tool' || node.type === 'task') {
+        } else if (node.type === 'orchestrator') {
+            $('#nodeEditTabs').hide();
+            $('#toolSection').hide();
+            $('#executionSection').hide();
+            $('#parametersSection').hide();
+            $('#conditionSection').hide();
+            $('#adapterConfigSection').hide();
+            $('#orchestratorConfigSection').show();
+            console.log('Editing orchestrator node, config:', node.orchestratorConfiguration);
+            // Load orchestrator configuration
+            this.loadOrchestratorConfiguration(node);
+        } else if (node.type === 'tool' || node.type === 'task' || node.type === 'output') {
             $('#toolSection').show();
             $('#executionSection').show();
             $('#parametersSection').show();
             $('#conditionSection').hide();
             $('#adapterConfigSection').hide();
+            $('#orchestratorConfigSection').hide();
             
             // Show tabs for tool nodes
             $('#nodeEditTabs').show();
@@ -326,6 +338,7 @@ export class WorkflowDesignerApp {
             $('#parametersSection').hide();
             $('#conditionSection').hide();
             $('#adapterConfigSection').hide();
+            $('#orchestratorConfigSection').hide();
         }
         
         console.log('About to show modal...');
@@ -360,7 +373,7 @@ export class WorkflowDesignerApp {
         
         if (node.type === 'condition') {
             updates.condition = $('#nodeCondition').val();
-        } else if (node.type === 'tool' || node.type === 'task') {
+        } else if (node.type === 'tool' || node.type === 'task' || node.type === 'output') {
             updates.tool = $('#nodeToolSelect').val() || null;
             updates.useReAct = $('#nodeUseReAct').is(':checked');
             updates.timeoutSeconds = parseInt($('#nodeTimeout').val()) || 300;
@@ -422,6 +435,14 @@ export class WorkflowDesignerApp {
             });
             
             console.log('Saving adapter configuration:', updates.adapterConfiguration);
+        } else if (node.type === 'orchestrator') {
+            // Save orchestrator selection
+            updates.selectedOrchestrator = $('#nodeOrchestratorSelect').val();
+            
+            // For now, we don't have orchestrator parameters, but we can add them later
+            updates.orchestratorConfiguration = {};
+            
+            console.log('Saving orchestrator configuration:', updates.selectedOrchestrator);
         }
         
         this.workflowManager.updateNode(nodeId, updates);
@@ -486,6 +507,24 @@ export class WorkflowDesignerApp {
     }
     
     /**
+     * Safe base64 encoding for UTF-8 strings
+     */
+    safeBase64Encode(str) {
+        return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+            return String.fromCharCode('0x' + p1);
+        }));
+    }
+    
+    /**
+     * Safe base64 decoding for UTF-8 strings
+     */
+    safeBase64Decode(str) {
+        return decodeURIComponent(atob(str).split('').map(c => {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+    }
+    
+    /**
      * Render single parameter
      */
     renderParameter(param, prefix = '') {
@@ -505,7 +544,7 @@ export class WorkflowDesignerApp {
             case 'String':
                 if (param.validation?.allowedValues && param.validation.allowedValues.length > 0) {
                     // Select for allowed values
-                    const selectParamInfo = btoa(JSON.stringify(param));
+                    const selectParamInfo = this.safeBase64Encode(JSON.stringify(param));
                     html += `<select class="form-control" id="${idPrefix}${param.name}" data-param="${param.name}" data-param-info="${selectParamInfo}">`;
                     param.validation.allowedValues.forEach(val => {
                         html += `<option value="${val}"${val === param.defaultValue ? ' selected' : ''}>${val}</option>`;
@@ -513,7 +552,7 @@ export class WorkflowDesignerApp {
                     html += '</select>';
                 } else {
                     // Text input
-                    const paramInfo = btoa(JSON.stringify(param)); // Base64 encode to avoid quote issues
+                    const paramInfo = this.safeBase64Encode(JSON.stringify(param)); // Base64 encode to avoid quote issues
                     html += `<input type="text" class="form-control" id="${idPrefix}${param.name}"
                              data-param="${param.name}" 
                              data-param-info="${paramInfo}"
@@ -524,7 +563,7 @@ export class WorkflowDesignerApp {
                 
             case 'Boolean':
                 html += `<div class="custom-control custom-switch">`;
-                const boolParamInfo = btoa(JSON.stringify(param));
+                const boolParamInfo = this.safeBase64Encode(JSON.stringify(param));
                 html += `<input type="checkbox" class="custom-control-input" id="${idPrefix}${param.name}" 
                          data-param="${param.name}" data-param-info="${boolParamInfo}"
                          ${param.defaultValue ? ' checked' : ''}>`;
@@ -533,7 +572,7 @@ export class WorkflowDesignerApp {
                 break;
                 
             case 'Integer':
-                const intParamInfo = btoa(JSON.stringify(param));
+                const intParamInfo = this.safeBase64Encode(JSON.stringify(param));
                 html += `<input type="number" class="form-control" id="${idPrefix}${param.name}"
                          data-param="${param.name}" 
                          data-param-info="${intParamInfo}"
@@ -543,7 +582,7 @@ export class WorkflowDesignerApp {
                 break;
                 
             case 'Decimal':
-                const decimalParamInfo = btoa(JSON.stringify(param));
+                const decimalParamInfo = this.safeBase64Encode(JSON.stringify(param));
                 html += `<input type="number" step="0.01" class="form-control" id="${idPrefix}${param.name}"
                          data-param="${param.name}" 
                          data-param-info="${decimalParamInfo}"
@@ -551,7 +590,7 @@ export class WorkflowDesignerApp {
                 break;
                 
             case 'Json':
-                const jsonParamInfo = btoa(JSON.stringify(param));
+                const jsonParamInfo = this.safeBase64Encode(JSON.stringify(param));
                 html += `<textarea class="form-control json-input" id="${idPrefix}${param.name}"
                          data-param="${param.name}" 
                          data-param-info="${jsonParamInfo}"
@@ -559,7 +598,7 @@ export class WorkflowDesignerApp {
                 break;
                 
             default:
-                const defaultParamInfo = btoa(JSON.stringify(param));
+                const defaultParamInfo = this.safeBase64Encode(JSON.stringify(param));
                 html += `<input type="text" class="form-control" id="${idPrefix}${param.name}"
                          data-param="${param.name}" 
                          data-param-info="${defaultParamInfo}"
@@ -696,6 +735,109 @@ export class WorkflowDesignerApp {
                 html += this.renderParameter(paramCopy, 'nodeAdapter_');
             });
         }
+        
+        $container.html(html);
+    }
+    
+    /**
+     * Load orchestrator configuration for node
+     */
+    async loadOrchestratorConfiguration(node) {
+        const $container = $('#orchestratorConfigContainer');
+        
+        // Show loading
+        $container.html(`
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin"></i> Načítám orchestrátory...
+            </div>
+        `);
+        
+        try {
+            // Load orchestrators
+            const response = await fetch('/api/orchestrators');
+            const data = await response.json();
+            
+            if (data.success) {
+                // Create select for orchestrators
+                let html = `
+                    <div class="form-group">
+                        <label>Vyberte orchestrátor</label>
+                        <select class="form-control" id="nodeOrchestratorSelect">
+                            <option value="">-- Vyberte orchestrátor --</option>
+                `;
+                
+                // Add options
+                data.data.forEach(orchestrator => {
+                    const selected = node.selectedOrchestrator === orchestrator.id ? 'selected' : '';
+                    html += `<option value="${orchestrator.id}" ${selected}>${orchestrator.name}</option>`;
+                });
+                
+                html += `</select></div>`;
+                html += `<div id="nodeOrchestratorParameters"></div>`;
+                
+                $container.html(html);
+                
+                // Store orchestrators for later use
+                this.currentOrchestrators = data.data;
+                
+                // Handle orchestrator selection
+                $('#nodeOrchestratorSelect').on('change', (e) => {
+                    const orchestratorId = $(e.target).val();
+                    this.loadOrchestratorParameters(orchestratorId, node);
+                });
+                
+                // If orchestrator is already selected, load its parameters
+                if (node.selectedOrchestrator) {
+                    this.loadOrchestratorParameters(node.selectedOrchestrator, node);
+                }
+            } else {
+                $container.html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Chyba při načítání orchestrátorů
+                    </div>
+                `);
+            }
+        } catch (error) {
+            console.error('Error loading orchestrators:', error);
+            $container.html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Chyba při načítání orchestrátorů
+                </div>
+            `);
+        }
+    }
+    
+    /**
+     * Load orchestrator parameters
+     */
+    loadOrchestratorParameters(orchestratorId, node) {
+        const $container = $('#nodeOrchestratorParameters');
+        
+        if (!orchestratorId) {
+            $container.empty();
+            return;
+        }
+        
+        const orchestrator = this.currentOrchestrators.find(o => o.id === orchestratorId);
+        if (!orchestrator) return;
+        
+        let html = '';
+        
+        // For now, just show orchestrator info
+        html = `
+            <div class="alert alert-info">
+                <h6>${orchestrator.name}</h6>
+                <p>${orchestrator.description || 'Bez popisu'}</p>
+                ${orchestrator.capabilities ? `
+                    <strong>Schopnosti:</strong>
+                    <ul class="mb-0">
+                        ${orchestrator.capabilities.map(cap => `<li>${cap}</li>`).join('')}
+                    </ul>
+                ` : ''}
+            </div>
+        `;
+        
+        // TODO: Add parameter configuration when orchestrators support it
         
         $container.html(html);
     }
@@ -945,3 +1087,34 @@ export class WorkflowDesignerApp {
 
 // Export for global use
 window.WorkflowDesignerApp = WorkflowDesignerApp;
+
+// Global functions for HTML onclick handlers
+window.startExecution = function() {
+    if (window.workflowDesignerApp && window.workflowDesignerApp.workflowExecutor) {
+        window.workflowDesignerApp.workflowExecutor.startExecution();
+    }
+};
+
+window.cancelExecution = function() {
+    if (window.workflowDesignerApp && window.workflowDesignerApp.workflowExecutor) {
+        window.workflowDesignerApp.workflowExecutor.cancelExecution();
+    }
+};
+
+window.updateCurrentNode = function() {
+    if (window.workflowDesignerApp) {
+        window.workflowDesignerApp.updateCurrentNode();
+    }
+};
+
+window.deleteCurrentNode = function() {
+    if (window.workflowDesignerApp) {
+        window.workflowDesignerApp.deleteCurrentNode();
+    }
+};
+
+window.runToolTest = function() {
+    if (window.workflowDesignerApp) {
+        window.workflowDesignerApp.testCurrentTool();
+    }
+};
