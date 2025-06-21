@@ -220,61 +220,48 @@ namespace OAI.ServiceLayer.Services.AI
                     return (true, "Ollama server is already running");
                 }
 
-                // Try to start Ollama in the background
+                // Try to start Ollama using shell to handle background process properly
                 var startInfo = new ProcessStartInfo
                 {
-                    FileName = "ollama",
-                    Arguments = "serve",
+                    FileName = "/bin/bash",
+                    Arguments = "-c \"ollama serve > /dev/null 2>&1 &\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
 
+                _logger.LogInformation("Starting Ollama server with command: {Command}", $"{startInfo.FileName} {startInfo.Arguments}");
+                
                 using var process = Process.Start(startInfo);
                 if (process != null)
                 {
-                    // Don't wait for exit as Ollama runs in background
-                    // Just give it a moment to start
-                    await Task.Delay(2000);
+                    // Wait for bash to complete (it will return immediately after starting background process)
+                    await process.WaitForExitAsync();
+                    
+                    // Give Ollama time to start
+                    _logger.LogInformation("Waiting for Ollama server to start...");
+                    await Task.Delay(3000);
                     
                     // Check if Ollama is responding
                     if (await IsOllamaRunning())
                     {
+                        _logger.LogInformation("Ollama server started successfully");
                         return (true, "Ollama server started successfully");
                     }
                     
-                    // If not running, check if process exited with error
-                    if (process.HasExited)
-                    {
-                        var error = await process.StandardError.ReadToEndAsync();
-                        var output = await process.StandardOutput.ReadToEndAsync();
-                        
-                        _logger.LogInformation("Ollama start attempt - Output: {Output}, Error: {Error}", output, error);
-                        
-                        // If there's an error about already running, that's actually success
-                        if (error.Contains("address already in use") || 
-                            error.Contains("bind: address already in use") ||
-                            output.Contains("address already in use"))
-                        {
-                            // Double check if it's actually running
-                            if (await IsOllamaRunning())
-                            {
-                                return (true, "Ollama server is already running");
-                            }
-                        }
-                        
-                        return (false, $"Ollama server failed to start: {error}");
-                    }
-                    
-                    // Process started but API not responding yet, wait a bit more
+                    // If not running yet, wait a bit more
+                    _logger.LogInformation("Ollama not responding yet, waiting additional 3 seconds...");
                     await Task.Delay(3000);
+                    
                     if (await IsOllamaRunning())
                     {
+                        _logger.LogInformation("Ollama server started successfully after extended wait");
                         return (true, "Ollama server started successfully");
                     }
                     
-                    return (false, "Ollama process started but API is not responding");
+                    _logger.LogWarning("Ollama server failed to start - API not responding after 6 seconds");
+                    return (false, "Ollama server failed to start - API not responding");
                 }
                 
                 return (false, "Failed to start Ollama process");
