@@ -353,7 +353,7 @@
                                         <th>Zahájeno</th>
                                         <th>Dokončeno</th>
                                         <th>Doba trvání</th>
-                                        <th>Zpracováno</th>
+                                        <th>Kroky</th>
                                         <th>Status</th>
                                         <th>Spustil</th>
                                         <th>Akce</th>
@@ -810,6 +810,9 @@
                 type: 'GET',
                 success: function(response) {
                     if (response.success && response.data) {
+                        // Store workflow data including workflow ID
+                        workflowData = response.data;
+                        
                         // Create wrapper object for compatibility
                         const workflowWrapper = {
                             metadata: {
@@ -853,20 +856,34 @@
         }
         
         function loadExecutionHistory() {
+            // First make sure we have workflow ID
+            if (!workflowData || !workflowData.workflowId) {
+                $('#executionHistoryBody').html(`
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Načítám workflow...
+                        </td>
+                    </tr>
+                `);
+                // Try again in a moment
+                setTimeout(loadExecutionHistory, 1000);
+                return;
+            }
+            
             $.ajax({
-                url: '/api/projects/' + projectId + '/executions',
+                url: `/api/workflow/history/${workflowData.workflowId}`,
                 type: 'GET',
-                data: { limit: 10 },
+                data: { page: 1, pageSize: 10 },
                 success: function(response) {
                     // Handle wrapped response from BaseApiController
-                    const executions = response.data || response;
+                    const executions = response.data?.items || response.data || [];
                     renderExecutionHistory(executions);
                 },
                 error: function() {
                     $('#executionHistoryBody').html(`
                         <tr>
                             <td colspan="7" class="text-center text-muted">
-                                <i class="fas fa-exclamation-triangle"></i> Unable to load execution history
+                                <i class="fas fa-exclamation-triangle"></i> Nepodařilo se načíst historii spuštění
                             </td>
                         </tr>
                     `);
@@ -890,27 +907,35 @@
             }
             
             executions.forEach(execution => {
-                const duration = execution.completedAt ? 
-                    Math.round((new Date(execution.completedAt) - new Date(execution.startedAt)) / 1000) + 's' : 
-                    'Running...';
+                const duration = execution.durationSeconds ? 
+                    execution.durationSeconds + 's' : 
+                    (execution.completedAt ? 
+                        Math.round((new Date(execution.completedAt) - new Date(execution.startedAt)) / 1000) + 's' : 
+                        'Běží...');
                 
                 const statusBadge = {
                     'Completed': 'badge-success',
                     'Running': 'badge-primary',
                     'Failed': 'badge-danger',
-                    'Cancelled': 'badge-warning'
+                    'Cancelled': 'badge-warning',
+                    'Pending': 'badge-info'
                 }[execution.status] || 'badge-secondary';
+                
+                const initiatedBy = execution.initiatedBy || execution.startedBy || 'System';
+                const completedSteps = execution.completedSteps || 0;
+                const totalSteps = execution.totalSteps || 0;
+                const progress = totalSteps > 0 ? `${completedSteps}/${totalSteps}` : '-';
                 
                 const row = $(`
                     <tr>
-                        <td>${new Date(execution.startedAt).toLocaleString()}</td>
-                        <td>${execution.completedAt ? new Date(execution.completedAt).toLocaleString() : '-'}</td>
+                        <td>${new Date(execution.startedAt).toLocaleString('cs-CZ')}</td>
+                        <td>${execution.completedAt ? new Date(execution.completedAt).toLocaleString('cs-CZ') : '-'}</td>
                         <td>${duration}</td>
-                        <td>${execution.itemsProcessed || 0}</td>
+                        <td>${progress}</td>
                         <td><span class="badge ${statusBadge}">${execution.status}</span></td>
-                        <td>${execution.startedBy}</td>
+                        <td>${initiatedBy}</td>
                         <td>
-                            <button class="btn btn-sm btn-default" onclick="viewExecution('${execution.id}')">
+                            <button class="btn btn-sm btn-default" onclick="viewExecutionDetails('${execution.executionId || execution.id}')">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </td>
@@ -943,33 +968,59 @@
         }
         
         function executeWorkflow() {
+            // Get workflow ID from the project's workflow
+            const workflowId = workflowData?.workflowId;
+            if (!workflowId) {
+                toastr.error('Projekt nemá přiřazené workflow');
+                return;
+            }
+            
             const executionData = {
-                projectId: projectId,
-                runName: $('#runName').val() || `${currentRunMode} run ${new Date().toLocaleString()}`,
-                mode: currentRunMode,
-                priority: $('#runPriority').val(),
-                testItemLimit: currentRunMode === 'test' ? parseInt($('#testItemLimit').val()) : null,
+                inputParameters: JSON.parse($('#inputParameters').val() || '{}'),
                 enableDebugLogging: $('#debugMode').is(':checked'),
-                startedBy: 'Current User', // This would come from auth
-                metadata: JSON.parse($('#inputParameters').val() || '{}')
+                initiatedBy: $('#runName').val() || `${currentRunMode} run ${new Date().toLocaleString()}`,
+                // Add metadata for project context
+                metadata: {
+                    projectId: projectId,
+                    mode: currentRunMode,
+                    priority: $('#runPriority').val(),
+                    testItemLimit: currentRunMode === 'test' ? parseInt($('#testItemLimit').val()) : null
+                }
             };
             
             $.ajax({
-                url: '/api/projects/execute',
+                url: `/api/workflow/execute/${workflowId}`,
                 type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(executionData),
                 success: function(response) {
                     $('#runWorkflowModal').modal('hide');
-                    toastr.success('Workflow execution started successfully!');
                     
-                    // Refresh history after a delay
-                    setTimeout(() => {
-                        loadExecutionHistory();
-                    }, 2000);
+                    if (response.success && response.data) {
+                        toastr.success('Workflow spuštěno úspěšně!');
+                        
+                        // Show execution ID
+                        if (response.data.executionId) {
+                            toastr.info(`Execution ID: ${response.data.executionId}`);
+                        }
+                        
+                        // Refresh history after a delay
+                        setTimeout(() => {
+                            loadExecutionHistory();
+                        }, 2000);
+                    } else {
+                        toastr.error(response.message || 'Chyba při spouštění workflow');
+                    }
                 },
                 error: function(xhr) {
-                    toastr.error('Failed to start workflow execution');
+                    let errorMsg = 'Nepodařilo se spustit workflow';
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse.message) {
+                            errorMsg = errorResponse.message;
+                        }
+                    } catch (e) {}
+                    toastr.error(errorMsg);
                 }
             });
         }
@@ -1016,61 +1067,110 @@
         }
         
         function testWorkflow() {
+            // Get workflow ID from the project's workflow
+            const workflowId = workflowData?.workflowId;
+            if (!workflowId) {
+                toastr.error('Projekt nemá přiřazené workflow');
+                return;
+            }
+            
             $('#workflowTestModal').modal('show');
             $('#testProgressBar').css('width', '0%').text('0%');
             $('#testSteps').empty();
-            $('#testResults').text('Running tests...');
+            $('#testResults').text('Spouštím test workflow...');
             
-            // Simulate workflow test
-            const testSteps = [
-                { name: 'Validating workflow structure', duration: 1000 },
-                { name: 'Checking tool availability', duration: 1500 },
-                { name: 'Testing connections', duration: 2000 },
-                { name: 'Running sample data', duration: 3000 }
-            ];
-            
-            let currentStep = 0;
-            
-            function runTestStep() {
-                if (currentStep >= testSteps.length) {
-                    $('#testProgressBar').removeClass('progress-bar-animated').addClass('bg-success').text('100%');
-                    $('#testResults').text(JSON.stringify({
-                        success: true,
-                        message: 'All tests passed successfully',
-                        details: {
-                            stagesValidated: workflowData?.stages?.length || 0,
-                            toolsChecked: 5,
-                            connectionsValid: true,
-                            sampleDataProcessed: true
-                        }
-                    }, null, 2));
-                    $('#closeTestBtn').show();
-                    return;
+            // Execute workflow in test mode
+            const testData = {
+                inputParameters: { testMode: true, maxItems: 5 },
+                enableDebugLogging: true,
+                initiatedBy: 'Test Run',
+                metadata: {
+                    projectId: projectId,
+                    mode: 'test',
+                    testRun: true
                 }
-                
-                const step = testSteps[currentStep];
-                const progress = Math.round((currentStep + 1) / testSteps.length * 100);
-                
-                $('#testProgressBar').css('width', progress + '%').text(progress + '%');
-                
-                const stepHtml = $(`
-                    <div class="d-flex align-items-center mb-2">
-                        <div class="spinner-border spinner-border-sm text-primary mr-2"></div>
-                        <span>${step.name}...</span>
-                    </div>
-                `);
-                $('#testSteps').append(stepHtml);
-                
-                setTimeout(() => {
-                    stepHtml.find('.spinner-border').removeClass('spinner-border spinner-border-sm text-primary').html('<i class="fas fa-check-circle text-success"></i>');
-                    stepHtml.find('span').html(`${step.name} - <span class="text-success">Passed</span>`);
-                    
-                    currentStep++;
-                    runTestStep();
-                }, step.duration);
-            }
+            };
             
-            runTestStep();
+            $.ajax({
+                url: `/api/workflow/execute/${workflowId}`,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(testData),
+                success: function(response) {
+                    if (response.success && response.data) {
+                        const executionId = response.data.executionId;
+                        $('#testProgressBar').css('width', '10%').text('10%');
+                        $('#testSteps').append('<div><i class="fas fa-check text-success"></i> Workflow spuštěno</div>');
+                        
+                        // Start monitoring execution
+                        monitorTestExecution(executionId);
+                    } else {
+                        showTestError(response.message || 'Chyba při spouštění testu');
+                    }
+                },
+                error: function(xhr) {
+                    let errorMsg = 'Nepodařilo se spustit test';
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse.message) {
+                            errorMsg = errorResponse.message;
+                        }
+                    } catch (e) {}
+                    showTestError(errorMsg);
+                }
+            });
+        }
+        
+        function monitorTestExecution(executionId) {
+            const checkInterval = setInterval(async () => {
+                try {
+                    const response = await $.ajax({
+                        url: `/api/workflow/status/${executionId}`,
+                        type: 'GET'
+                    });
+                    
+                    if (response.success && response.data) {
+                        const status = response.data;
+                        const progress = Math.round(status.progressPercentage || 0);
+                        $('#testProgressBar').css('width', progress + '%').text(progress + '%');
+                        
+                        if (status.currentStepName) {
+                            $('#testSteps').append(`<div><i class="fas fa-cog fa-spin"></i> ${status.currentStepName}</div>`);
+                        }
+                        
+                        if (status.status !== 'Running' && status.status !== 'Pending') {
+                            clearInterval(checkInterval);
+                            
+                            if (status.status === 'Completed') {
+                                $('#testProgressBar').removeClass('progress-bar-animated').addClass('bg-success').text('100%');
+                                $('#testResults').text(JSON.stringify({
+                                    success: true,
+                                    message: 'Test dokončen úspěšně',
+                                    executionId: executionId,
+                                    duration: status.durationSeconds + 's',
+                                    completedSteps: status.completedSteps,
+                                    totalSteps: status.totalSteps
+                                }, null, 2));
+                                $('#closeTestBtn').show();
+                            } else {
+                                showTestError(`Test selhal: ${status.message || status.status}`);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking test status:', error);
+                }
+            }, 2000);
+        }
+        
+        function showTestError(message) {
+            $('#testProgressBar')
+                .removeClass('progress-bar-animated')
+                .addClass('bg-danger')
+                .css('width', '100%')
+                .text('Chyba');
+            $('#testResults').html(`<div class="text-danger">${message}</div>`);
+            $('#closeTestBtn').show();
         }
         
         function cancelTest() {
@@ -1088,8 +1188,50 @@
             loadExecutionHistory();
         }
         
-        function viewExecution(executionId) {
-            window.location.href = `/Projects/Execution/${executionId}`;
+        function viewExecutionDetails(executionId) {
+            // Open workflow execution details modal or redirect to details page
+            // For now, let's show a modal with execution details
+            $.ajax({
+                url: `/api/workflow/execution/${executionId}/details`,
+                type: 'GET',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        showExecutionDetailsModal(response.data);
+                    }
+                },
+                error: function() {
+                    toastr.error('Nepodařilo se načíst detaily spuštění');
+                }
+            });
+        }
+        
+        function showExecutionDetailsModal(executionData) {
+            // Create a simple modal to show execution details
+            const modalHtml = `
+                <div class="modal fade" id="executionDetailsModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Detaily spuštění workflow</h5>
+                                <button type="button" class="close" data-dismiss="modal">
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <pre>${JSON.stringify(executionData, null, 2)}</pre>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remove existing modal if any
+            $('#executionDetailsModal').remove();
+            $('body').append(modalHtml);
+            $('#executionDetailsModal').modal('show');
         }
         
         function loadRelatedRequests() {
