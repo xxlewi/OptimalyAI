@@ -90,9 +90,9 @@ namespace OptimalyAI.Controllers
                             var lines = output.Split('\n');
                             foreach (var line in lines)
                             {
-                                if (line.StartsWith("Identifier:"))
+                                if (line.Trim().StartsWith("Identifier:"))
                                 {
-                                    var modelName = line.Replace("Identifier:", "").Trim();
+                                    var modelName = line.Trim().Replace("Identifier:", "").Trim();
                                     loadedModels.Add(modelName);
                                 }
                             }
@@ -903,6 +903,103 @@ namespace OptimalyAI.Controllers
                     }
                 }
 
+                // Load the model if server is running and model is specified
+                if (isRunning && server != null && !string.IsNullOrEmpty(configuration?.DefaultModelId))
+                {
+                    steps.Add(new { message = $"Checking if model {configuration.DefaultModelId} is loaded...", status = "info" });
+                    
+                    try
+                    {
+                        // Check if model is already loaded
+                        var loadedModels = await GetLoadedModelsForServer(server);
+                        bool modelAlreadyLoaded = loadedModels.Any(m => 
+                            m.Equals(configuration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (modelAlreadyLoaded)
+                        {
+                            steps.Add(new { message = $"Model {configuration.DefaultModelId} is already loaded", status = "success" });
+                        }
+                        else
+                        {
+                            steps.Add(new { message = $"Model {configuration.DefaultModelId} needs to be loaded", status = "warning" });
+                            
+                            // Load the model based on server type
+                            if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama)
+                            {
+                                steps.Add(new { message = $"Loading Ollama model: {configuration.DefaultModelId}", status = "info" });
+                                
+                                // Pull the model if needed
+                                steps.Add(new { message = $"Executing: ollama pull {configuration.DefaultModelId}", status = "info" });
+                                var pullResult = await ExecuteOllamaCommand($"pull {configuration.DefaultModelId}");
+                                if (!pullResult.success)
+                                {
+                                    steps.Add(new { message = $"Failed to pull model: {pullResult.message}", status = "error" });
+                                }
+                                else
+                                {
+                                    steps.Add(new { message = "Model pulled successfully", status = "success" });
+                                }
+                                
+                                // For Ollama, pulling the model is usually enough to make it available
+                                // We can verify it's available by checking the models list
+                                await Task.Delay(1000); // Give it a moment
+                                steps.Add(new { message = "Model should now be available for use", status = "info" });
+                            }
+                            else if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+                            {
+                                steps.Add(new { message = $"Loading LM Studio model: {configuration.DefaultModelId}", status = "info" });
+                                steps.Add(new { message = $"Executing: lms load \"{configuration.DefaultModelId}\" --yes --quiet", status = "info" });
+                                
+                                var loadResult = await ExecuteLMStudioCommand($"load \"{configuration.DefaultModelId}\" --yes --quiet");
+                                if (!loadResult.success)
+                                {
+                                    steps.Add(new { message = $"Failed to load model: {loadResult.message}", status = "error" });
+                                }
+                                else
+                                {
+                                    steps.Add(new { message = "Model loaded successfully", status = "success" });
+                                    
+                                    // Parse the output to show relevant info
+                                    if (loadResult.message.Contains("Model loaded successfully"))
+                                    {
+                                        var lines = loadResult.message.Split('\n');
+                                        foreach (var line in lines)
+                                        {
+                                            if (line.Contains("in ") && line.Contains("s."))
+                                            {
+                                                steps.Add(new { message = line.Trim(), status = "info" });
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Verify model is loaded
+                            steps.Add(new { message = "Verifying model is loaded...", status = "info" });
+                            await Task.Delay(2000); // Give it time to load
+                            
+                            loadedModels = await GetLoadedModelsForServer(server);
+                            modelAlreadyLoaded = loadedModels.Any(m => 
+                                m.Equals(configuration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
+                            
+                            if (modelAlreadyLoaded)
+                            {
+                                steps.Add(new { message = $"Model {configuration.DefaultModelId} is now loaded!", status = "success" });
+                            }
+                            else
+                            {
+                                steps.Add(new { message = $"Model {configuration.DefaultModelId} failed to load", status = "error" });
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error loading model {ModelId}", configuration.DefaultModelId);
+                        steps.Add(new { message = $"Error loading model: {ex.Message}", status = "error" });
+                    }
+                }
+
                 // Final status
                 bool overallSuccess = isRunning && server != null;
                 steps.Add(new { message = overallSuccess ? "Orchestrator activation completed!" : "Orchestrator activation completed with errors", status = overallSuccess ? "success" : "warning" });
@@ -1210,6 +1307,92 @@ namespace OptimalyAI.Controllers
             
             [JsonPropertyName("expires_at")]
             public DateTime ExpiresAt { get; set; }
+        }
+
+        /// <summary>
+        /// Execute Ollama command
+        /// </summary>
+        private async Task<(bool success, string message)> ExecuteOllamaCommand(string arguments)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "ollama",
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process == null)
+                {
+                    return (false, "Failed to start ollama process");
+                }
+                
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                
+                if (process.ExitCode == 0)
+                {
+                    return (true, output);
+                }
+                else
+                {
+                    return (false, string.IsNullOrEmpty(error) ? output : error);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing ollama command: {Arguments}", arguments);
+                return (false, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Execute LM Studio command
+        /// </summary>
+        private async Task<(bool success, string message)> ExecuteLMStudioCommand(string arguments)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "lms",
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process == null)
+                {
+                    return (false, "Failed to start lms process");
+                }
+                
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                
+                if (process.ExitCode == 0)
+                {
+                    return (true, output);
+                }
+                else
+                {
+                    return (false, string.IsNullOrEmpty(error) ? output : error);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing lms command: {Arguments}", arguments);
+                return (false, ex.Message);
+            }
         }
     }
 

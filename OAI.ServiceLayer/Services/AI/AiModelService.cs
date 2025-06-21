@@ -5,6 +5,7 @@ using OAI.ServiceLayer.Services;
 using OAI.ServiceLayer.Services.AI.Models;
 using OAI.ServiceLayer.Interfaces;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Net.Http;
 using System.IO;
 
@@ -77,9 +78,9 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
             }
             else if (server.ServerType == AiServerType.LMStudio)
             {
-                // For LM Studio, we only check local files
-                var localModels = await GetLMStudioLocalModels();
-                onlineModels = localModels.Select(m => (m.Name, m.Size, m.Tag ?? "latest", m.ModifiedAt)).ToList();
+                // For LM Studio, use API to get available models
+                var models = await GetLMStudioModels(server.BaseUrl);
+                onlineModels = models.Select(m => (m.Name, m.Size, m.Tag ?? "latest", m.ModifiedAt)).ToList();
             }
 
             // Get existing models from database
@@ -100,7 +101,7 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
                     }
                     else if (server.ServerType == AiServerType.LMStudio)
                     {
-                        modelInfo = (await GetLMStudioLocalModels()).FirstOrDefault(m => m.Name == name);
+                        modelInfo = (await GetLMStudioModels(server.BaseUrl)).FirstOrDefault(m => m.Name == name);
                     }
                     
                     var model = new AiModel
@@ -189,6 +190,44 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get models from Ollama API");
+        }
+        
+        return models;
+    }
+
+    private async Task<List<OllamaModelInfo>> GetLMStudioModels(string baseUrl)
+    {
+        var models = new List<OllamaModelInfo>();
+        
+        try
+        {
+            using var httpClient = new HttpClient();
+            var response = await httpClient.GetAsync($"{baseUrl}/v1/models");
+            response.EnsureSuccessStatusCode();
+            
+            var json = await response.Content.ReadAsStringAsync();
+            var modelsResponse = JsonSerializer.Deserialize<LMStudioModelsResponse>(json);
+            
+            if (modelsResponse?.Data != null)
+            {
+                foreach (var model in modelsResponse.Data)
+                {
+                    models.Add(new OllamaModelInfo
+                    {
+                        Name = model.Id,
+                        Tag = "latest",
+                        Size = 0, // LM Studio API doesn't provide size
+                        ModifiedAt = model.Created != 0 ? DateTimeOffset.FromUnixTimeSeconds(model.Created).DateTime : DateTime.UtcNow,
+                        Family = ExtractFamilyFromPath(model.Id),
+                        ParameterSize = ExtractSizeFromFileName(model.Id),
+                        QuantizationLevel = ExtractQuantizationFromFileName(model.Id)
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get models from LM Studio API");
         }
         
         return models;
@@ -397,12 +436,16 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
     // Response classes for LM Studio
     private class LMStudioModelsResponse
     {
+        [JsonPropertyName("data")]
         public List<LMStudioModel>? Data { get; set; }
     }
 
     private class LMStudioModel
     {
+        [JsonPropertyName("id")]
         public string Id { get; set; } = string.Empty;
+        
+        [JsonPropertyName("created")]
         public long Created { get; set; }
     }
 }

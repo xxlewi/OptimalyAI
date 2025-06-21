@@ -110,20 +110,40 @@ public class ModelsController : Controller
                     }
                     else if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
                     {
-                        // Get loaded LM Studio models
-                        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                        var response = await httpClient.GetAsync($"{server.BaseUrl}/v1/models");
-                        if (response.IsSuccessStatusCode)
+                        // Get actually loaded LM Studio models using CLI
+                        try
                         {
-                            var json = await response.Content.ReadAsStringAsync();
-                            var lmResponse = JsonSerializer.Deserialize<LMStudioModelsResponse>(json);
-                            if (lmResponse?.Data != null)
+                            var psi = new System.Diagnostics.ProcessStartInfo
                             {
-                                foreach (var model in lmResponse.Data)
+                                FileName = "lms",
+                                Arguments = "ps",
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                CreateNoWindow = true
+                            };
+                            
+                            using var process = System.Diagnostics.Process.Start(psi);
+                            if (process != null)
+                            {
+                                var output = await process.StandardOutput.ReadToEndAsync();
+                                await process.WaitForExitAsync();
+                                
+                                // Parse the output to find loaded models
+                                var lines = output.Split('\n');
+                                foreach (var line in lines)
                                 {
-                                    loadedLMStudioModels.Add(model.Id);
+                                    if (line.Trim().StartsWith("Identifier:"))
+                                    {
+                                        var modelName = line.Trim().Replace("Identifier:", "").Trim();
+                                        loadedLMStudioModels.Add(modelName);
+                                    }
                                 }
                             }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to get loaded models from LM Studio using CLI");
                         }
                     }
                 }
@@ -302,6 +322,39 @@ public class ModelsController : Controller
                 // Load model in Ollama
                 await _ollamaService.WarmupModelAsync(model);
             }
+            else if (aiServer.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+            {
+                // Load model in LM Studio using CLI
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "lms",
+                    Arguments = $"load \"{model}\" --yes --quiet",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process != null)
+                {
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    var error = await process.StandardError.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+                    
+                    if (process.ExitCode != 0)
+                    {
+                        _logger.LogError("Failed to load LM Studio model {Model}: {Error}", model, error);
+                        return Json(new { success = false, error = $"Nepodařilo se načíst model: {error}" });
+                    }
+                    
+                    _logger.LogInformation("LM Studio model {Model} loaded successfully", model);
+                }
+                else
+                {
+                    return Json(new { success = false, error = "Nepodařilo se spustit LM Studio CLI" });
+                }
+            }
             
             return Json(new { success = true, message = $"Model {model} úspěšně načten" });
         }
@@ -352,11 +405,44 @@ public class ModelsController : Controller
                 
                 return Json(new { success = true, message = $"Model {model} byl úspěšně uvolněn z paměti" });
             }
-            else
+            else if (aiServer.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
             {
-                // LM Studio doesn't have unload endpoint
-                return Json(new { success = true, message = $"Model {model} bude automaticky uvolněn serverem" });
+                // LM Studio unload using CLI
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "lms",
+                    Arguments = "unload",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process != null)
+                {
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    var error = await process.StandardError.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+                    
+                    if (process.ExitCode != 0 && !error.Contains("No models are currently loaded"))
+                    {
+                        _logger.LogError("Failed to unload LM Studio models: {Error}", error);
+                        return Json(new { success = false, error = $"Nepodařilo se uvolnit model: {error}" });
+                    }
+                    
+                    _logger.LogInformation("LM Studio models unloaded successfully");
+                }
+                else
+                {
+                    return Json(new { success = false, error = "Nepodařilo se spustit LM Studio CLI" });
+                }
+                
+                return Json(new { success = true, message = $"Model {model} byl úspěšně uvolněn z paměti" });
             }
+            
+            // Unsupported server type
+            return Json(new { success = false, error = $"Uvolňování modelů není podporováno pro typ serveru {aiServer.ServerType}" });
         }
         catch (Exception ex)
         {
