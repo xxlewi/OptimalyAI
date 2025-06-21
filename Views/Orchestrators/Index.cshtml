@@ -145,34 +145,22 @@
             </div>
         </div>
 
-        <!-- Actions Bar -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <a href="/Orchestrators/Projects" class="btn btn-primary">
-                            <i class="fas fa-project-diagram"></i> Project Orchestrators
-                        </a>
-                        <a href="/Orchestrators/Projects/Create" class="btn btn-success">
-                            <i class="fas fa-plus"></i> Create New Project
-                        </a>
-                        <button class="btn btn-info float-right" onclick="refreshMetrics()">
-                            <i class="fas fa-sync"></i> Refresh Metrics
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Orchestrators Grid -->
         <div class="row">
             @foreach (var orchestrator in Model)
             {
-                <div class="col-lg-6 col-xl-4">
-                    <div class="card orchestrator-card @(orchestrator.IsActive ? "active" : "inactive")">
+                <div class="col-lg-6 col-xl-4 mb-4">
+                    <div class="card orchestrator-card @(orchestrator.IsActive ? "active" : "inactive") h-100" style="cursor: pointer;" onclick="viewDetail('@orchestrator.Id')">
                         <div class="card-header">
                             <h3 class="card-title">
                                 <i class="fas fa-robot mr-2"></i>@orchestrator.Name
+                                @if (orchestrator.IsDefault)
+                                {
+                                    <span class="badge badge-warning ml-2">
+                                        <i class="fas fa-star mr-1"></i>Default
+                                    </span>
+                                }
                             </h3>
                             <div class="card-tools">
                                 <span class="status-badge @(orchestrator.IsActive ? "active" : "inactive")">
@@ -243,19 +231,6 @@
                                 </div>
                             }
                         </div>
-                        <div class="card-footer">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="/Orchestrators/Details/@orchestrator.Id" class="btn btn-info">
-                                    <i class="fas fa-info-circle"></i> Details
-                                </a>
-                                <a href="/Orchestrators/Test/@orchestrator.Id" class="btn btn-primary">
-                                    <i class="fas fa-play"></i> Test
-                                </a>
-                                <button class="btn btn-warning" onclick="viewConfig('@orchestrator.Id')">
-                                    <i class="fas fa-cog"></i> Config
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             }
@@ -281,22 +256,773 @@
     </div>
 </section>
 
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1" role="dialog" aria-labelledby="detailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailModalLabel">
+                    <i class="fas fa-robot"></i> Orchestrator Detail
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="detailTabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="config-tab" data-toggle="tab" href="#configContent" role="tab">
+                            <i class="fas fa-cog"></i> Configuration
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="test-tab" data-toggle="tab" href="#testContent" role="tab">
+                            <i class="fas fa-play"></i> Test
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="metrics-tab" data-toggle="tab" href="#metricsContent" role="tab">
+                            <i class="fas fa-chart-line"></i> Metrics
+                        </a>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3" id="detailTabContent">
+                    <div class="tab-pane fade show active" id="configContent" role="tabpanel">
+                        <!-- Configuration will be loaded here -->
+                    </div>
+                    <div class="tab-pane fade" id="testContent" role="tabpanel">
+                        <!-- Test interface will be loaded here -->
+                    </div>
+                    <div class="tab-pane fade" id="metricsContent" role="tabpanel">
+                        <!-- Metrics will be loaded here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveConfigBtn" onclick="saveConfig()" style="display:none;">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+                <button type="button" class="btn btn-success" id="executeTestBtn" onclick="executeTest()" style="display:none;">
+                    <i class="fas fa-play"></i> Execute Test
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         function refreshMetrics() {
-            location.reload();
+            // TODO: Implement AJAX refresh of metrics without page reload
+            console.log('Metrics refresh disabled - was causing page reload issues');
         }
         
-        function viewConfig(orchestratorId) {
-            // TODO: Show configuration modal
-            alert('Configuration for orchestrator: ' + orchestratorId);
+        let currentOrchestratorId = null;
+        
+        function viewDetail(orchestratorId) {
+            currentOrchestratorId = orchestratorId;
+            $('#detailModal').modal('show');
+            
+            // Show config tab by default
+            $('#config-tab').tab('show');
+            loadConfigTab(orchestratorId);
+            
+            // Setup tab change handlers
+            $('#config-tab').off('shown.bs.tab').on('shown.bs.tab', function() {
+                loadConfigTab(orchestratorId);
+                $('#saveConfigBtn').show();
+                $('#executeTestBtn').hide();
+            });
+            
+            $('#test-tab').off('shown.bs.tab').on('shown.bs.tab', function() {
+                loadTestTab(orchestratorId);
+                $('#saveConfigBtn').hide();
+                $('#executeTestBtn').show();
+            });
+            
+            $('#metrics-tab').off('shown.bs.tab').on('shown.bs.tab', function() {
+                loadMetricsTab(orchestratorId);
+                $('#saveConfigBtn').hide();
+                $('#executeTestBtn').hide();
+            });
         }
         
-        // Auto-refresh every 30 seconds
-        setInterval(function() {
-            if (document.visibilityState === 'visible') {
-                refreshMetrics();
+        function loadConfigTab(orchestratorId) {
+            $('#saveConfigBtn').show();
+            $('#executeTestBtn').hide();
+            
+            const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
+            const orchestratorName = orchestratorCard.find('.card-title').text().trim();
+            
+            $('#configContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading configuration...</div>');
+            
+            setTimeout(() => {
+                let content = `
+                    <form id="configForm">
+                        <h5 class="mb-3">${orchestratorName}</h5>
+                        <input type="hidden" id="orchestratorId" value="${orchestratorId}">
+                `;
+                
+                // Add AI Server selection for all orchestrators
+                content += `
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">AI Server</label>
+                        <div class="col-sm-8">
+                            <select class="form-control" id="aiServerSelect" name="aiServer" onchange="loadServerModels()">
+                                <option value="">Loading servers...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">Default Model</label>
+                        <div class="col-sm-8">
+                            <select class="form-control" id="modelSelect" name="defaultModel">
+                                <option value="">Select AI Server first</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">Default Orchestrator</label>
+                        <div class="col-sm-8">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="isDefaultOrchestrator" name="isDefaultOrchestrator">
+                                <label class="custom-control-label" for="isDefaultOrchestrator">Set as default workflow orchestrator</label>
+                            </div>
+                            <small class="form-text text-muted">Only one orchestrator can be set as default</small>
+                        </div>
+                    </div>
+                    <hr>
+                `;
+                
+                // Add specific configuration based on orchestrator type
+                if (orchestratorId.includes('conversation')) {
+                    content += `
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Enable Tool Detection</label>
+                            <div class="col-sm-8">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="enableToolDetection" name="enableToolDetection" checked>
+                                    <label class="custom-control-label" for="enableToolDetection">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Tool Detection Threshold</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="toolDetectionThreshold" value="0.7" min="0" max="1" step="0.1">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Auto Detect ReAct Mode</label>
+                            <div class="col-sm-8">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="autoDetectReActMode" name="autoDetectReActMode" checked>
+                                    <label class="custom-control-label" for="autoDetectReActMode">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">ReAct Max Iterations</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="reActMaxIterations" value="5" min="1" max="20">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Default Temperature</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="defaultTemperature" value="0.7" min="0" max="2" step="0.1">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Default Max Tokens</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="defaultMaxTokens" value="2000" min="100" max="10000" step="100">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Max Message Length</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="maxMessageLength" value="10000" min="1000" max="50000" step="1000">
+                            </div>
+                        </div>
+                    `;
+                } else if (orchestratorId.includes('project')) {
+                    content += `
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Max Concurrent Stages</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="maxConcurrentStages" value="3" min="1" max="10">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Stage Timeout (minutes)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="stageTimeout" value="5" min="1" max="60">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Enable Parallel Execution</label>
+                            <div class="col-sm-8">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="enableParallelExecution" name="enableParallelExecution" checked>
+                                    <label class="custom-control-label" for="enableParallelExecution">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Retry Failed Stages</label>
+                            <div class="col-sm-8">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="retryFailedStages" name="retryFailedStages" checked>
+                                    <label class="custom-control-label" for="retryFailedStages">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Max Retries</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="maxRetries" value="2" min="0" max="5">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Log Level</label>
+                            <div class="col-sm-8">
+                                <select class="form-control" name="logLevel">
+                                    <option value="Verbose">Verbose</option>
+                                    <option value="Debug">Debug</option>
+                                    <option value="Information" selected>Information</option>
+                                    <option value="Warning">Warning</option>
+                                    <option value="Error">Error</option>
+                                    <option value="Fatal">Fatal</option>
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                } else if (orchestratorId.includes('toolchain')) {
+                    content += `
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Max Concurrent Tools</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="maxConcurrentTools" value="5" min="1" max="20">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Tool Timeout (seconds)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="toolTimeout" value="30" min="5" max="300">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Enable Caching</label>
+                            <div class="col-sm-8">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="enableCaching" name="enableCaching" checked>
+                                    <label class="custom-control-label" for="enableCaching">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Cache Expiration (hours)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="cacheExpiration" value="1" min="0.5" max="24" step="0.5">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Validate Tool Inputs</label>
+                            <div class="col-sm-8">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="validateToolInputs" name="validateToolInputs" checked>
+                                    <label class="custom-control-label" for="validateToolInputs">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (orchestratorId.includes('webscraping')) {
+                    content += `
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Scraper Timeout (seconds)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="scraperTimeout" value="30" min="5" max="120">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Max Retries</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="maxRetries" value="3" min="0" max="10">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Retry Delay (seconds)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="retryDelay" value="1" min="0.5" max="10" step="0.5">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Enable JavaScript</label>
+                            <div class="col-sm-8">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="enableJavaScript" name="enableJavaScript" checked>
+                                    <label class="custom-control-label" for="enableJavaScript">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">User Agent</label>
+                            <div class="col-sm-8">
+                                <input type="text" class="form-control" name="userAgent" value="Mozilla/5.0 (compatible; OptimalyAI/1.0)">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <label class="col-sm-4 col-form-label">Max Page Size (MB)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" name="maxPageSize" value="10" min="1" max="50">
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                content += '</form>';
+                
+                $('#configContent').html(content);
+                
+                // Load AI servers
+                loadAIServers();
+                
+                // Load saved configuration
+                loadSavedConfiguration(orchestratorId);
+            }, 300);
+        }
+        
+        async function loadSavedConfiguration(orchestratorId) {
+            try {
+                const response = await fetch(`/Orchestrators/GetConfiguration?id=${orchestratorId}`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const config = result.data;
+                    
+                    // Set default checkbox
+                    $('#isDefaultOrchestrator').prop('checked', config.isDefault);
+                    
+                    // Set AI server selection after servers are loaded
+                    if (config.aiServerId) {
+                        setTimeout(() => {
+                            $('#aiServerSelect').val(config.aiServerId);
+                            $('#aiServerSelect').trigger('change');
+                            
+                            // Set model selection after models are loaded
+                            if (config.defaultModelId) {
+                                setTimeout(() => {
+                                    $('#modelSelect').val(config.defaultModelId);
+                                }, 500);
+                            }
+                        }, 500);
+                    }
+                } else {
+                    // No saved configuration, set default based on current state
+                    const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
+                    const isCurrentlyDefault = orchestratorCard.find('.badge-warning').length > 0;
+                    $('#isDefaultOrchestrator').prop('checked', isCurrentlyDefault);
+                }
+            } catch (error) {
+                console.error('Error loading saved configuration:', error);
+                // Fallback to current state
+                const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
+                const isCurrentlyDefault = orchestratorCard.find('.badge-warning').length > 0;
+                $('#isDefaultOrchestrator').prop('checked', isCurrentlyDefault);
             }
-        }, 30000);
+        }
+        
+        async function loadAIServers() {
+            try {
+                // Load servers from page HTML - we'll parse the existing data
+                const response = await fetch('/AiServers');
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Extract servers from the table
+                const servers = [];
+                doc.querySelectorAll('table tbody tr').forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 5) {
+                        const id = row.querySelector('button[data-id]')?.getAttribute('data-id');
+                        const name = cells[0].textContent.trim();
+                        const type = cells[1].querySelector('.badge')?.textContent.trim();
+                        const url = cells[2].textContent.trim();
+                        const isDefault = cells[3].querySelector('.badge-success') !== null;
+                        
+                        if (id) {
+                            servers.push({ id, name, type, url, isDefault });
+                        }
+                    }
+                });
+                
+                let options = '<option value="">Select AI Server</option>';
+                servers.forEach(server => {
+                    const isDefault = server.isDefault ? ' (Default)' : '';
+                    options += `<option value="${server.id}" data-type="${server.type}" data-url="${server.url}">${server.name}${isDefault} - ${server.url}</option>`;
+                });
+                
+                $('#aiServerSelect').html(options);
+                
+                // Don't auto-select any server - let the saved configuration handle it
+            } catch (error) {
+                console.error('Error loading AI servers:', error);
+                $('#aiServerSelect').html('<option value="">Error loading servers</option>');
+            }
+        }
+        
+        async function loadServerModels() {
+            const selectedServerId = $('#aiServerSelect').val();
+            const selectedOption = $('#aiServerSelect option:selected');
+            const serverType = selectedOption.data('type');
+            const serverUrl = selectedOption.data('url');
+            
+            if (!selectedServerId) {
+                $('#modelSelect').html('<option value="">Select AI Server first</option>');
+                return;
+            }
+            
+            $('#modelSelect').html('<option value="">Loading models...</option>');
+            
+            try {
+                // Load models page and extract data
+                const response = await fetch('/Models');
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Extract models from table
+                const models = [];
+                const selectedServerText = $('#aiServerSelect option:selected').text();
+                
+                doc.querySelectorAll('table tbody tr').forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 7) {
+                        const modelName = cells[0].querySelector('small')?.textContent.trim();
+                        const serverBadge = cells[1].querySelector('.badge')?.textContent.trim();
+                        const sizeText = cells[2].textContent.trim();
+                        const statusBadge = cells[6].querySelector('.badge');
+                        const isLoaded = statusBadge?.textContent.includes('Načtený') || false;
+                        
+                        // Filter by selected server
+                        if (modelName && (selectedServerText.includes(serverBadge) || serverBadge === selectedOption.data('type'))) {
+                            models.push({ 
+                                name: modelName, 
+                                sizeText: sizeText, 
+                                isLoaded: isLoaded 
+                            });
+                        }
+                    }
+                });
+                
+                let options = '<option value="">Select Model</option>';
+                models.forEach(model => {
+                    const status = model.isLoaded ? ' (Loaded)' : '';
+                    const size = model.sizeText ? ` - ${model.sizeText}` : '';
+                    options += `<option value="${model.name}">${model.name}${size}${status}</option>`;
+                });
+                
+                $('#modelSelect').html(options);
+                
+                // Select default model if exists
+                const defaultModel = models.find(m => m.name.includes('llama3.2')) || models[0];
+                if (defaultModel) {
+                    $('#modelSelect').val(defaultModel.name);
+                }
+            } catch (error) {
+                console.error('Error loading models:', error);
+                $('#modelSelect').html('<option value="">Error loading models</option>');
+            }
+        }
+        
+        function saveConfig() {
+            const formData = $('#configForm').serializeArray();
+            const config = {};
+            
+            // Convert form data to object
+            formData.forEach(item => {
+                if (item.value === 'on') {
+                    // Handle checkboxes
+                    config[item.name] = true;
+                } else if (!isNaN(item.value) && item.value !== '') {
+                    // Handle numbers
+                    config[item.name] = parseFloat(item.value);
+                } else {
+                    // Handle strings
+                    config[item.name] = item.value;
+                }
+            });
+            
+            // Add unchecked checkboxes
+            $('#configForm input[type="checkbox"]').each(function() {
+                if (!this.checked) {
+                    config[this.name] = false;
+                }
+            });
+            
+            // Show saving state
+            const saveBtn = $('button[onclick="saveConfig()"]');
+            const originalText = saveBtn.html();
+            saveBtn.html('<i class="fas fa-spinner fa-spin"></i> Saving...').prop('disabled', true);
+            
+            // Save configuration
+            Promise.resolve().then(async () => {
+                try {
+                    // Prepare configuration data
+                    const aiServerId = $('#aiServerSelect').val();
+                    const defaultModelId = $('#modelSelect').val();
+                    
+                    const isDefault = $('#isDefaultOrchestrator').is(':checked');
+                    
+                    const configData = {
+                        orchestratorId: currentOrchestratorId,
+                        name: currentOrchestratorId,
+                        isDefault: isDefault,
+                        aiServerId: aiServerId ? aiServerId : null,
+                        defaultModelId: defaultModelId ? defaultModelId : null
+                    };
+                    
+                    console.log('Saving config data:', configData);
+                    console.log('Current orchestrator ID:', currentOrchestratorId);
+                    console.log('AI Server ID:', aiServerId);
+                    console.log('Model ID:', defaultModelId);
+                    console.log('Is Default:', isDefault);
+                    console.log('JSON being sent:', JSON.stringify(configData));
+                    
+                    const response = await fetch('/Orchestrators/SaveConfiguration', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify(configData)
+                    });
+                    
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', response.headers);
+                    
+                    const result = await response.json();
+                    console.log('Response result:', result);
+                    
+                    if (result.success) {
+                        toastr.success('Configuration saved successfully!');
+                        saveBtn.html(originalText).prop('disabled', false);
+                        
+                        // Refresh page if default was changed
+                        if (isDefault === true) {
+                            location.reload();
+                        }
+                    } else {
+                        throw new Error(result.error || 'Failed to save configuration');
+                    }
+                } catch (error) {
+                    console.error('Error saving configuration:', error);
+                    toastr.error('Failed to save configuration: ' + error.message);
+                    saveBtn.html(originalText).prop('disabled', false);
+                }
+            });
+        }
+        
+        function loadTestTab(orchestratorId) {
+            const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
+            const orchestratorName = orchestratorCard.find('.card-title').text().trim();
+            
+            $('#testContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading test interface...</div>');
+            
+            setTimeout(() => {
+                let content = `
+                    <div class="test-interface">
+                        <h5 class="mb-3">Test ${orchestratorName}</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-edit"></i> Input</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <form id="testForm">
+                                            <div class="form-group">
+                                                <label>Input Data (JSON)</label>
+                                                <textarea id="testInput" class="form-control" rows="10" placeholder='{"message": "Test message"}'>{
+  "message": "Hello, test the orchestrator"
+}</textarea>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Context (Optional)</label>
+                                                <textarea id="testContext" class="form-control" rows="3" placeholder='{"userId": "test-user"}'></textarea>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-terminal"></i> Output</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="testOutput" style="min-height: 300px; max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;">
+                                            <p class="text-muted">Execute test to see output here...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#testContent').html(content);
+            }, 300);
+        }
+        
+        function loadMetricsTab(orchestratorId) {
+            $('#metricsContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading metrics...</div>');
+            
+            setTimeout(() => {
+                let content = `
+                    <div class="metrics-view">
+                        <h5 class="mb-3">Performance Metrics</h5>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="small-box bg-info">
+                                    <div class="inner">
+                                        <h3>0</h3>
+                                        <p>Total Executions</p>
+                                    </div>
+                                    <div class="icon">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small-box bg-success">
+                                    <div class="inner">
+                                        <h3>0.0%</h3>
+                                        <p>Success Rate</p>
+                                    </div>
+                                    <div class="icon">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small-box bg-warning">
+                                    <div class="inner">
+                                        <h3>0ms</h3>
+                                        <p>Avg Response Time</p>
+                                    </div>
+                                    <div class="icon">
+                                        <i class="fas fa-clock"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small-box bg-danger">
+                                    <div class="inner">
+                                        <h3>0</h3>
+                                        <p>Failed Executions</p>
+                                    </div>
+                                    <div class="icon">
+                                        <i class="fas fa-times-circle"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h6><i class="fas fa-history"></i> Recent Executions</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted text-center">No execution history available</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#metricsContent').html(content);
+            }, 300);
+        }
+        
+        async function executeTest() {
+            const input = $('#testInput').val();
+            const context = $('#testContext').val();
+            
+            // Validate JSON
+            try {
+                if (input) JSON.parse(input);
+                if (context) JSON.parse(context);
+            } catch (e) {
+                toastr.error('Invalid JSON format: ' + e.message);
+                return;
+            }
+            
+            $('#testOutput').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Executing test...</div>');
+            
+            // Real API call to test orchestrator
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch('/api/orchestrators/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        orchestratorId: currentOrchestratorId,
+                        input: input ? JSON.parse(input) : {},
+                        context: context ? JSON.parse(context) : {}
+                    })
+                });
+                
+                const result = await response.json();
+                const executionTime = Date.now() - startTime;
+                
+                if (response.ok && result.success) {
+                    $('#testOutput').html(`
+                        <div class="result-item">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="badge badge-success">Success</span>
+                                <small class="text-muted">${executionTime}ms</small>
+                            </div>
+                            <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                        </div>
+                    `);
+                    toastr.success('Test executed successfully!');
+                } else {
+                    $('#testOutput').html(`
+                        <div class="result-item">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="badge badge-danger">Error</span>
+                                <small class="text-muted">${executionTime}ms</small>
+                            </div>
+                            <div class="alert alert-danger">
+                                ${result.message || result.error || 'Unknown error occurred'}
+                            </div>
+                        </div>
+                    `);
+                    toastr.error('Test execution failed');
+                }
+            } catch (error) {
+                const executionTime = Date.now() - startTime;
+                $('#testOutput').html(`
+                    <div class="result-item">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="badge badge-danger">Error</span>
+                            <small class="text-muted">${executionTime}ms</small>
+                        </div>
+                        <div class="alert alert-danger">
+                            Network error: ${error.message}
+                        </div>
+                    </div>
+                `);
+                toastr.error('Failed to execute test: ' + error.message);
+            }
+        }
+        
+        // Auto-refresh disabled - was causing page reload issues
     </script>
 }

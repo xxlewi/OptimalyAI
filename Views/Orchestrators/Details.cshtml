@@ -1,0 +1,315 @@
+@model OptimalyAI.Controllers.OrchestratorDetailsViewModel
+@{
+    ViewData["Title"] = $"{Model.Name} - Details";
+}
+
+@section Styles {
+    <style>
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .status-badge.active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .execution-item {
+            border-left: 3px solid #dee2e6;
+            padding-left: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .execution-item.success {
+            border-left-color: #28a745;
+        }
+        
+        .execution-item.failed {
+            border-left-color: #dc3545;
+        }
+        
+        .capability-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            display: inline-block;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@Model.Name</h1>
+                <p class="text-muted">@Model.Description</p>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/Orchestrators">Orchestrators</a></li>
+                    <li class="breadcrumb-item active">@Model.Name</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Status and Actions -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <span class="status-badge @(Model.IsActive ? "active" : "inactive") mr-3">
+                                    <i class="fas fa-circle mr-2" style="font-size: 0.6rem;"></i>
+                                    @(Model.IsActive ? "Active" : "Inactive")
+                                </span>
+                                <span class="text-muted">Type: <strong>@Model.Type</strong></span>
+                            </div>
+                            <div class="col-md-6 text-right">
+                                <a href="/Orchestrators/Test/@Model.Id" class="btn btn-primary">
+                                    <i class="fas fa-play"></i> Test Orchestrator
+                                </a>
+                                <button class="btn btn-warning" onclick="showConfigModal()">
+                                    <i class="fas fa-cog"></i> Configuration
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Overview -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value">@Model.TotalExecutions</div>
+                    <div>Total Executions</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card" style="background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);">
+                    <div class="metric-value">@Model.SuccessfulExecutions</div>
+                    <div>Successful</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                    <div class="metric-value">@Model.FailedExecutions</div>
+                    <div>Failed</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);">
+                    <div class="metric-value">@Model.SuccessRate.ToString("F1")%</div>
+                    <div>Success Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Capabilities -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-tools"></i> Capabilities
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.Capabilities != null)
+                        {
+                            <div class="mb-3">
+                                @if (Model.Capabilities.SupportsStreaming)
+                                {
+                                    <div class="capability-badge">
+                                        <i class="fas fa-stream"></i> Streaming Support
+                                    </div>
+                                }
+                                @if (Model.Capabilities.SupportsParallelExecution)
+                                {
+                                    <div class="capability-badge">
+                                        <i class="fas fa-tasks"></i> Parallel Execution
+                                    </div>
+                                }
+                                @if (Model.Capabilities.SupportsCancel)
+                                {
+                                    <div class="capability-badge">
+                                        <i class="fas fa-stop-circle"></i> Cancelable
+                                    </div>
+                                }
+                            </div>
+                            
+                            @if (Model.Capabilities.SupportedToolCategories?.Any() == true)
+                            {
+                                <h6>Supported Tool Categories:</h6>
+                                <div>
+                                    @foreach (var category in Model.Capabilities.SupportedToolCategories)
+                                    {
+                                        <div class="capability-badge">
+                                            <i class="fas fa-tag"></i> @category
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted">No capabilities information available</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Metrics -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-line"></i> Performance Metrics (Last 7 Days)
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="performanceChart" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Executions -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-history"></i> Recent Executions
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.RecentExecutions?.Any() == true)
+                        {
+                            @foreach (var execution in Model.RecentExecutions.Take(10))
+                            {
+                                <div class="execution-item @(execution.IsSuccess ? "success" : "failed")">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <strong>@execution.StartTime.ToString("g")</strong>
+                                        </div>
+                                        <div class="col-md-2">
+                                            @if (execution.IsSuccess)
+                                            {
+                                                <span class="badge badge-success">Success</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-danger">Failed</span>
+                                            }
+                                        </div>
+                                        <div class="col-md-2">
+                                            <i class="fas fa-clock"></i> @execution.Duration.TotalMilliseconds.ToString("F0")ms
+                                        </div>
+                                        <div class="col-md-5">
+                                            @if (!string.IsNullOrEmpty(execution.ErrorMessage))
+                                            {
+                                                <span class="text-danger">@execution.ErrorMessage</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted text-center">No execution history available</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Performance Chart
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        
+        const dailyMetrics = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DailyMetrics ?? new List<dynamic>()));
+        
+        const labels = dailyMetrics.map(m => new Date(m.Date).toLocaleDateString());
+        const successData = dailyMetrics.map(m => m.SuccessCount || 0);
+        const failureData = dailyMetrics.map(m => m.FailureCount || 0);
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Successful Executions',
+                    data: successData,
+                    borderColor: 'rgb(40, 167, 69)',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.3
+                }, {
+                    label: 'Failed Executions',
+                    data: failureData,
+                    borderColor: 'rgb(220, 53, 69)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        function showConfigModal() {
+            // TODO: Implement configuration modal
+            toastr.info('Configuration modal will be implemented');
+        }
+    </script>
+}

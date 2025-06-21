@@ -21,15 +21,18 @@ namespace OptimalyAI.Controllers
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<OrchestratorsController> _logger;
         private readonly IOrchestratorMetrics _metrics;
+        private readonly IOrchestratorSettings _orchestratorSettings;
 
         public OrchestratorsController(
             IServiceProvider serviceProvider,
             ILogger<OrchestratorsController> logger,
-            IOrchestratorMetrics metrics)
+            IOrchestratorMetrics metrics,
+            IOrchestratorSettings orchestratorSettings)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
             _metrics = metrics;
+            _orchestratorSettings = orchestratorSettings;
         }
 
         /// <summary>
@@ -118,6 +121,9 @@ namespace OptimalyAI.Controllers
                         capabilities = capabilitiesMethod.Invoke(orchestrator, null) as OrchestratorCapabilities;
                     }
                     
+                    // Get saved configuration - commented out for now
+                    // var savedConfig = await _configurationService.GetByOrchestratorIdAsync(orchestratorId);
+                    
                     orchestrators.Add(new OrchestratorViewModel
                     {
                         Id = orchestratorId,
@@ -125,6 +131,7 @@ namespace OptimalyAI.Controllers
                         Description = orchestratorDescription,
                         Type = orchestratorType.Name,
                         IsActive = health?.State == OrchestratorHealthState.Healthy,
+                        IsDefault = await _orchestratorSettings.IsDefaultOrchestratorAsync(orchestratorId),
                         TotalExecutions = summary?.TotalExecutions ?? 0,
                         SuccessfulExecutions = summary?.SuccessfulExecutions ?? 0,
                         FailedExecutions = summary?.FailedExecutions ?? 0,
@@ -193,7 +200,18 @@ namespace OptimalyAI.Controllers
                 Description = orchestratorType.GetProperty("Description")?.GetValue(orchestrator)?.ToString() ?? "",
                 Type = orchestratorType.Name,
                 Metrics = metrics,
-                RecentExecutions = recentExecutions
+                RecentExecutions = recentExecutions,
+                IsActive = true, // Assume active if found
+                TotalExecutions = metrics?.Metrics?.TotalExecutions ?? 0,
+                SuccessfulExecutions = metrics?.Metrics?.SuccessfulExecutions ?? 0,
+                FailedExecutions = metrics?.Metrics?.FailedExecutions ?? 0,
+                SuccessRate = metrics?.Metrics?.SuccessRate ?? 0,
+                DailyMetrics = metrics?.Metrics?.HourlyBreakdown?.GroupBy(h => h.Hour.Date)
+                    .Select(g => new {
+                        Date = g.Key,
+                        SuccessCount = g.Sum(h => h.SuccessCount),
+                        FailureCount = g.Sum(h => h.FailureCount)
+                    }).Cast<dynamic>().ToList() ?? new List<dynamic>()
             };
             
             // Get capabilities
@@ -227,8 +245,6 @@ namespace OptimalyAI.Controllers
                 return NotFound();
             }
             
-            ViewBag.OrchestratorId = id;
-            
             // Get orchestrator type to determine test interface
             var orchestratorType = GetAllOrchestratorTypes()
                 .FirstOrDefault(t => 
@@ -244,30 +260,142 @@ namespace OptimalyAI.Controllers
                 return NotFound();
             }
             
-            ViewBag.OrchestratorName = orchestratorType.GetProperty("Name")?.GetValue(_serviceProvider.GetService(orchestratorType))?.ToString() ?? id;
+            var orchestratorInstance = _serviceProvider.GetService(orchestratorType);
+            
+            var viewModel = new OrchestratorTestViewModel
+            {
+                Id = id,
+                Name = orchestratorType.GetProperty("Name")?.GetValue(orchestratorInstance)?.ToString() ?? id,
+                Description = orchestratorType.GetProperty("Description")?.GetValue(orchestratorInstance)?.ToString() ?? "AI Orchestrator",
+                Type = orchestratorType.Name
+            };
             
             // Determine which test view to show based on orchestrator type
             if (orchestratorType.Name.Contains("Conversation"))
             {
-                return View("~/Views/Orchestrators/TestConversation.cshtml");
+                return View("~/Views/Orchestrators/TestConversation.cshtml", viewModel);
             }
             else if (orchestratorType.Name.Contains("ToolChain"))
             {
-                return View("~/Views/Orchestrators/TestToolChain.cshtml");
+                return View("~/Views/Orchestrators/TestToolChain.cshtml", viewModel);
             }
             else if (orchestratorType.Name.Contains("Project"))
             {
-                return View("~/Views/Orchestrators/TestProject.cshtml");
+                return View("~/Views/Orchestrators/TestProject.cshtml", viewModel);
             }
             else if (orchestratorType.Name.Contains("WebScraping"))
             {
-                return View("~/Views/Orchestrators/TestToolChain.cshtml"); // Use ToolChain test view for now
+                return View("~/Views/Orchestrators/TestToolChain.cshtml", viewModel); // Use ToolChain test view for now
             }
             
             // Default test view
-            return View("~/Views/Orchestrators/Test.cshtml");
+            return View("~/Views/Orchestrators/Test.cshtml", viewModel);
         }
 
+        /// <summary>
+        /// Set default orchestrator
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> SetDefault(string id)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(id))
+                {
+                    return Json(new { success = false, error = "Orchestrator ID is required" });
+                }
+
+                await _orchestratorSettings.SetDefaultOrchestratorAsync(id);
+                return Json(new { success = true, message = "Default orchestrator updated successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting default orchestrator {Id}", id);
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Save orchestrator configuration
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> SaveConfiguration([FromBody] SaveConfigurationRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("SaveConfiguration called");
+                
+                if (request == null)
+                {
+                    _logger.LogWarning("Request is null");
+                    return Json(new { success = false, error = "Invalid request data" });
+                }
+                
+                _logger.LogInformation("Request received: OrchestratorId={Id}, IsDefault={IsDefault}, AiServerId={AiServerId}, ModelId={ModelId}", 
+                    request.OrchestratorId, request.IsDefault, request.AiServerId, request.DefaultModelId);
+                
+                if (string.IsNullOrEmpty(request.OrchestratorId))
+                {
+                    return Json(new { success = false, error = "Orchestrator ID is required" });
+                }
+
+                // Handle default setting
+                if (request.IsDefault)
+                {
+                    await _orchestratorSettings.SetDefaultOrchestratorAsync(request.OrchestratorId);
+                }
+
+                // Save AI Server and Model configuration
+                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                if (settingsService != null)
+                {
+                    await settingsService.SaveOrchestratorConfigurationAsync(request.OrchestratorId, request.AiServerId, request.DefaultModelId);
+                }
+                
+                return Json(new { success = true, message = "Configuration saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving configuration for orchestrator {Id}", request?.OrchestratorId);
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get orchestrator configuration
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetConfiguration(string id)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(id))
+                {
+                    return Json(new { success = false, error = "Orchestrator ID is required" });
+                }
+
+                // Get default status
+                var isDefault = await _orchestratorSettings.IsDefaultOrchestratorAsync(id);
+                
+                // Get AI Server and Model configuration
+                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(id) : null;
+                
+                var config = new {
+                    orchestratorId = id,
+                    isDefault = isDefault,
+                    aiServerId = configuration?.AiServerId?.ToString(),
+                    defaultModelId = configuration?.DefaultModelId  // Already a string now
+                };
+                
+                return Json(new { success = true, data = config });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting configuration for orchestrator {Id}", id);
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
 
         private object? GetOrchestratorInstance(Type orchestratorType)
         {
@@ -337,6 +465,7 @@ namespace OptimalyAI.Controllers
         public string Description { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public bool IsActive { get; set; }
+        public bool IsDefault { get; set; }
         public int TotalExecutions { get; set; }
         public int SuccessfulExecutions { get; set; }
         public int FailedExecutions { get; set; }
@@ -357,6 +486,12 @@ namespace OptimalyAI.Controllers
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public int TotalExecutions { get; set; }
+        public int SuccessfulExecutions { get; set; }
+        public int FailedExecutions { get; set; }
+        public double SuccessRate { get; set; }
+        public List<dynamic> DailyMetrics { get; set; } = new();
         public OrchestratorDetailedMetrics? Metrics { get; set; }
         public IReadOnlyList<OrchestratorExecutionRecord> RecentExecutions { get; set; } = new List<OrchestratorExecutionRecord>();
         public OrchestratorCapabilities? Capabilities { get; set; }
@@ -374,6 +509,24 @@ namespace OptimalyAI.Controllers
         public DateTime? NextRun { get; set; }
         public List<string> Steps { get; set; } = new();
         public Dictionary<string, object> Configuration { get; set; } = new();
+    }
+
+    public class OrchestratorTestViewModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+    }
+
+    public class SaveConfigurationRequest
+    {
+        public string OrchestratorId { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public bool IsDefault { get; set; }
+        public Guid? AiServerId { get; set; }
+        public string? DefaultModelId { get; set; }  // Changed from Guid? to string?
+        public Dictionary<string, object>? Configuration { get; set; }
     }
 
 }

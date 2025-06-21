@@ -369,6 +369,9 @@ public static class ServiceCollectionExtensions
         // Register orchestrator metrics
         services.AddSingleton<OAI.Core.Interfaces.Orchestration.IOrchestratorMetrics, OAI.ServiceLayer.Services.Orchestration.OrchestratorMetricsService>();
         
+        // Register orchestrator settings
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestratorSettings, OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService>();
+        
         // Register supporting services for RefactoredConversationOrchestrator
         services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ToolDetectionService>();
         services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ConversationResponseBuilder>();

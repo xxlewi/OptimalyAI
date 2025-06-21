@@ -1,0 +1,391 @@
+@model OptimalyAI.Controllers.OrchestratorTestViewModel
+@{
+    ViewData["Title"] = $"Test {Model.Name}";
+}
+
+@section Styles {
+    <style>
+        .test-panel {
+            min-height: 400px;
+        }
+        
+        .input-panel {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .output-panel {
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .execution-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+        
+        .execution-status.running {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .execution-status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .execution-status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .result-item {
+            background-color: #f8f9fa;
+            border-left: 3px solid #007bff;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        
+        .result-item.error {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        
+        .result-timestamp {
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+        
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Test @Model.Name</h1>
+                <p class="text-muted">@Model.Description</p>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/Orchestrators">Orchestrators</a></li>
+                    <li class="breadcrumb-item active">Test</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Input Panel -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-edit"></i> Input
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-panel">
+                            <form id="testForm">
+                                <div class="form-group">
+                                    <label for="inputData">Input Data (JSON)</label>
+                                    <textarea id="inputData" class="form-control" rows="10" placeholder='{"message": "Your test input here"}'>{
+  "message": "Test message"
+}</textarea>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="contextData">Context Data (Optional)</label>
+                                    <textarea id="contextData" class="form-control" rows="5" placeholder='{"userId": "123", "sessionId": "abc"}'></textarea>
+                                </div>
+                                
+                                <button type="button" class="btn btn-primary" onclick="executeTest()">
+                                    <i class="fas fa-play"></i> Execute Test
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="clearResults()">
+                                    <i class="fas fa-eraser"></i> Clear
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Output Panel -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-terminal"></i> Output
+                        </h3>
+                        <div class="card-tools">
+                            <span id="executionStatus"></span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="outputPanel" class="output-panel">
+                            <p class="text-muted text-center">Execute a test to see results here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Execution History -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card collapsed-card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-history"></i> Execution History
+                        </h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="executionHistory">
+                            <p class="text-muted">No execution history yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        let executionHistory = [];
+        
+        async function executeTest() {
+            const inputData = document.getElementById('inputData').value;
+            const contextData = document.getElementById('contextData').value;
+            
+            // Validate JSON
+            try {
+                if (inputData) JSON.parse(inputData);
+                if (contextData) JSON.parse(contextData);
+            } catch (e) {
+                toastr.error('Invalid JSON format: ' + e.message);
+                return;
+            }
+            
+            // Update UI
+            updateExecutionStatus('running');
+            clearOutput();
+            addOutput('Starting execution...', 'info');
+            
+            try {
+                const response = await fetch('/api/orchestrators/@Model.Id/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        input: inputData ? JSON.parse(inputData) : {},
+                        context: contextData ? JSON.parse(contextData) : {}
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Update status
+                updateExecutionStatus('success');
+                
+                // Display result
+                addOutput('Execution completed successfully', 'success');
+                addOutput('Result:', 'info');
+                addOutput(JSON.stringify(result, null, 2), 'code');
+                
+                // Add to history
+                addToHistory({
+                    timestamp: new Date(),
+                    input: inputData,
+                    context: contextData,
+                    result: result,
+                    success: true
+                });
+                
+            } catch (error) {
+                updateExecutionStatus('error');
+                addOutput('Execution failed: ' + error.message, 'error');
+                
+                // Add to history
+                addToHistory({
+                    timestamp: new Date(),
+                    input: inputData,
+                    context: contextData,
+                    error: error.message,
+                    success: false
+                });
+            }
+        }
+        
+        function updateExecutionStatus(status) {
+            const statusEl = document.getElementById('executionStatus');
+            
+            switch(status) {
+                case 'running':
+                    statusEl.innerHTML = '<span class="execution-status running"><span class="spinner"></span>Running...</span>';
+                    break;
+                case 'success':
+                    statusEl.innerHTML = '<span class="execution-status success"><i class="fas fa-check-circle mr-2"></i>Success</span>';
+                    break;
+                case 'error':
+                    statusEl.innerHTML = '<span class="execution-status error"><i class="fas fa-times-circle mr-2"></i>Error</span>';
+                    break;
+                default:
+                    statusEl.innerHTML = '';
+            }
+        }
+        
+        function clearOutput() {
+            document.getElementById('outputPanel').innerHTML = '';
+        }
+        
+        function clearResults() {
+            clearOutput();
+            updateExecutionStatus('');
+            document.getElementById('outputPanel').innerHTML = '<p class="text-muted text-center">Execute a test to see results here</p>';
+        }
+        
+        function addOutput(message, type = 'info') {
+            const outputPanel = document.getElementById('outputPanel');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            let cssClass = 'result-item';
+            if (type === 'error') cssClass += ' error';
+            
+            let content = `
+                <div class="${cssClass}">
+                    <div class="result-timestamp">${timestamp}</div>
+            `;
+            
+            if (type === 'code') {
+                content += `<pre>${escapeHtml(message)}</pre>`;
+            } else {
+                content += `<div>${escapeHtml(message)}</div>`;
+            }
+            
+            content += '</div>';
+            
+            outputPanel.innerHTML += content;
+            outputPanel.scrollTop = outputPanel.scrollHeight;
+        }
+        
+        function addToHistory(execution) {
+            executionHistory.unshift(execution);
+            if (executionHistory.length > 10) {
+                executionHistory = executionHistory.slice(0, 10);
+            }
+            updateHistoryDisplay();
+        }
+        
+        function updateHistoryDisplay() {
+            const historyEl = document.getElementById('executionHistory');
+            
+            if (executionHistory.length === 0) {
+                historyEl.innerHTML = '<p class="text-muted">No execution history yet</p>';
+                return;
+            }
+            
+            let html = '<div class="table-responsive"><table class="table table-sm">';
+            html += '<thead><tr><th>Time</th><th>Status</th><th>Input</th><th>Result/Error</th></tr></thead><tbody>';
+            
+            executionHistory.forEach(exec => {
+                const statusBadge = exec.success 
+                    ? '<span class="badge badge-success">Success</span>'
+                    : '<span class="badge badge-danger">Failed</span>';
+                    
+                const resultText = exec.success 
+                    ? 'View result' 
+                    : exec.error || 'Unknown error';
+                    
+                html += `
+                    <tr>
+                        <td>${exec.timestamp.toLocaleTimeString()}</td>
+                        <td>${statusBadge}</td>
+                        <td><small>${truncate(exec.input, 50)}</small></td>
+                        <td><small>${truncate(resultText, 100)}</small></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+            historyEl.innerHTML = html;
+        }
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        function truncate(str, len) {
+            if (!str) return '';
+            if (str.length <= len) return str;
+            return str.substring(0, len) + '...';
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Pretty print JSON in textareas
+            const inputData = document.getElementById('inputData');
+            try {
+                const parsed = JSON.parse(inputData.value);
+                inputData.value = JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                // Invalid JSON, leave as is
+            }
+        });
+    </script>
+}
