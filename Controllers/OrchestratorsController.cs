@@ -9,9 +9,11 @@ using OAI.Core.DTOs.Orchestration;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces.Orchestration;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using OAI.ServiceLayer.Services.Orchestration.Base;
 using OAI.ServiceLayer.Services.Orchestration;
 using System.Threading;
+using System.Net.Http;
 using OptimalyAI.ViewModels;
 
 namespace OptimalyAI.Controllers
@@ -36,6 +38,78 @@ namespace OptimalyAI.Controllers
             _logger = logger;
             _metrics = metrics;
             _orchestratorSettings = orchestratorSettings;
+        }
+
+        /// <summary>
+        /// Get loaded models for a specific AI server
+        /// </summary>
+        private async Task<List<string>> GetLoadedModelsForServer(OAI.Core.Entities.AiServer server)
+        {
+            var loadedModels = new List<string>();
+            
+            try
+            {
+                using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                
+                if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama)
+                {
+                    // Get loaded Ollama models
+                    var response = await httpClient.GetAsync($"{server.BaseUrl}/api/ps");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var psResponse = JsonSerializer.Deserialize<OllamaProcessResponse>(json);
+                        if (psResponse?.Models != null)
+                        {
+                            loadedModels.AddRange(psResponse.Models.Select(m => m.Name));
+                        }
+                    }
+                }
+                else if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+                {
+                    // For LM Studio, we need to use CLI to get actually loaded models
+                    try
+                    {
+                        var psi = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "lms",
+                            Arguments = "ps",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        };
+                        
+                        using var process = System.Diagnostics.Process.Start(psi);
+                        if (process != null)
+                        {
+                            var output = await process.StandardOutput.ReadToEndAsync();
+                            await process.WaitForExitAsync();
+                            
+                            // Parse the output to find loaded models
+                            var lines = output.Split('\n');
+                            foreach (var line in lines)
+                            {
+                                if (line.StartsWith("Identifier:"))
+                                {
+                                    var modelName = line.Replace("Identifier:", "").Trim();
+                                    loadedModels.Add(modelName);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get loaded models from LM Studio using CLI");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get loaded models for server {ServerName}", server.Name);
+            }
+            
+            return loadedModels;
         }
 
         /// <summary>
@@ -152,9 +226,26 @@ namespace OptimalyAI.Controllers
                             {
                                 aiServerName = server.Name;
                                 
-                                // For now, assume model is loaded if server is running
-                                // TODO: Implement proper model status check
-                                isModelLoaded = isActive;
+                                // Check if the configured model is actually loaded
+                                if (isActive && !string.IsNullOrEmpty(configuration.DefaultModelId))
+                                {
+                                    try
+                                    {
+                                        // Get loaded models for this server
+                                        var loadedModels = await GetLoadedModelsForServer(server);
+                                        isModelLoaded = loadedModels.Any(m => 
+                                            m.Equals(configuration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
+                                        
+                                        _logger.LogInformation("Model {Model} loaded status for orchestrator {Name}: {IsLoaded}", 
+                                            configuration.DefaultModelId, orchestratorName, isModelLoaded);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger.LogWarning(ex, "Failed to check model loaded status for orchestrator {Name}", orchestratorName);
+                                        // Assume not loaded on error
+                                        isModelLoaded = false;
+                                    }
+                                }
                             }
                             defaultModelId = configuration.DefaultModelId;
                         }
@@ -1095,6 +1186,31 @@ namespace OptimalyAI.Controllers
             
             return types;
         }
+
+        // Response classes for API calls
+        private class OllamaProcessResponse
+        {
+            [JsonPropertyName("models")]
+            public List<OllamaRunningModel>? Models { get; set; }
+        }
+        
+        private class OllamaRunningModel
+        {
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = string.Empty;
+            
+            [JsonPropertyName("model")]
+            public string Model { get; set; } = string.Empty;
+            
+            [JsonPropertyName("size")]
+            public long Size { get; set; }
+            
+            [JsonPropertyName("digest")]
+            public string Digest { get; set; } = string.Empty;
+            
+            [JsonPropertyName("expires_at")]
+            public DateTime ExpiresAt { get; set; }
+        }
     }
 
     // View Models
@@ -1194,5 +1310,4 @@ namespace OptimalyAI.Controllers
     {
         public string OrchestratorId { get; set; } = string.Empty;
     }
-
 }
