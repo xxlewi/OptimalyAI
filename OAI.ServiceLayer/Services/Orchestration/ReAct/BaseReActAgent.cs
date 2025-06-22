@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
+using OAI.ServiceLayer.Extensions;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 

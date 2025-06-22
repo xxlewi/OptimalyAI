@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Tools;
+using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Services.AI.Interfaces;
 
 namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator

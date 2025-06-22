@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
 using OAI.Core.Interfaces;
+using OAI.Core.Interfaces.Specification;
 
 namespace OAI.DataLayer.Repositories
 {
@@ -25,10 +26,27 @@ namespace OAI.DataLayer.Repositories
             return await _dbSet.FindAsync(id);
         }
 
+        public async Task<T?> GetByIdAsync(Guid id, params string[] includeProperties)
+        {
+            IQueryable<T> query = _dbSet;
+            
+            foreach (var includeProperty in includeProperties)
+            {
+                query = query.Include(includeProperty);
+            }
+            
+            return await query.FirstOrDefaultAsync(e => e.Id == id);
+        }
+        
         public async Task<T?> GetByIdAsync(Guid id, Func<IQueryable<T>, IQueryable<T>> include)
         {
             IQueryable<T> query = _dbSet;
-            query = include(query);
+            
+            if (include != null)
+            {
+                query = include(query);
+            }
+            
             return await query.FirstOrDefaultAsync(e => e.Id == id);
         }
 
@@ -87,6 +105,71 @@ namespace OAI.DataLayer.Repositories
         public async Task<int> CountAsync()
         {
             return await _dbSet.CountAsync();
+        }
+        
+        public async Task<int> CountAsync(Expression<Func<T, bool>> predicate)
+        {
+            return await _dbSet.CountAsync(predicate);
+        }
+
+        // Specification pattern implementations
+        public async Task<T?> GetBySpecAsync(ISpecification<T> spec)
+        {
+            return await ApplySpecification(spec).FirstOrDefaultAsync();
+        }
+
+        public async Task<IEnumerable<T>> ListAsync(ISpecification<T> spec)
+        {
+            return await ApplySpecification(spec).ToListAsync();
+        }
+
+        public async Task<int> CountAsync(ISpecification<T> spec)
+        {
+            return await ApplySpecification(spec).CountAsync();
+        }
+
+        protected IQueryable<T> ApplySpecification(ISpecification<T> spec)
+        {
+            var query = _dbSet.AsQueryable();
+
+            if (spec.Criteria != null)
+            {
+                query = query.Where(spec.Criteria);
+            }
+
+            foreach (var include in spec.Includes)
+            {
+                query = query.Include(include);
+            }
+
+            foreach (var includeString in spec.IncludeStrings)
+            {
+                query = query.Include(includeString);
+            }
+
+            if (spec.OrderBy != null)
+            {
+                query = query.OrderBy(spec.OrderBy);
+            }
+            else if (spec.OrderByDescending != null)
+            {
+                query = query.OrderByDescending(spec.OrderByDescending);
+            }
+
+            if (spec.IsPagingEnabled)
+            {
+                if (spec.Skip.HasValue)
+                {
+                    query = query.Skip(spec.Skip.Value);
+                }
+
+                if (spec.Take.HasValue)
+                {
+                    query = query.Take(spec.Take.Value);
+                }
+            }
+
+            return query;
         }
 
         public async Task<IEnumerable<T>> GetAsync(

@@ -165,12 +165,7 @@ namespace OAI.ServiceLayer.Services.Business
         public async Task<RequestDto> GetRequestWithDetailsAsync(int id)
         {
             var entity = await _repository.GetByIdAsync(id,
-                include: q => q.Include(br => br.Executions)
-                    .ThenInclude(re => re.StepExecutions)
-                    .Include(br => br.Files)
-                    .Include(br => br.Notes)
-                    .Include(br => br.WorkflowTemplate)
-                    .Include(br => br.Project));
+                "Executions.StepExecutions", "Files", "Notes", "WorkflowTemplate", "Project");
 
             if (entity == null)
             {

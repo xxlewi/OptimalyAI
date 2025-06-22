@@ -23,14 +23,11 @@ namespace OAI.DataLayer.Migrations
                 name: "DefaultModelId1",
                 table: "OrchestratorConfigurations");
 
-            migrationBuilder.AlterColumn<int>(
-                name: "DefaultModelId",
-                table: "OrchestratorConfigurations",
-                type: "integer",
-                nullable: true,
-                oldClrType: typeof(Guid),
-                oldType: "uuid",
-                oldNullable: true);
+            migrationBuilder.Sql(@"
+                ALTER TABLE ""OrchestratorConfigurations"" 
+                ALTER COLUMN ""DefaultModelId"" TYPE integer 
+                USING NULL;
+            ");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OrchestratorConfigurations_DefaultModelId",

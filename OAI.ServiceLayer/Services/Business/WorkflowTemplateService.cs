@@ -101,8 +101,10 @@ namespace OAI.ServiceLayer.Services.Business
 
         public async Task<WorkflowTemplateDto> GetTemplateWithStepsAsync(int id)
         {
-            var entity = await _repository.GetByIdAsync(id,
+            var entities = await _repository.GetAsync(
+                filter: wt => wt.Id == id,
                 include: q => q.Include(wt => wt.Steps.OrderBy(s => s.Order)));
+            var entity = entities.FirstOrDefault();
 
             if (entity == null)
             {
@@ -201,8 +203,10 @@ namespace OAI.ServiceLayer.Services.Business
             if (stepDto == null)
                 throw new ArgumentNullException(nameof(stepDto));
 
-            var template = await _repository.GetByIdAsync(templateId,
+            var templates = await _repository.GetAsync(
+                filter: wt => wt.Id == templateId,
                 include: q => q.Include(wt => wt.Steps));
+            var template = templates.FirstOrDefault();
 
             if (template == null)
             {
@@ -229,8 +233,10 @@ namespace OAI.ServiceLayer.Services.Business
 
         public async Task<bool> RemoveStepAsync(int templateId, int stepId)
         {
-            var template = await _repository.GetByIdAsync(templateId,
+            var templates = await _repository.GetAsync(
+                filter: wt => wt.Id == templateId,
                 include: q => q.Include(wt => wt.Steps));
+            var template = templates.FirstOrDefault();
 
             if (template == null)
             {
@@ -265,8 +271,10 @@ namespace OAI.ServiceLayer.Services.Business
             if (stepIdToNewOrder == null || !stepIdToNewOrder.Any())
                 throw new ArgumentException("Step order mapping cannot be empty", nameof(stepIdToNewOrder));
 
-            var template = await _repository.GetByIdAsync(templateId,
+            var templates = await _repository.GetAsync(
+                filter: wt => wt.Id == templateId,
                 include: q => q.Include(wt => wt.Steps));
+            var template = templates.FirstOrDefault();
 
             if (template == null)
             {

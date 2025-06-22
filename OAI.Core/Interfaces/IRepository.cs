@@ -26,4 +26,12 @@ public interface IRepository<T> where T : BaseEntity
     Task<T?> GetBySpecAsync(ISpecification<T> spec);
     Task<IEnumerable<T>> ListAsync(ISpecification<T> spec);
     Task<int> CountAsync(ISpecification<T> spec);
+    
+    // Advanced query operations
+    Task<IEnumerable<T>> GetAsync(
+        Expression<Func<T, bool>>? filter = null,
+        Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null,
+        Func<IQueryable<T>, IQueryable<T>>? include = null,
+        int? skip = null,
+        int? take = null);
 }

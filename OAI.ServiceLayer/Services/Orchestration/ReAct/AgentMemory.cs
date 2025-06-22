@@ -2,6 +2,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Orchestration;
+using OAI.ServiceLayer.Extensions;
 using System.Reflection;
 
 namespace OAI.ServiceLayer.Services.Orchestration.ReAct;

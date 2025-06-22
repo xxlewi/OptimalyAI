@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Orchestration;
+using OAI.ServiceLayer.Extensions;
 using OAI.ServiceLayer.Services.AI.Interfaces;
 using OAI.Core.Interfaces.AI;
 

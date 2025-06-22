@@ -208,7 +208,7 @@ namespace OAI.ServiceLayer.Services.Business
         public async Task<RequestExecutionDto> UpdateExecutionStatusAsync(int id, ExecutionStatus status, string results = null, string errors = null)
         {
             var execution = await _repository.GetByIdAsync(id,
-                include: q => q.Include(re => re.Request));
+                "Request");
 
             if (execution == null)
             {
@@ -256,8 +256,7 @@ namespace OAI.ServiceLayer.Services.Business
         public async Task<ExecutionProgressDto> GetExecutionProgressAsync(int id)
         {
             var execution = await _repository.GetByIdAsync(id,
-                include: q => q.Include(re => re.StepExecutions)
-                    .ThenInclude(se => se.WorkflowStep));
+                "StepExecutions.WorkflowStep");
 
             if (execution == null)
             {
