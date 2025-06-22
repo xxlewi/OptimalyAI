@@ -216,7 +216,7 @@ namespace OptimalyAI.Hubs
                 var assistantMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = conversationId,
-                    UserId = "assistant",
+                    UserId = "default", // Use the same userId as user messages
                     Role = "assistant",
                     Content = fullResponse,
                     TokenCount = tokenCount,

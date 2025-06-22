@@ -1,6 +1,7 @@
+@using OAI.Core.DTOs
 @{
     ViewData["Title"] = "Nový Chat";
-    var availableModels = ViewBag.AvailableModels as List<string> ?? new List<string>();
+    var availableModels = ViewBag.AvailableModels as List<ChatModelOptionDto> ?? new List<ChatModelOptionDto>();
     var defaultModel = ViewBag.DefaultModel as string;
 }
 
@@ -142,15 +143,15 @@
                     <div class="input-group input-group-sm model-selector">
                         <select id="model-select" class="form-control">
                             <option value="">-- Použít výchozí model orchestrátoru@(defaultModel != null ? $" ({defaultModel})" : "") --</option>
-                            @foreach (var modelName in availableModels)
+                            @foreach (var aiModel in availableModels)
                             {
-                                @if (modelName == defaultModel)
+                                if (aiModel.Value == defaultModel)
                                 {
-                                    <option value="@modelName">⭐ @modelName (výchozí)</option>
+                                    <option value="@aiModel.Value">⭐ @aiModel.Display (výchozí)</option>
                                 }
                                 else
                                 {
-                                    <option value="@modelName">@modelName</option>
+                                    <option value="@aiModel.Value">@aiModel.Display</option>
                                 }
                             }
                         </select>

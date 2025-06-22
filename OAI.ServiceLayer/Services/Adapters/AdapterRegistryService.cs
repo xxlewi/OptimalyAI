@@ -183,6 +183,7 @@ namespace OAI.ServiceLayer.Services.Adapters
                     existing.Type = adapter.Type;
                     existing.IsActive = adapter.IsEnabled;
                     existing.UpdatedAt = DateTime.UtcNow;
+                    existing.Configuration = existing.Configuration ?? "{}"; // Ensure Configuration is not null
                     existing.Capabilities = System.Text.Json.JsonSerializer.Serialize(adapter.GetCapabilities());
                     existing.Parameters = System.Text.Json.JsonSerializer.Serialize(
                         adapter.Parameters.Select(p => new
@@ -207,6 +208,7 @@ namespace OAI.ServiceLayer.Services.Adapters
                         Category = adapter.Category,
                         Type = adapter.Type,
                         IsActive = adapter.IsEnabled,
+                        Configuration = "{}", // Empty JSON object as default
                         Capabilities = System.Text.Json.JsonSerializer.Serialize(adapter.GetCapabilities()),
                         Parameters = System.Text.Json.JsonSerializer.Serialize(
                             adapter.Parameters.Select(p => new

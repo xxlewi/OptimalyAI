@@ -11,9 +11,35 @@ using OAI.Core.Interfaces.Orchestration;
 using OAI.ServiceLayer.Interfaces;
 using OAI.ServiceLayer.Services;
 using OAI.ServiceLayer.Services.AI.Interfaces;
+using OAI.Core.Interfaces.AI;
 
 namespace OptimalyAI.Controllers
 {
+    // Response classes for API calls
+    internal class OllamaProcessResponse
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("models")]
+        public List<OllamaRunningModel>? Models { get; set; }
+    }
+    
+    internal class OllamaRunningModel
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("model")]
+        public string Model { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("size")]
+        public long Size { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("digest")]
+        public string Digest { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("expires_at")]
+        public DateTime ExpiresAt { get; set; }
+    }
+
     public class ChatController : Controller
     {
         private readonly ILogger<ChatController> _logger;
@@ -23,6 +49,7 @@ namespace OptimalyAI.Controllers
         private readonly IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
         private readonly IOrchestratorConfigurationService _orchestratorConfigService;
         private readonly OAI.ServiceLayer.Services.AI.IAiModelService _aiModelService;
+        private readonly ILMStudioService _lmStudioService;
 
         public ChatController(
             ILogger<ChatController> logger,
@@ -31,7 +58,8 @@ namespace OptimalyAI.Controllers
             IMessageService messageService,
             IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator,
             IOrchestratorConfigurationService orchestratorConfigService,
-            OAI.ServiceLayer.Services.AI.IAiModelService aiModelService)
+            OAI.ServiceLayer.Services.AI.IAiModelService aiModelService,
+            ILMStudioService lmStudioService)
         {
             _logger = logger;
             _ollamaService = ollamaService;
@@ -40,6 +68,7 @@ namespace OptimalyAI.Controllers
             _orchestrator = orchestrator;
             _orchestratorConfigService = orchestratorConfigService;
             _aiModelService = aiModelService;
+            _lmStudioService = lmStudioService;
         }
 
         public IActionResult Index()
@@ -51,15 +80,134 @@ namespace OptimalyAI.Controllers
         {
             try
             {
-                // Load registered models from database
-                var registeredModels = await _aiModelService.GetAvailableModelsAsync();
-                var modelList = registeredModels
-                    .Where(m => m.IsAvailable) // Only show available models
-                    .OrderBy(m => m.AiServer?.ServerType.ToString() ?? "Unknown")
-                    .ThenBy(m => m.Name)
-                    .Select(m => m.Name)
-                    .ToList();
+                var modelList = new List<ChatModelOptionDto>();
                 
+                // Get all available models with their servers
+                var registeredModels = await _aiModelService.GetAvailableModelsAsync();
+                var activeModels = registeredModels.Where(m => m.IsAvailable && m.AiServer != null && m.AiServer.IsActive).ToList();
+                
+                // Group models by server to check loaded models
+                var modelsByServer = activeModels.GroupBy(m => m.AiServer);
+                
+                foreach (var serverGroup in modelsByServer)
+                {
+                    var server = serverGroup.Key;
+                    try
+                    {
+                        List<string> loadedModelNames = new List<string>();
+                        
+                        // Get loaded models based on server type
+                        if (server.ServerType == AiServerType.Ollama)
+                        {
+                            try
+                            {
+                                // Use the same approach as ModelsController - call /api/ps endpoint
+                                using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                                var response = await httpClient.GetAsync($"{server.BaseUrl}/api/ps");
+                                if (response.IsSuccessStatusCode)
+                                {
+                                    var json = await response.Content.ReadAsStringAsync();
+                                    var options = new System.Text.Json.JsonSerializerOptions
+                                    {
+                                        PropertyNameCaseInsensitive = true
+                                    };
+                                    var psResponse = System.Text.Json.JsonSerializer.Deserialize<OllamaProcessResponse>(json, options);
+                                    if (psResponse?.Models != null)
+                                    {
+                                        foreach (var model in psResponse.Models)
+                                        {
+                                            loadedModelNames.Add(model.Name);
+                                        }
+                                    }
+                                }
+                                _logger.LogInformation("Ollama loaded models for server {ServerName}: {Models}", 
+                                    server.Name, string.Join(", ", loadedModelNames));
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to get loaded models from Ollama server {ServerName}", server.Name);
+                                continue; // Skip this server if we can't get loaded models
+                            }
+                        }
+                        else if (server.ServerType == AiServerType.LMStudio)
+                        {
+                            try
+                            {
+                                // Use CLI to get loaded models like in ModelsController
+                                var psi = new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = "lms",
+                                    Arguments = "ps",
+                                    UseShellExecute = false,
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true,
+                                    CreateNoWindow = true
+                                };
+                                
+                                using var process = System.Diagnostics.Process.Start(psi);
+                                if (process != null)
+                                {
+                                    var output = await process.StandardOutput.ReadToEndAsync();
+                                    await process.WaitForExitAsync();
+                                    
+                                    // Parse the output to find loaded models
+                                    var lines = output.Split('\n');
+                                    foreach (var line in lines)
+                                    {
+                                        if (line.Trim().StartsWith("Identifier:"))
+                                        {
+                                            var modelName = line.Trim().Replace("Identifier:", "").Trim();
+                                            loadedModelNames.Add(modelName);
+                                        }
+                                    }
+                                }
+                                _logger.LogInformation("LM Studio loaded models for server {ServerName}: {Models}", 
+                                    server.Name, string.Join(", ", loadedModelNames));
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to get loaded models from LM Studio server {ServerName}", server.Name);
+                                continue; // Skip this server if we can't get loaded models
+                            }
+                        }
+                        
+                        // Only add models that are actually loaded
+                        if (loadedModelNames.Any())
+                        {
+                            _logger.LogInformation("Registered models for server {ServerName}: {Models}", 
+                                server.Name, string.Join(", ", serverGroup.Select(m => m.Name)));
+                            
+                            // Match loaded models with registered models
+                            var serverModels = serverGroup
+                                .Where(m => loadedModelNames.Any(loaded => 
+                                    loaded.Equals(m.Name, StringComparison.OrdinalIgnoreCase) ||
+                                    loaded.Contains(m.Name, StringComparison.OrdinalIgnoreCase) ||
+                                    m.Name.Contains(loaded, StringComparison.OrdinalIgnoreCase)))
+                                .Select(m => new ChatModelOptionDto
+                                {
+                                    Value = m.Name,
+                                    Display = $"{m.DisplayName} ({server.Name})",
+                                    ServerType = server.ServerType.ToString()
+                                })
+                                .ToList();
+                            
+                            _logger.LogInformation("Matched models for server {ServerName}: {Count} models", 
+                                server.Name, serverModels.Count);
+                            
+                            modelList.AddRange(serverModels);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("No loaded models found for server {ServerName}", server.Name);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get loaded models for server {ServerName}", server.Name);
+                    }
+                }
+                
+                _logger.LogInformation("Total matched loaded models: {Count}", modelList.Count);
                 ViewBag.AvailableModels = modelList;
                 
                 // Get default model from orchestrator configuration
@@ -79,7 +227,7 @@ namespace OptimalyAI.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading chat configuration");
-                ViewBag.AvailableModels = new List<string>();
+                ViewBag.AvailableModels = new List<ChatModelOptionDto>();
             }
             
             return View();
@@ -95,20 +243,125 @@ namespace OptimalyAI.Controllers
 
             try
             {
-                var models = await _ollamaService.ListModelsAsync();
-                ViewBag.AvailableModels = models.Select(m => m.Name).ToList();
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogWarning(ex, "Ollama service is not available");
-                ViewBag.AvailableModels = new List<string> { "llama3.2", "llama3.1", "mistral", "codellama" };
-                ViewBag.OllamaOffline = true;
+                var modelList = new List<ChatModelOptionDto>();
+                
+                // Get all available models with their servers
+                var registeredModels = await _aiModelService.GetAvailableModelsAsync();
+                var activeModels = registeredModels.Where(m => m.IsAvailable && m.AiServer != null && m.AiServer.IsActive).ToList();
+                
+                // Group models by server to check loaded models
+                var modelsByServer = activeModels.GroupBy(m => m.AiServer);
+                
+                foreach (var serverGroup in modelsByServer)
+                {
+                    var server = serverGroup.Key;
+                    try
+                    {
+                        List<string> loadedModelNames = new List<string>();
+                        
+                        // Get loaded models based on server type
+                        if (server.ServerType == AiServerType.Ollama)
+                        {
+                            try
+                            {
+                                // Use the same approach as ModelsController - call /api/ps endpoint
+                                using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                                var response = await httpClient.GetAsync($"{server.BaseUrl}/api/ps");
+                                if (response.IsSuccessStatusCode)
+                                {
+                                    var json = await response.Content.ReadAsStringAsync();
+                                    var options = new System.Text.Json.JsonSerializerOptions
+                                    {
+                                        PropertyNameCaseInsensitive = true
+                                    };
+                                    var psResponse = System.Text.Json.JsonSerializer.Deserialize<OllamaProcessResponse>(json, options);
+                                    if (psResponse?.Models != null)
+                                    {
+                                        foreach (var model in psResponse.Models)
+                                        {
+                                            loadedModelNames.Add(model.Name);
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to get loaded models from Ollama server {ServerName}", server.Name);
+                                continue;
+                            }
+                        }
+                        else if (server.ServerType == AiServerType.LMStudio)
+                        {
+                            try
+                            {
+                                // Use CLI to get loaded models like in ModelsController
+                                var psi = new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = "lms",
+                                    Arguments = "ps",
+                                    UseShellExecute = false,
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true,
+                                    CreateNoWindow = true
+                                };
+                                
+                                using var process = System.Diagnostics.Process.Start(psi);
+                                if (process != null)
+                                {
+                                    var output = await process.StandardOutput.ReadToEndAsync();
+                                    await process.WaitForExitAsync();
+                                    
+                                    // Parse the output to find loaded models
+                                    var lines = output.Split('\n');
+                                    foreach (var line in lines)
+                                    {
+                                        if (line.Trim().StartsWith("Identifier:"))
+                                        {
+                                            var modelName = line.Trim().Replace("Identifier:", "").Trim();
+                                            loadedModelNames.Add(modelName);
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to get loaded models from LM Studio server {ServerName}", server.Name);
+                                continue;
+                            }
+                        }
+                        
+                        // Only add models that are actually loaded
+                        if (loadedModelNames.Any())
+                        {
+                            // Match loaded models with registered models
+                            var serverModels = serverGroup
+                                .Where(m => loadedModelNames.Any(loaded => 
+                                    loaded.Equals(m.Name, StringComparison.OrdinalIgnoreCase) ||
+                                    loaded.Contains(m.Name, StringComparison.OrdinalIgnoreCase) ||
+                                    m.Name.Contains(loaded, StringComparison.OrdinalIgnoreCase)))
+                                .Select(m => new ChatModelOptionDto
+                                {
+                                    Value = m.Name,
+                                    Display = $"{m.DisplayName} ({server.Name})",
+                                    ServerType = server.ServerType.ToString()
+                                })
+                                .ToList();
+                            
+                            modelList.AddRange(serverModels);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get loaded models for server {ServerName}", server.Name);
+                    }
+                }
+                
+                ViewBag.AvailableModels = modelList;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting models from Ollama");
-                ViewBag.AvailableModels = new List<string> { "llama3.2" };
-                ViewBag.OllamaOffline = true;
+                _logger.LogError(ex, "Error loading models");
+                ViewBag.AvailableModels = new List<ChatModelOptionDto>();
             }
             
             ViewBag.CurrentModel = conversation.Model;
@@ -250,7 +503,7 @@ namespace OptimalyAI.Controllers
                 var assistantMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = dto.ConversationId,
-                    UserId = "assistant",
+                    UserId = "default", // Use the same userId as user messages
                     Role = "assistant",
                     Content = orchestratorResponse.Response,
                     TokenCount = tokenCount,

@@ -108,7 +108,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOr
                 // Add user message
                 await _conversationManager.AddMessageAsync(
                     conversationId,
-                    null, // userId - not available in this context
+                    "default", // Use default userId to avoid null constraint violation
                     userMessage,
                     MessageRole.User,
                     new Dictionary<string, object>());
@@ -128,7 +128,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOr
                 // Add assistant response
                 await _conversationManager.AddMessageAsync(
                     conversationId,
-                    null, // userId - not available in this context
+                    "default", // Use default userId to avoid null constraint violation
                     assistantResponse,
                     MessageRole.Assistant,
                     metadata);

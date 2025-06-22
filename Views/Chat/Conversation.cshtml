@@ -1,7 +1,8 @@
 @model OAI.Core.Entities.Conversation
+@using OAI.Core.DTOs
 @{
     ViewData["Title"] = Model.Title ?? "Chat";
-    var availableModels = ViewBag.AvailableModels as List<string> ?? new List<string>();
+    var availableModels = ViewBag.AvailableModels as List<ChatModelOptionDto> ?? new List<ChatModelOptionDto>();
     var currentModel = ViewBag.CurrentModel as string ?? "llama3.2";
 }
 
@@ -276,15 +277,15 @@
                 <div class="card-tools">
                     <div class="input-group input-group-sm model-selector">
                         <select id="model-select" class="form-control">
-                            @foreach (var modelName in availableModels)
+                            @foreach (var aiModel in availableModels)
                             {
-                                @if (modelName == currentModel)
+                                @if (aiModel.Value == currentModel)
                                 {
-                                    <option value="@modelName" selected>@modelName</option>
+                                    <option value="@aiModel.Value" selected>@aiModel.Display</option>
                                 }
                                 else
                                 {
-                                    <option value="@modelName">@modelName</option>
+                                    <option value="@aiModel.Value">@aiModel.Display</option>
                                 }
                             }
                         </select>

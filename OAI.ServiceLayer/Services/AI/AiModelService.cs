@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using OAI.Core.Entities;
 using OAI.Core.Interfaces;
 using OAI.ServiceLayer.Services;
@@ -48,7 +49,10 @@ public class AiModelService : BaseService<AiModel>, IAiModelService
 
     public async Task<List<AiModel>> GetAvailableModelsAsync()
     {
-        var models = await _repository.FindAsync(m => m.IsAvailable);
+        var models = await _repository.GetAsync(
+            filter: m => m.IsAvailable,
+            include: q => q.Include(m => m.AiServer)
+        );
         return models.ToList();
     }
 
