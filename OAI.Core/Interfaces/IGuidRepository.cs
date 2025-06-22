@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using OAI.Core.Entities;
+using OAI.Core.Interfaces.Specification;
 
 namespace OAI.Core.Interfaces
 {
@@ -12,25 +12,26 @@ namespace OAI.Core.Interfaces
     /// </summary>
     public interface IGuidRepository<T> where T : BaseGuidEntity
     {
+        // Basic CRUD operations
         Task<T?> GetByIdAsync(Guid id);
-        Task<T?> GetByIdAsync(Guid id, Func<IQueryable<T>, IQueryable<T>> include);
+        Task<T?> GetByIdAsync(Guid id, params string[] includeProperties);
         Task<IEnumerable<T>> GetAllAsync();
-        Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate);
         Task<T> AddAsync(T entity);
         Task<T> CreateAsync(T entity);
         Task<T> UpdateAsync(T entity);
         void Update(T entity);
         void Delete(T entity);
         Task DeleteAsync(Guid id);
+        
+        // Query operations using expressions (without IQueryable)
+        Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate);
         Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate);
         Task<int> CountAsync();
+        Task<int> CountAsync(Expression<Func<T, bool>> predicate);
         
-        // Advanced query methods
-        Task<IEnumerable<T>> GetAsync(
-            Expression<Func<T, bool>>? filter = null,
-            Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null,
-            Func<IQueryable<T>, IQueryable<T>>? include = null,
-            int? skip = null,
-            int? take = null);
+        // Specification pattern for complex queries
+        Task<T?> GetBySpecAsync(ISpecification<T> spec);
+        Task<IEnumerable<T>> ListAsync(ISpecification<T> spec);
+        Task<int> CountAsync(ISpecification<T> spec);
     }
 }
