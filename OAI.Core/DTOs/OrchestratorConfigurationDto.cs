@@ -1,3 +1,5 @@
+using OAI.Core.Entities;
+
 namespace OAI.Core.DTOs
 {
     /// <summary>
@@ -10,6 +12,7 @@ namespace OAI.Core.DTOs
         public bool IsDefault { get; set; }
         public Guid? AiServerId { get; set; }
         public string? AiServerName { get; set; }
+        public AiServerType? AiServerType { get; set; }
         public Guid? DefaultModelId { get; set; }
         public string? DefaultModelName { get; set; }
         public Dictionary<string, object> Configuration { get; set; } = new();

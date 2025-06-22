@@ -127,7 +127,7 @@ namespace OptimalyAI.Hubs
                     RequestId = Guid.NewGuid().ToString(),
                     ConversationId = conversationId.ToString(),
                     Message = message,
-                    ModelId = !string.IsNullOrEmpty(model) ? model : conversation.Model ?? "llama3.2",
+                    ModelId = !string.IsNullOrEmpty(model) ? model : null, // Pass selected model or null to use orchestrator default
                     UserId = "default", // TODO: Add proper user authentication
                     SessionId = Context.ConnectionId, // Use SignalR connection ID as session
                     EnableTools = true,

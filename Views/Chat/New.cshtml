@@ -1,6 +1,7 @@
 @{
     ViewData["Title"] = "Nový Chat";
     var availableModels = ViewBag.AvailableModels as List<string> ?? new List<string>();
+    var defaultModel = ViewBag.DefaultModel as string;
 }
 
 @section Styles {
@@ -131,16 +132,6 @@
     </div>
 </div>
 
-@if (ViewBag.OllamaOffline == true)
-{
-    <div class="container-fluid">
-        <div class="alert alert-warning alert-dismissible">
-            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
-            <h5><i class="icon fas fa-exclamation-triangle"></i> Ollama server není dostupný!</h5>
-            Ollama server neběží. Prosím spusťte Ollama server pomocí příkazu <code>ollama serve</code> nebo přejděte do sekce <a href="/Ollama" class="alert-link">Ollama Server</a>.
-        </div>
-    </div>
-}
 
 <section class="content">
     <div class="container-fluid">
@@ -150,9 +141,10 @@
                 <div class="card-tools">
                     <div class="input-group input-group-sm model-selector">
                         <select id="model-select" class="form-control">
+                            <option value="">-- Použít výchozí model orchestrátoru --</option>
                             @foreach (var modelName in availableModels)
                             {
-                                @if (modelName == "llama3.2")
+                                @if (modelName == defaultModel)
                                 {
                                     <option value="@modelName" selected>@modelName</option>
                                 }
@@ -348,7 +340,7 @@
                         contentType: 'application/json',
                         data: JSON.stringify({
                             title: message.substring(0, 50),
-                            model: $('#model-select').val()
+                            model: $('#model-select').val() || null
                         })
                     });
                     
@@ -371,8 +363,9 @@
                 $('#messages-container').append(currentMessageDiv);
                 
                 // Send message via SignalR for streaming
-                console.log('Invoking SendMessage with:', { conversationId, message, model: $('#model-select').val() });
-                await connection.invoke("SendMessage", conversationId, message, $('#model-select').val());
+                const selectedModel = $('#model-select').val() || null;
+                console.log('Invoking SendMessage with:', { conversationId, message, model: selectedModel });
+                await connection.invoke("SendMessage", conversationId, message, selectedModel);
                 console.log('SendMessage invoked successfully');
                 
             } catch (error) {

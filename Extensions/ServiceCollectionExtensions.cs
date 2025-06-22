@@ -363,6 +363,12 @@ public static class ServiceCollectionExtensions
         // Configure Ollama settings for orchestrator services
         services.Configure<OllamaSettings>(configuration.GetSection("OllamaSettings"));
         
+        // Register Orchestrator Configuration Service FIRST (before any orchestrators)
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestratorConfigurationService, OAI.ServiceLayer.Services.Orchestration.OrchestratorConfigurationService>();
+        
+        // Register AI Server Service
+        services.AddScoped<OAI.Core.Interfaces.Services.IAiServerService, OAI.ServiceLayer.Services.AiServerService>();
+        
         // Register main Conversation Manager
         // services.TryAddSingleton<IConversationManager, ConversationManager>();
         
@@ -411,6 +417,22 @@ public static class ServiceCollectionExtensions
         });
         services.AddScoped<OAI.Core.Interfaces.AI.IOllamaService>(provider => 
             provider.GetRequiredService<OAI.ServiceLayer.Services.AI.SimpleOllamaService>());
+            
+        // Register LM Studio service
+        services.AddHttpClient<OAI.ServiceLayer.Services.AI.LMStudioService>("LMStudioService", client =>
+        {
+            var baseUrl = configuration.GetSection("LMStudio:BaseUrl").Value ?? "http://localhost:1234";
+            var timeout = int.Parse(configuration.GetSection("LMStudio:Timeout").Value ?? "60");
+            
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(timeout);
+        });
+        services.AddScoped<OAI.Core.Interfaces.AI.ILMStudioService>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.AI.LMStudioService>());
+            
+        // Register Workflow Orchestrator V2
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.WorkflowOrchestratorRequest, OAI.Core.DTOs.Orchestration.WorkflowOrchestratorResponse>, 
+            OAI.ServiceLayer.Services.Orchestration.WorkflowOrchestratorV2>();
         
         // Register Tool services needed for orchestrators
         services.TryAddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();

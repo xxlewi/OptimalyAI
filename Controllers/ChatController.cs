@@ -21,19 +21,22 @@ namespace OptimalyAI.Controllers
         private readonly IConversationService _conversationService;
         private readonly IMessageService _messageService;
         private readonly IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
+        private readonly IOrchestratorConfigurationService _orchestratorConfigService;
 
         public ChatController(
             ILogger<ChatController> logger,
             IWebOllamaService ollamaService,
             IConversationService conversationService,
             IMessageService messageService,
-            IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator)
+            IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator,
+            IOrchestratorConfigurationService orchestratorConfigService)
         {
             _logger = logger;
             _ollamaService = ollamaService;
             _conversationService = conversationService;
             _messageService = messageService;
             _orchestrator = orchestrator;
+            _orchestratorConfigService = orchestratorConfigService;
         }
 
         public IActionResult Index()
@@ -45,20 +48,37 @@ namespace OptimalyAI.Controllers
         {
             try
             {
-                var models = await _ollamaService.ListModelsAsync();
-                ViewBag.AvailableModels = models.Select(m => m.Name).ToList();
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogWarning(ex, "Ollama service is not available");
-                ViewBag.AvailableModels = new List<string> { "llama3.2", "llama3.1", "mistral", "codellama" };
-                ViewBag.OllamaOffline = true;
+                // Load available models from all AI services
+                var models = new List<string>();
+                
+                try
+                {
+                    var ollamaModels = await _ollamaService.ListModelsAsync();
+                    models.AddRange(ollamaModels.Select(m => m.Name));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load Ollama models");
+                }
+                
+                // Remove duplicates and sort
+                ViewBag.AvailableModels = models.Distinct().OrderBy(m => m).ToList();
+                
+                // Get default model from orchestrator configuration
+                try
+                {
+                    var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("conversation_orchestrator");
+                    ViewBag.DefaultModel = orchestratorConfig?.DefaultModelName;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get orchestrator configuration");
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting models from Ollama");
-                ViewBag.AvailableModels = new List<string> { "llama3.2" };
-                ViewBag.OllamaOffline = true;
+                _logger.LogError(ex, "Error loading chat configuration");
+                ViewBag.AvailableModels = new List<string>();
             }
             
             return View();
@@ -114,7 +134,7 @@ namespace OptimalyAI.Controllers
                 var conversation = new OAI.Core.Entities.Conversation
                 {
                     Title = dto.Title ?? "Nový chat",
-                    Model = dto.Model ?? "llama3.2",
+                    Model = dto.Model, // Store the selected model in conversation
                     SystemPrompt = dto.SystemPrompt ?? "You are a helpful AI assistant.",
                     UserId = "default", // TODO: Add user authentication
                     LastMessageAt = DateTime.UtcNow
@@ -159,7 +179,7 @@ namespace OptimalyAI.Controllers
                     RequestId = Guid.NewGuid().ToString(),
                     ConversationId = dto.ConversationId.ToString(),
                     Message = dto.Message,
-                    ModelId = conversation.Model ?? dto.Model ?? "llama3.2",
+                    ModelId = conversation.Model, // Use model stored in conversation, or null for orchestrator default
                     UserId = "default", // TODO: Add user authentication
                     SessionId = HttpContext.Session.Id,
                     EnableTools = true,

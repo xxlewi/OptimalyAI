@@ -53,6 +53,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         private readonly IToolExecutor _toolExecutor;
         private readonly IReActAgent _reActAgent;
         private readonly IConfiguration _configuration;
+        private readonly IOrchestratorConfigurationService _orchestratorConfigService;
 
         // Specialized services
         private readonly ToolDetectionService _toolDetection;
@@ -75,7 +76,8 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             IReActAgent reActAgent,
             ILogger<RefactoredConversationOrchestrator> logger,
             ILoggerFactory loggerFactory,
-            IOrchestratorMetrics metrics)
+            IOrchestratorMetrics metrics,
+            IOrchestratorConfigurationService orchestratorConfigService)
             : base(logger, metrics)
         {
             // Core services
@@ -83,6 +85,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
             _reActAgent = reActAgent ?? throw new ArgumentNullException(nameof(reActAgent));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _orchestratorConfigService = orchestratorConfigService ?? throw new ArgumentNullException(nameof(orchestratorConfigService));
 
             // Initialize specialized services
             _toolDetection = new ToolDetectionService(
@@ -350,20 +353,24 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                     ["max_tokens"] = request.MaxTokens ?? _options.DefaultMaxTokens
                 };
 
+                // Determine which model to use
+                string modelToUse = request.ModelId ?? await GetConfiguredModelAsync() ?? _options.DefaultModel;
+
                 // Generate response
                 var response = await _ollamaService.GenerateResponseAsync(
-                    request.ModelId ?? _options.DefaultModel,
+                    modelToUse,
                     prompt,
                     request.ConversationId ?? Guid.NewGuid().ToString(),
                     parameters,
                     cancellationToken);
 
-                _logger.LogInformation("Generated AI response with length {Length}", response?.Length ?? 0);
+                _logger.LogInformation("Generated AI response with length {Length} using model {Model}", 
+                    response?.Length ?? 0, modelToUse);
 
                 return new AIGenerationResult
                 {
                     Response = response ?? string.Empty,
-                    Model = request.ModelId ?? _options.DefaultModel,
+                    Model = modelToUse,
                     Success = !string.IsNullOrEmpty(response)
                 };
             }
@@ -372,6 +379,29 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                 _logger.LogError(ex, "Failed to generate AI response");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Gets the configured model from orchestrator settings
+        /// </summary>
+        private async Task<string?> GetConfiguredModelAsync()
+        {
+            try
+            {
+                var configuration = await _orchestratorConfigService.GetByOrchestratorIdAsync(Id);
+                if (configuration != null && !string.IsNullOrEmpty(configuration.DefaultModelName))
+                {
+                    _logger.LogDebug("Using configured model {Model} for orchestrator {OrchestratorId}", 
+                        configuration.DefaultModelName, Id);
+                    return configuration.DefaultModelName;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get orchestrator configuration, using default model");
+            }
+            
+            return null;
         }
 
         /// <summary>
