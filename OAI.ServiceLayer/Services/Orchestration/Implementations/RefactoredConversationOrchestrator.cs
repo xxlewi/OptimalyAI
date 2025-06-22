@@ -562,7 +562,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
     /// </summary>
     public class ConversationOrchestratorOptions
     {
-        public string DefaultModel { get; set; } = "llama3.2:latest";
+        public string DefaultModel { get; set; } = "google/gemma-3-12b"; // Use a model that actually exists
         public List<string> SupportedModels { get; set; } = new() 
         { 
             "llama3.2:latest", 

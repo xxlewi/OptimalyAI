@@ -242,9 +242,12 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(settings.DefaultTimeout);
         });
         
-        // Register Core interface implementation
+        // Register AI Service Router for dynamic AI service selection
+        services.AddScoped<OAI.Core.Interfaces.AI.IAiServiceRouter, OAI.ServiceLayer.Services.AI.AiServiceRouter>();
+        
+        // Register Core interface implementation - now using router
         services.AddScoped<OAI.Core.Interfaces.AI.IOllamaService>(provider => 
-            provider.GetRequiredService<OAI.ServiceLayer.Services.AI.Interfaces.ISimpleOllamaService>());
+            provider.GetRequiredService<OAI.Core.Interfaces.AI.IAiServiceRouter>());
         
         // Register Tool services - Registry must be Singleton to persist registered tools
         services.AddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
@@ -406,7 +409,7 @@ public static class ServiceCollectionExtensions
         // Register conversation manager interface for orchestrator
         services.AddScoped<OAI.Core.Interfaces.AI.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();
         
-        // Register simple Ollama service for orchestrator
+        // Register simple Ollama service for orchestrator - but don't override IOllamaService
         services.AddHttpClient<OAI.ServiceLayer.Services.AI.SimpleOllamaService>("OrchestratorOllamaService", client =>
         {
             var baseUrl = configuration.GetSection("OllamaSettings:BaseUrl").Value ?? "http://localhost:11434";
@@ -415,8 +418,9 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(baseUrl);
             client.Timeout = TimeSpan.FromSeconds(timeout);
         });
-        services.AddScoped<OAI.Core.Interfaces.AI.IOllamaService>(provider => 
-            provider.GetRequiredService<OAI.ServiceLayer.Services.AI.SimpleOllamaService>());
+        // Don't re-register IOllamaService - it's already registered as AiServiceRouter in AddOllamaServices
+        // services.AddScoped<OAI.Core.Interfaces.AI.IOllamaService>(provider => 
+        //     provider.GetRequiredService<OAI.ServiceLayer.Services.AI.SimpleOllamaService>());
             
         // Register LM Studio service
         services.AddHttpClient<OAI.ServiceLayer.Services.AI.LMStudioService>("LMStudioService", client =>

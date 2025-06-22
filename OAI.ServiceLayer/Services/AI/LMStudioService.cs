@@ -270,5 +270,87 @@ namespace OAI.ServiceLayer.Services.AI
             public long created { get; set; }
             public string owned_by { get; set; }
         }
+
+        // Additional methods for compatibility with routing
+        public class ChatMessage
+        {
+            public string Role { get; set; }
+            public string Content { get; set; }
+        }
+
+        public class ChatResponse
+        {
+            public string Content { get; set; }
+            public string Model { get; set; }
+            public bool Success { get; set; }
+        }
+
+        public async Task<ChatResponse> GenerateAsync(string model, List<dynamic> messages, Dictionary<string, object> parameters, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _logger.LogInformation("LMStudioService.GenerateAsync called with model: {Model}, messages count: {Count}", model, messages?.Count ?? 0);
+                
+                var payload = new
+                {
+                    model = model,
+                    messages = messages,
+                    temperature = parameters.GetValueOrDefault("temperature", 0.7),
+                    max_tokens = parameters.GetValueOrDefault("max_tokens", 2000),
+                    stream = false
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                _logger.LogDebug("LMStudioService sending request: {Json}", json);
+                
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync("/v1/chat/completions", content, cancellationToken);
+                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+                
+                _logger.LogDebug("LMStudioService received response: Status={Status}, Body={Body}", 
+                    response.StatusCode, responseJson);
+                
+                response.EnsureSuccessStatusCode();
+
+                var result = JsonSerializer.Deserialize<LMStudioChatResponse>(responseJson);
+
+                return new ChatResponse
+                {
+                    Content = result.choices?.FirstOrDefault()?.message?.content ?? "",
+                    Model = result.model,
+                    Success = true
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating response from LM Studio - URL: {BaseAddress}", _httpClient.BaseAddress);
+                return new ChatResponse
+                {
+                    Content = "Error: " + ex.Message,
+                    Model = model,
+                    Success = false
+                };
+            }
+        }
+        
+        // Add a convenience method for IOllamaService-like interface
+        public async Task<string> GenerateResponseAsync(string modelId, string prompt, string conversationId, Dictionary<string, object> parameters, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("LMStudioService.GenerateResponseAsync called with model: {Model}, prompt length: {PromptLength}", 
+                modelId, prompt?.Length ?? 0);
+            
+            var messages = new List<dynamic>
+            {
+                new { role = "user", content = prompt }
+            };
+            
+            var response = await GenerateAsync(modelId, messages, parameters, cancellationToken);
+            
+            _logger.LogInformation("LMStudioService.GenerateResponseAsync response - Success: {Success}, Content length: {ContentLength}", 
+                response.Success, response.Content?.Length ?? 0);
+            
+            return response.Success ? response.Content : $"Error: Unable to generate response from LM Studio. {response.Content}";
+        }
     }
 }

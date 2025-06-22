@@ -16,7 +16,7 @@ namespace OAI.ServiceLayer.Services.AI
     /// <summary>
     /// Simple Ollama service implementation for orchestrator use
     /// </summary>
-    public class SimpleOllamaService : ISimpleOllamaService
+    public class SimpleOllamaService : ISimpleOllamaService, IOllamaService
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<SimpleOllamaService> _logger;
