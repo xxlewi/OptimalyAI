@@ -98,7 +98,7 @@ namespace OptimalyAI.Hubs
                 _logger.LogInformation("Conversation loaded. Messages count: {Count}", conversation.Messages?.Count ?? 0);
 
                 // Save user message
-                var userMessage = new Message
+                var userMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = conversationId,
                     UserId = "default", // TODO: Add proper user authentication
@@ -213,7 +213,7 @@ namespace OptimalyAI.Hubs
                 var tokensPerSecond = tokenCount / responseTime;
 
                 // Save assistant message with orchestrator metadata
-                var assistantMessage = new Message
+                var assistantMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = conversationId,
                     UserId = "assistant",

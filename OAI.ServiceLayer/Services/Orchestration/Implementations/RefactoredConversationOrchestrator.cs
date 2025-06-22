@@ -62,8 +62,9 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
 
         // Configuration
         private readonly ConversationOrchestratorOptions _options;
+        private readonly OAI.ServiceLayer.Services.AI.IAiModelService _aiModelService;
 
-        public override string Id => "conversation_orchestrator";
+        public override string Id => "refactored_conversation_orchestrator";
         public override string Name => "Conversation Orchestrator";
         public override string Description => "Orchestrates conversations between AI models and tools";
 
@@ -77,7 +78,8 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             ILogger<RefactoredConversationOrchestrator> logger,
             ILoggerFactory loggerFactory,
             IOrchestratorMetrics metrics,
-            IOrchestratorConfigurationService orchestratorConfigService)
+            IOrchestratorConfigurationService orchestratorConfigService,
+            OAI.ServiceLayer.Services.AI.IAiModelService aiModelService)
             : base(logger, metrics)
         {
             // Core services
@@ -86,6 +88,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             _reActAgent = reActAgent ?? throw new ArgumentNullException(nameof(reActAgent));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _orchestratorConfigService = orchestratorConfigService ?? throw new ArgumentNullException(nameof(orchestratorConfigService));
+            _aiModelService = aiModelService ?? throw new ArgumentNullException(nameof(aiModelService));
 
             // Initialize specialized services
             _toolDetection = new ToolDetectionService(
@@ -527,11 +530,22 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                 errors.Add($"Message exceeds maximum length of {_options.MaxMessageLength} characters");
             }
 
+            // Validate model against registered models from database
             if (!string.IsNullOrEmpty(request.ModelId))
             {
-                if (!_options.SupportedModels.Contains(request.ModelId))
+                try
                 {
-                    errors.Add($"Model '{request.ModelId}' is not supported");
+                    var availableModels = await _aiModelService.GetAvailableModelsAsync();
+                    var modelNames = availableModels.Select(m => m.Name).ToList();
+                    
+                    if (!modelNames.Contains(request.ModelId))
+                    {
+                        errors.Add($"Model '{request.ModelId}' is not registered. Available models: {string.Join(", ", modelNames)}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to validate model, skipping model validation");
                 }
             }
 
@@ -552,8 +566,22 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         public List<string> SupportedModels { get; set; } = new() 
         { 
             "llama3.2:latest", 
-            "mistral:latest", 
-            "gemma:latest" 
+            "llama3.2",
+            "llama3.1",
+            "llama-fast-cline:latest",
+            "llama-fast-cline",
+            "mistral:latest",
+            "mistral",
+            "gemma:latest",
+            "gemma",
+            "qwen2.5-14b-instruct",
+            "qwen2.5:14b-instruct",
+            "codellama",
+            "google/gemma-3-12b",
+            "gemma-3-12b",
+            "phi3:medium",
+            "llama2",
+            "neural-chat"
         };
         public bool EnableToolDetection { get; set; } = true;
         public double ToolDetectionThreshold { get; set; } = 0.7;

@@ -131,7 +131,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
                     if (!stepResult.Success)
                     {
-                        response.Status = OAI.Core.DTOs.Orchestration.WorkflowExecutionStatus.Failed;
+                        response.Status = WorkflowOrchestratorExecutionStatus.Failed;
                         response.ErrorMessage = $"Step {step.Id} failed: {stepResult.Error}";
                         break;
                     }
@@ -144,15 +144,15 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 }
 
                 // Generate AI summary if all steps completed
-                if (response.Status != OAI.Core.DTOs.Orchestration.WorkflowExecutionStatus.Failed)
+                if (response.Status != WorkflowOrchestratorExecutionStatus.Failed)
                 {
-                    response.Status = OAI.Core.DTOs.Orchestration.WorkflowExecutionStatus.Completed;
+                    response.Status = WorkflowOrchestratorExecutionStatus.Completed;
                     response.FinalOutputs = ExtractFinalOutputs(executionContext, definition);
                     response.AIGuidanceSummary = await GenerateExecutionSummaryAsync(
                         definition, response.StepResults, executionContext, config);
                 }
 
-                response.Success = response.Status == OAI.Core.DTOs.Orchestration.WorkflowExecutionStatus.Completed;
+                response.Success = response.Status == WorkflowOrchestratorExecutionStatus.Completed;
                 response.CompletedAt = DateTime.UtcNow;
                 response.DurationMs = (response.CompletedAt - response.StartedAt).TotalMilliseconds;
 
@@ -162,7 +162,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error executing workflow {WorkflowId}", request.WorkflowId);
-                response.Status = OAI.Core.DTOs.Orchestration.WorkflowExecutionStatus.Failed;
+                response.Status = WorkflowOrchestratorExecutionStatus.Failed;
                 response.Success = false;
                 response.ErrorMessage = ex.Message;
                 response.CompletedAt = DateTime.UtcNow;
@@ -626,7 +626,7 @@ Keep it under 200 words.";
             {
                 WorkflowId = workflowId,
                 ExecutionType = "Workflow",
-                Status = response.Status == OAI.Core.DTOs.Orchestration.WorkflowExecutionStatus.Completed 
+                Status = response.Status == WorkflowOrchestratorExecutionStatus.Completed 
                     ? ExecutionStatus.Completed 
                     : ExecutionStatus.Failed,
                 StartedAt = response.StartedAt,

@@ -141,12 +141,12 @@
                 <div class="card-tools">
                     <div class="input-group input-group-sm model-selector">
                         <select id="model-select" class="form-control">
-                            <option value="">-- Použít výchozí model orchestrátoru --</option>
+                            <option value="">-- Použít výchozí model orchestrátoru@(defaultModel != null ? $" ({defaultModel})" : "") --</option>
                             @foreach (var modelName in availableModels)
                             {
                                 @if (modelName == defaultModel)
                                 {
-                                    <option value="@modelName" selected>@modelName</option>
+                                    <option value="@modelName">⭐ @modelName (výchozí)</option>
                                 }
                                 else
                                 {

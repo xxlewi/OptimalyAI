@@ -26,7 +26,7 @@ namespace OAI.Core.DTOs.Orchestration
         public Guid ExecutionId { get; set; }
         public Dictionary<string, object> FinalOutputs { get; set; } = new();
         public List<StepExecutionResult> StepResults { get; set; } = new();
-        public WorkflowExecutionStatus Status { get; set; }
+        public WorkflowOrchestratorExecutionStatus Status { get; set; }
         public string AIGuidanceSummary { get; set; }
     }
 
@@ -47,9 +47,9 @@ namespace OAI.Core.DTOs.Orchestration
     }
 
     /// <summary>
-    /// Workflow execution status
+    /// Workflow orchestrator execution status
     /// </summary>
-    public enum WorkflowExecutionStatus
+    public enum WorkflowOrchestratorExecutionStatus
     {
         Running,
         Completed,

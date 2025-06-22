@@ -22,6 +22,7 @@ namespace OptimalyAI.Controllers
         private readonly IMessageService _messageService;
         private readonly IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
         private readonly IOrchestratorConfigurationService _orchestratorConfigService;
+        private readonly OAI.ServiceLayer.Services.AI.IAiModelService _aiModelService;
 
         public ChatController(
             ILogger<ChatController> logger,
@@ -29,7 +30,8 @@ namespace OptimalyAI.Controllers
             IConversationService conversationService,
             IMessageService messageService,
             IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator,
-            IOrchestratorConfigurationService orchestratorConfigService)
+            IOrchestratorConfigurationService orchestratorConfigService,
+            OAI.ServiceLayer.Services.AI.IAiModelService aiModelService)
         {
             _logger = logger;
             _ollamaService = ollamaService;
@@ -37,6 +39,7 @@ namespace OptimalyAI.Controllers
             _messageService = messageService;
             _orchestrator = orchestrator;
             _orchestratorConfigService = orchestratorConfigService;
+            _aiModelService = aiModelService;
         }
 
         public IActionResult Index()
@@ -48,27 +51,25 @@ namespace OptimalyAI.Controllers
         {
             try
             {
-                // Load available models from all AI services
-                var models = new List<string>();
+                // Load registered models from database
+                var registeredModels = await _aiModelService.GetAvailableModelsAsync();
+                var modelList = registeredModels
+                    .Where(m => m.IsAvailable) // Only show available models
+                    .OrderBy(m => m.AiServer?.ServerType.ToString() ?? "Unknown")
+                    .ThenBy(m => m.Name)
+                    .Select(m => m.Name)
+                    .ToList();
                 
-                try
-                {
-                    var ollamaModels = await _ollamaService.ListModelsAsync();
-                    models.AddRange(ollamaModels.Select(m => m.Name));
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to load Ollama models");
-                }
-                
-                // Remove duplicates and sort
-                ViewBag.AvailableModels = models.Distinct().OrderBy(m => m).ToList();
+                ViewBag.AvailableModels = modelList;
                 
                 // Get default model from orchestrator configuration
                 try
                 {
-                    var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("conversation_orchestrator");
+                    var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("refactored_conversation_orchestrator");
                     ViewBag.DefaultModel = orchestratorConfig?.DefaultModelName;
+                    
+                    _logger.LogInformation("Loaded {Count} models. Default model: {Model}", 
+                        modelList.Count, orchestratorConfig?.DefaultModelName);
                 }
                 catch (Exception ex)
                 {
@@ -131,10 +132,28 @@ namespace OptimalyAI.Controllers
         {
             try
             {
+                // Get default model from orchestrator config if not specified
+                string defaultModel = "qwen2.5-14b-instruct"; // Fallback default
+                if (string.IsNullOrEmpty(dto.Model))
+                {
+                    try
+                    {
+                        var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("refactored_conversation_orchestrator");
+                        if (orchestratorConfig != null && !string.IsNullOrEmpty(orchestratorConfig.DefaultModelName))
+                        {
+                            defaultModel = orchestratorConfig.DefaultModelName;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get orchestrator default model, using fallback");
+                    }
+                }
+
                 var conversation = new OAI.Core.Entities.Conversation
                 {
                     Title = dto.Title ?? "Nový chat",
-                    Model = dto.Model, // Store the selected model in conversation
+                    Model = dto.Model ?? defaultModel, // Use selected model or default
                     SystemPrompt = dto.SystemPrompt ?? "You are a helpful AI assistant.",
                     UserId = "default", // TODO: Add user authentication
                     LastMessageAt = DateTime.UtcNow
@@ -163,7 +182,7 @@ namespace OptimalyAI.Controllers
                 }
 
                 // Save user message
-                var userMessage = new Message
+                var userMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = dto.ConversationId,
                     UserId = "default", // TODO: Add user authentication
@@ -228,7 +247,7 @@ namespace OptimalyAI.Controllers
                 }
 
                 // Save assistant message with orchestrator metadata
-                var assistantMessage = new Message
+                var assistantMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = dto.ConversationId,
                     UserId = "assistant",
