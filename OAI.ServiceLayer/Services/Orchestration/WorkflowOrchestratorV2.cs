@@ -31,7 +31,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
         private readonly IToolExecutor _toolExecutor;
         private readonly IAdapterRegistry _adapterRegistry;
         private readonly IOrchestratorConfigurationService _orchestratorConfigService;
-        private readonly OAI.Core.Interfaces.Services.IAiServerService _aiServerService;
+        private readonly OAI.ServiceLayer.Services.AI.IAiServerService _aiServerService;
         private readonly IOllamaService _ollamaService;
         private readonly ILMStudioService _lmStudioService;
         private readonly new ILogger<WorkflowOrchestratorV2> _logger;
@@ -46,7 +46,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
             IToolExecutor toolExecutor,
             IAdapterRegistry adapterRegistry,
             IOrchestratorConfigurationService orchestratorConfigService,
-            OAI.Core.Interfaces.Services.IAiServerService aiServerService,
+            OAI.ServiceLayer.Services.AI.IAiServerService aiServerService,
             IOllamaService ollamaService,
             ILMStudioService lmStudioService,
             ILogger<WorkflowOrchestratorV2> logger,

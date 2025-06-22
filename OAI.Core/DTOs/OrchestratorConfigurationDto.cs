@@ -13,7 +13,7 @@ namespace OAI.Core.DTOs
         public Guid? AiServerId { get; set; }
         public string? AiServerName { get; set; }
         public AiServerType? AiServerType { get; set; }
-        public Guid? DefaultModelId { get; set; }
+        public int? DefaultModelId { get; set; }
         public string? DefaultModelName { get; set; }
         public Dictionary<string, object> Configuration { get; set; } = new();
         public bool IsActive { get; set; } = true;
@@ -28,7 +28,7 @@ namespace OAI.Core.DTOs
         public string Name { get; set; } = string.Empty;
         public bool IsDefault { get; set; }
         public Guid? AiServerId { get; set; }
-        public Guid? DefaultModelId { get; set; }
+        public int? DefaultModelId { get; set; }
         public Dictionary<string, object> Configuration { get; set; } = new();
         public bool IsActive { get; set; } = true;
     }
@@ -41,7 +41,7 @@ namespace OAI.Core.DTOs
         public string? Name { get; set; }
         public bool? IsDefault { get; set; }
         public Guid? AiServerId { get; set; }
-        public Guid? DefaultModelId { get; set; }
+        public int? DefaultModelId { get; set; }
         public Dictionary<string, object>? Configuration { get; set; }
         public bool? IsActive { get; set; }
     }

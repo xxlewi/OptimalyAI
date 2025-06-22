@@ -19,7 +19,7 @@ namespace OAI.Core.Entities
         public Guid? AiServerId { get; set; }
         public virtual AiServer? AiServer { get; set; }
         
-        public Guid? DefaultModelId { get; set; }
+        public int? DefaultModelId { get; set; }
         public virtual AiModel? DefaultModel { get; set; }
         
         /// <summary>

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using OAI.Core.Interfaces;
 using OAI.Core.Entities;
 using OAI.DataLayer.Repositories;
@@ -13,17 +14,19 @@ public class UnitOfWork : IUnitOfWork
     private IDbContextTransaction? _transaction;
     private readonly Dictionary<Type, object> _repositories = new Dictionary<Type, object>();
     private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<UnitOfWork> _logger;
 
-    public UnitOfWork(DbContext context, IServiceProvider serviceProvider)
+    public UnitOfWork(DbContext context, IServiceProvider serviceProvider, ILogger<UnitOfWork> logger)
     {
         _context = context;
         _serviceProvider = serviceProvider;
+        _logger = logger;
     }
 
     public async Task<int> SaveChangesAsync()
     {
         var result = await _context.SaveChangesAsync();
-        Console.WriteLine($"[UnitOfWork] SaveChangesAsync called, {result} entities affected");
+        _logger.LogDebug("SaveChangesAsync called, {Count} entities affected", result);
         return result;
     }
 
