@@ -34,6 +34,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         public override string Id => "web_scraping_orchestrator";
         public override string Name => "Web Scraping Orchestrator";
         public override string Description => "Orchestrates web scraping workflows including image extraction and downloading";
+        public override bool IsWorkflowNode { get; protected set; } = true;
 
         public override OrchestratorCapabilities GetCapabilities()
         {

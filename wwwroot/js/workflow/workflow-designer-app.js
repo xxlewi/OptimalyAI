@@ -755,8 +755,8 @@ export class WorkflowDesignerApp {
         `);
         
         try {
-            // Load orchestrators
-            const response = await fetch('/api/orchestrators');
+            // Load orchestrators - only those that can be used as workflow nodes
+            const response = await fetch('/api/orchestrators?workflowOnly=true');
             const data = await response.json();
             
             if (data.success) {

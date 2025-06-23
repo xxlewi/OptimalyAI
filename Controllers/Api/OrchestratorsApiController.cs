@@ -25,6 +25,101 @@ namespace OptimalyAI.Controllers.Api
         }
 
         /// <summary>
+        /// Get all available orchestrators
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetOrchestrators([FromQuery] bool? workflowOnly = null)
+        {
+            try
+            {
+                var orchestrators = new List<object>();
+                
+                // Manually add known orchestrators since they're registered by their interfaces
+                var knownOrchestrators = new List<(Type type, Type requestType, Type responseType)>
+                {
+                    (typeof(OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator), 
+                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto),
+                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto)),
+                    
+                    (typeof(OAI.ServiceLayer.Services.Orchestration.Implementations.WebScrapingOrchestrator),
+                     typeof(OAI.Core.DTOs.Orchestration.WebScrapingOrchestratorRequestDto),
+                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto)),
+                    
+                    (typeof(OAI.ServiceLayer.Services.Orchestration.Implementations.ToolChainOrchestrator),
+                     typeof(OAI.Core.DTOs.Orchestration.ToolChainOrchestratorRequestDto),
+                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto)),
+                    
+                    (typeof(OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestrator),
+                     typeof(OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorRequest),
+                     typeof(OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorResponse)),
+                     
+                    (typeof(OAI.ServiceLayer.Services.Orchestration.WorkflowOrchestratorV2),
+                     typeof(OAI.Core.DTOs.Orchestration.WorkflowOrchestratorRequest),
+                     typeof(OAI.Core.DTOs.Orchestration.WorkflowOrchestratorResponse))
+                };
+
+                foreach (var (orchestratorType, requestType, responseType) in knownOrchestrators)
+                {
+                    try
+                    {
+                        // Get the service through the interface
+                        var interfaceType = typeof(IOrchestrator<,>).MakeGenericType(requestType, responseType);
+                        var orchestrator = _serviceProvider.GetService(interfaceType);
+                        
+                        if (orchestrator != null)
+                        {
+                            var idProperty = orchestratorType.GetProperty("Id");
+                            var nameProperty = orchestratorType.GetProperty("Name");
+                            var descriptionProperty = orchestratorType.GetProperty("Description");
+                            var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
+                            
+                            var isWorkflowNode = (bool)(isWorkflowNodeProperty?.GetValue(orchestrator) ?? false);
+                            
+                            // Filter based on workflowOnly parameter
+                            if (workflowOnly.HasValue && workflowOnly.Value && !isWorkflowNode)
+                            {
+                                continue;
+                            }
+
+                            orchestrators.Add(new
+                            {
+                                id = idProperty?.GetValue(orchestrator)?.ToString() ?? orchestratorType.Name,
+                                name = nameProperty?.GetValue(orchestrator)?.ToString() ?? orchestratorType.Name,
+                                description = descriptionProperty?.GetValue(orchestrator)?.ToString() ?? "No description",
+                                type = orchestratorType.Name,
+                                isWorkflowNode = isWorkflowNode
+                            });
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Orchestrator {Type} not found in DI container", orchestratorType.Name);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get orchestrator {Type}", orchestratorType.Name);
+                    }
+                }
+
+                return Ok(new ApiResponse<List<object>>
+                {
+                    Success = true,
+                    Data = orchestrators,
+                    Message = "Orchestrators retrieved successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get orchestrators");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to retrieve orchestrators"
+                });
+            }
+        }
+
+        /// <summary>
         /// Execute an orchestrator with the given input
         /// </summary>
         [HttpPost("execute")]

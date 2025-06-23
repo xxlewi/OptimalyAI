@@ -67,6 +67,8 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         public override string Id => "refactored_conversation_orchestrator";
         public override string Name => "Conversation Orchestrator";
         public override string Description => "Orchestrates conversations between AI models and tools";
+        public override bool IsWorkflowNode { get; protected set; } = true;
+        public override bool IsDefaultChatOrchestrator { get; protected set; } = true;
 
         public RefactoredConversationOrchestrator(
             OAI.Core.Interfaces.AI.IOllamaService ollamaService,

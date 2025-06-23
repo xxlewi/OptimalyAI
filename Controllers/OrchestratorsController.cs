@@ -202,6 +202,54 @@ namespace OptimalyAI.Controllers
                         capabilities = capabilitiesMethod.Invoke(orchestrator, null) as OrchestratorCapabilities;
                     }
                     
+                    // Get saved configuration first
+                    var savedConfiguration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(orchestratorId) : null;
+                    
+                    // Get IsWorkflowNode - use saved value if available, otherwise get from property
+                    bool isWorkflowNode = false;
+                    if (savedConfiguration != null)
+                    {
+                        isWorkflowNode = savedConfiguration.IsWorkflowNode;
+                    }
+                    else
+                    {
+                        var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
+                        if (isWorkflowNodeProperty != null)
+                        {
+                            isWorkflowNode = (bool)(isWorkflowNodeProperty.GetValue(orchestrator) ?? false);
+                        }
+                    }
+                    
+                    // Get IsDefaultChatOrchestrator - use saved value if available, otherwise get from property
+                    bool isDefaultChatOrchestrator = false;
+                    if (savedConfiguration != null)
+                    {
+                        isDefaultChatOrchestrator = savedConfiguration.IsDefaultChatOrchestrator;
+                    }
+                    else
+                    {
+                        var isDefaultChatOrchestratorProperty = orchestratorType.GetProperty("IsDefaultChatOrchestrator");
+                        if (isDefaultChatOrchestratorProperty != null)
+                        {
+                            isDefaultChatOrchestrator = (bool)(isDefaultChatOrchestratorProperty.GetValue(orchestrator) ?? false);
+                        }
+                    }
+                    
+                    // Get IsDefaultWorkflowOrchestrator - use saved value if available, otherwise get from property
+                    bool isDefaultWorkflowOrchestrator = false;
+                    if (savedConfiguration != null)
+                    {
+                        isDefaultWorkflowOrchestrator = savedConfiguration.IsDefaultWorkflowOrchestrator;
+                    }
+                    else
+                    {
+                        var isDefaultWorkflowOrchestratorProperty = orchestratorType.GetProperty("IsDefaultWorkflowOrchestrator");
+                        if (isDefaultWorkflowOrchestratorProperty != null)
+                        {
+                            isDefaultWorkflowOrchestrator = (bool)(isDefaultWorkflowOrchestratorProperty.GetValue(orchestrator) ?? false);
+                        }
+                    }
+                    
                     // Get saved configuration - commented out for now
                     // var savedConfig = await _configurationService.GetByOrchestratorIdAsync(orchestratorId);
                     
@@ -213,7 +261,8 @@ namespace OptimalyAI.Controllers
                     
                     if (settingsService != null && aiServerService != null)
                     {
-                        var configuration = await settingsService.GetOrchestratorConfigurationAsync(orchestratorId);
+                        // Use the already retrieved configuration
+                        var configuration = savedConfiguration;
                         if (configuration?.AiServerId != null && !string.IsNullOrEmpty(configuration.DefaultModelId))
                         {
                             // Check if the AI server is running
@@ -263,6 +312,9 @@ namespace OptimalyAI.Controllers
                         Type = orchestratorType.Name,
                         IsActive = isActive, // Real status based on AI server
                         IsDefault = await _orchestratorSettings.IsDefaultOrchestratorAsync(orchestratorId),
+                        IsWorkflowNode = isWorkflowNode,
+                        IsDefaultChatOrchestrator = isDefaultChatOrchestrator,
+                        IsDefaultWorkflowOrchestrator = isDefaultWorkflowOrchestrator,
                         TotalExecutions = summary?.TotalExecutions ?? 0,
                         SuccessfulExecutions = summary?.SuccessfulExecutions ?? 0,
                         FailedExecutions = summary?.FailedExecutions ?? 0,
@@ -1151,11 +1203,17 @@ namespace OptimalyAI.Controllers
                     await _orchestratorSettings.SetDefaultOrchestratorAsync(request.OrchestratorId);
                 }
 
-                // Save AI Server and Model configuration
+                // Save AI Server and Model configuration along with workflow properties
                 var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
                 if (settingsService != null)
                 {
-                    await settingsService.SaveOrchestratorConfigurationAsync(request.OrchestratorId, request.AiServerId, request.DefaultModelId);
+                    await settingsService.SaveOrchestratorConfigurationAsync(
+                        request.OrchestratorId, 
+                        request.AiServerId, 
+                        request.DefaultModelId,
+                        request.IsWorkflowNode,
+                        request.IsDefaultChatOrchestrator,
+                        request.IsDefaultWorkflowOrchestrator);
                 }
                 
                 return Json(new { success = true, message = "Configuration saved successfully" });
@@ -1187,9 +1245,47 @@ namespace OptimalyAI.Controllers
                 var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
                 var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(id) : null;
                 
+                // Get IsWorkflowNode and IsDefaultChatOrchestrator from saved configuration
+                bool isWorkflowNode = configuration?.IsWorkflowNode ?? false;
+                bool isDefaultChatOrchestrator = configuration?.IsDefaultChatOrchestrator ?? false;
+                bool isDefaultWorkflowOrchestrator = configuration?.IsDefaultWorkflowOrchestrator ?? false;
+                
+                // If no configuration exists, get defaults from orchestrator properties
+                if (configuration == null)
+                {
+                    var orchestratorType = GetOrchestratorTypeById(id);
+                    if (orchestratorType != null)
+                    {
+                        var orchestrator = GetOrchestratorInstance(orchestratorType);
+                        if (orchestrator != null)
+                        {
+                            var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
+                            if (isWorkflowNodeProperty != null)
+                            {
+                                isWorkflowNode = (bool)(isWorkflowNodeProperty.GetValue(orchestrator) ?? false);
+                            }
+                            
+                            var isDefaultChatOrchestratorProperty = orchestratorType.GetProperty("IsDefaultChatOrchestrator");
+                            if (isDefaultChatOrchestratorProperty != null)
+                            {
+                                isDefaultChatOrchestrator = (bool)(isDefaultChatOrchestratorProperty.GetValue(orchestrator) ?? false);
+                            }
+                            
+                            var isDefaultWorkflowOrchestratorProperty = orchestratorType.GetProperty("IsDefaultWorkflowOrchestrator");
+                            if (isDefaultWorkflowOrchestratorProperty != null)
+                            {
+                                isDefaultWorkflowOrchestrator = (bool)(isDefaultWorkflowOrchestratorProperty.GetValue(orchestrator) ?? false);
+                            }
+                        }
+                    }
+                }
+                
                 var config = new {
                     orchestratorId = id,
                     isDefault = isDefault,
+                    isWorkflowNode = isWorkflowNode,
+                    isDefaultChatOrchestrator = isDefaultChatOrchestrator,
+                    isDefaultWorkflowOrchestrator = isDefaultWorkflowOrchestrator,
                     aiServerId = configuration?.AiServerId?.ToString(),
                     defaultModelId = configuration?.DefaultModelId  // Already a string now
                 };
@@ -1405,6 +1501,9 @@ namespace OptimalyAI.Controllers
         public string Type { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public bool IsDefault { get; set; }
+        public bool IsWorkflowNode { get; set; }
+        public bool IsDefaultChatOrchestrator { get; set; }
+        public bool IsDefaultWorkflowOrchestrator { get; set; }
         public int TotalExecutions { get; set; }
         public int SuccessfulExecutions { get; set; }
         public int FailedExecutions { get; set; }
@@ -1477,6 +1576,9 @@ namespace OptimalyAI.Controllers
         public string OrchestratorId { get; set; } = string.Empty;
         public string? Name { get; set; }
         public bool IsDefault { get; set; }
+        public bool IsWorkflowNode { get; set; }
+        public bool IsDefaultChatOrchestrator { get; set; }
+        public bool IsDefaultWorkflowOrchestrator { get; set; }
         public Guid? AiServerId { get; set; }
         public string? DefaultModelId { get; set; }  // Changed from Guid? to string?
         public Dictionary<string, object>? Configuration { get; set; }

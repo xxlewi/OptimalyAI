@@ -34,6 +34,11 @@ namespace OAI.Core.Interfaces.Orchestration
         bool IsEnabled { get; }
         
         /// <summary>
+        /// Whether this orchestrator can be used as a workflow node
+        /// </summary>
+        bool IsWorkflowNode { get; }
+        
+        /// <summary>
         /// Execute the orchestration logic
         /// </summary>
         /// <param name="request">The orchestration request</param>
@@ -74,6 +79,7 @@ namespace OAI.Core.Interfaces.Orchestration
         string Name { get; }
         string Description { get; }
         bool IsEnabled { get; }
+        bool IsWorkflowNode { get; }
         OrchestratorCapabilities GetCapabilities();
         Task<OrchestratorHealthStatus> GetHealthStatusAsync();
     }

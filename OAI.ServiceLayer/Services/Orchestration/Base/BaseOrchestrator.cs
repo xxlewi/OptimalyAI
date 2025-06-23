@@ -28,6 +28,9 @@ namespace OAI.ServiceLayer.Services.Orchestration.Base
         public abstract string Name { get; }
         public abstract string Description { get; }
         public virtual bool IsEnabled { get; protected set; } = true;
+        public virtual bool IsWorkflowNode { get; protected set; } = false;
+        public virtual bool IsDefaultChatOrchestrator { get; protected set; } = false;
+        public virtual bool IsDefaultWorkflowOrchestrator { get; protected set; } = false;
 
         protected BaseOrchestrator(
             ILogger<BaseOrchestrator<TRequest, TResponse>> logger,

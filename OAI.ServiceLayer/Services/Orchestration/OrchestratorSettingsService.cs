@@ -79,13 +79,16 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 var settings = await LoadSettingsAsync();
                 var configurations = await LoadConfigurationsAsync(settings);
 
-                var config = new OrchestratorConfiguration
-                {
-                    OrchestratorId = orchestratorId,
-                    AiServerId = aiServerId,
-                    DefaultModelId = defaultModelId,
-                    UpdatedAt = DateTime.UtcNow
-                };
+                // Get existing config or create new one
+                var config = configurations.ContainsKey(orchestratorId) 
+                    ? configurations[orchestratorId] 
+                    : new OrchestratorConfiguration();
+
+                // Update only the AI server and model properties
+                config.OrchestratorId = orchestratorId;
+                config.AiServerId = aiServerId;
+                config.DefaultModelId = defaultModelId;
+                config.UpdatedAt = DateTime.UtcNow;
 
                 configurations[orchestratorId] = config;
                 
@@ -99,6 +102,42 @@ namespace OAI.ServiceLayer.Services.Orchestration
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving configuration for orchestrator {OrchestratorId}", orchestratorId);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Saves orchestrator configuration with all properties
+        /// </summary>
+        public async Task SaveOrchestratorConfigurationAsync(string orchestratorId, Guid? aiServerId, string? defaultModelId, bool isWorkflowNode, bool isDefaultChatOrchestrator, bool isDefaultWorkflowOrchestrator)
+        {
+            try
+            {
+                var settings = await LoadSettingsAsync();
+                var configurations = await LoadConfigurationsAsync(settings);
+
+                var config = new OrchestratorConfiguration
+                {
+                    OrchestratorId = orchestratorId,
+                    AiServerId = aiServerId,
+                    DefaultModelId = defaultModelId,
+                    IsWorkflowNode = isWorkflowNode,
+                    IsDefaultChatOrchestrator = isDefaultChatOrchestrator,
+                    IsDefaultWorkflowOrchestrator = isDefaultWorkflowOrchestrator,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                configurations[orchestratorId] = config;
+                
+                // Save configurations back to settings
+                settings[ConfigurationsKey] = JsonSerializer.Serialize(configurations);
+                await SaveSettingsAsync(settings);
+
+                _logger.LogInformation("Full configuration saved for orchestrator {OrchestratorId}", orchestratorId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving full configuration for orchestrator {OrchestratorId}", orchestratorId);
                 throw;
             }
         }
@@ -176,6 +215,9 @@ namespace OAI.ServiceLayer.Services.Orchestration
         public string OrchestratorId { get; set; } = string.Empty;
         public Guid? AiServerId { get; set; }
         public string? DefaultModelId { get; set; }  // Changed from Guid? to string?
+        public bool IsWorkflowNode { get; set; }
+        public bool IsDefaultChatOrchestrator { get; set; }
+        public bool IsDefaultWorkflowOrchestrator { get; set; }
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }

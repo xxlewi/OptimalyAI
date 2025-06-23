@@ -176,10 +176,30 @@
                         <div class="card-header">
                             <h3 class="card-title">
                                 <i class="fas fa-robot mr-2"></i>@orchestrator.Name
+                                @* Historický IsDefault - už se nepoužívá
                                 @if (orchestrator.IsDefault)
                                 {
                                     <span class="badge badge-warning ml-2">
                                         <i class="fas fa-star mr-1"></i>Default
+                                    </span>
+                                }
+                                *@
+                                @if (orchestrator.IsWorkflowNode)
+                                {
+                                    <span class="badge badge-info ml-2">
+                                        <i class="fas fa-project-diagram mr-1"></i>Workflow Node
+                                    </span>
+                                }
+                                @if (orchestrator.IsDefaultChatOrchestrator)
+                                {
+                                    <span class="badge badge-primary ml-2">
+                                        <i class="fas fa-comments mr-1"></i>Default Chat
+                                    </span>
+                                }
+                                @if (orchestrator.IsDefaultWorkflowOrchestrator)
+                                {
+                                    <span class="badge badge-warning ml-2">
+                                        <i class="fas fa-sitemap mr-1"></i>Default Workflow
                                     </span>
                                 }
                             </h3>
@@ -636,6 +656,7 @@
                             </select>
                         </div>
                     </div>
+                    @* Historický IsDefault - už se nepoužívá
                     <div class="form-group row">
                         <label class="col-sm-4 col-form-label">Default Orchestrator</label>
                         <div class="col-sm-8">
@@ -644,6 +665,37 @@
                                 <label class="custom-control-label" for="isDefaultOrchestrator">Set as default workflow orchestrator</label>
                             </div>
                             <small class="form-text text-muted">Only one orchestrator can be set as default</small>
+                        </div>
+                    </div>
+                    *@
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">Workflow Node</label>
+                        <div class="col-sm-8">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="isWorkflowNode" name="isWorkflowNode">
+                                <label class="custom-control-label" for="isWorkflowNode">Can be used as workflow node</label>
+                            </div>
+                            <small class="form-text text-muted">Enable to allow this orchestrator in workflow designer</small>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">Default Chat Orchestrator</label>
+                        <div class="col-sm-8">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="isDefaultChatOrchestrator" name="isDefaultChatOrchestrator">
+                                <label class="custom-control-label" for="isDefaultChatOrchestrator">Use as default for chat</label>
+                            </div>
+                            <small class="form-text text-muted">Set as the default orchestrator for chat conversations</small>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">Default Workflow Orchestrator</label>
+                        <div class="col-sm-8">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="isDefaultWorkflowOrchestrator" name="isDefaultWorkflowOrchestrator">
+                                <label class="custom-control-label" for="isDefaultWorkflowOrchestrator">Use as default for workflows</label>
+                            </div>
+                            <small class="form-text text-muted">Set as the default orchestrator for workflow execution</small>
                         </div>
                     </div>
                     <hr>
@@ -857,7 +909,13 @@
                     const config = result.data;
                     
                     // Set default checkbox
-                    $('#isDefaultOrchestrator').prop('checked', config.isDefault);
+                    // Historický IsDefault - už se nepoužívá
+                    // $('#isDefaultOrchestrator').prop('checked', config.isDefault);
+                    
+                    // Set workflow node checkbox (read-only)
+                    $('#isWorkflowNode').prop('checked', config.isWorkflowNode || false);
+                    $('#isDefaultChatOrchestrator').prop('checked', config.isDefaultChatOrchestrator || false);
+                    $('#isDefaultWorkflowOrchestrator').prop('checked', config.isDefaultWorkflowOrchestrator || false);
                     
                     // Set AI server selection after servers are loaded
                     if (config.aiServerId) {
@@ -875,16 +933,18 @@
                     }
                 } else {
                     // No saved configuration, set default based on current state
-                    const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
-                    const isCurrentlyDefault = orchestratorCard.find('.badge-warning').length > 0;
-                    $('#isDefaultOrchestrator').prop('checked', isCurrentlyDefault);
+                    // Historický IsDefault - už se nepoužívá
+                    // const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
+                    // const isCurrentlyDefault = orchestratorCard.find('.badge-warning').length > 0;
+                    // $('#isDefaultOrchestrator').prop('checked', isCurrentlyDefault);
                 }
             } catch (error) {
                 console.error('Error loading saved configuration:', error);
                 // Fallback to current state
-                const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
-                const isCurrentlyDefault = orchestratorCard.find('.badge-warning').length > 0;
-                $('#isDefaultOrchestrator').prop('checked', isCurrentlyDefault);
+                // Historický IsDefault - už se nepoužívá
+                // const orchestratorCard = $(`.orchestrator-card[onclick*="${orchestratorId}"]`);
+                // const isCurrentlyDefault = orchestratorCard.find('.badge-warning').length > 0;
+                // $('#isDefaultOrchestrator').prop('checked', isCurrentlyDefault);
             }
         }
         
@@ -1029,12 +1089,20 @@
                     const aiServerId = $('#aiServerSelect').val();
                     const defaultModelId = $('#modelSelect').val();
                     
-                    const isDefault = $('#isDefaultOrchestrator').is(':checked');
+                    // Historický IsDefault - už se nepoužívá
+                    // const isDefault = $('#isDefaultOrchestrator').is(':checked');
+                    const isDefault = false; // Vždy false, už se nepoužívá
+                    const isWorkflowNode = $('#isWorkflowNode').is(':checked');
+                    const isDefaultChatOrchestrator = $('#isDefaultChatOrchestrator').is(':checked');
+                    const isDefaultWorkflowOrchestrator = $('#isDefaultWorkflowOrchestrator').is(':checked');
                     
                     const configData = {
                         orchestratorId: currentOrchestratorId,
                         name: currentOrchestratorId,
                         isDefault: isDefault,
+                        isWorkflowNode: isWorkflowNode,
+                        isDefaultChatOrchestrator: isDefaultChatOrchestrator,
+                        isDefaultWorkflowOrchestrator: isDefaultWorkflowOrchestrator,
                         aiServerId: aiServerId ? aiServerId : null,
                         defaultModelId: defaultModelId ? defaultModelId : null
                     };
@@ -1065,10 +1133,11 @@
                         toastr.success('Configuration saved successfully!');
                         saveBtn.html(originalText).prop('disabled', false);
                         
+                        // Historický IsDefault - už se nepoužívá
                         // Refresh page if default was changed
-                        if (isDefault === true) {
-                            location.reload();
-                        }
+                        // if (isDefault === true) {
+                        //     location.reload();
+                        // }
                     } else {
                         throw new Error(result.error || 'Failed to save configuration');
                     }
