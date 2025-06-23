@@ -48,6 +48,11 @@ namespace OAI.Core.Interfaces
         Task<IEnumerable<ProjectExecutionDto>> GetProjectExecutionsAsync(Guid projectId, int limit = 10, CancellationToken cancellationToken = default);
         
         /// <summary>
+        /// Get single project execution by ID
+        /// </summary>
+        Task<ProjectExecutionDto?> GetProjectExecutionAsync(Guid executionId, CancellationToken cancellationToken = default);
+        
+        /// <summary>
         /// Execute project workflow
         /// </summary>
         Task<ProjectExecutionDto> ExecuteProjectAsync(CreateProjectExecutionDto executionDto, CancellationToken cancellationToken = default);

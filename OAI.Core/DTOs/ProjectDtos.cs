@@ -121,8 +121,16 @@ namespace OAI.Core.DTOs
         public int ItemsFailed { get; set; }
         public string? ErrorMessage { get; set; }
         public TimeSpan? Duration => CompletedAt?.Subtract(StartedAt);
+        public int? DurationSeconds { get; set; }
         public object? Results { get; set; }
         public object? Metadata { get; set; }
+        public string? ExecutionLog { get; set; }
+        public string? CurrentStage { get; set; }
+        public int? TotalItemsCount { get; set; }
+        public int ItemsProcessedCount => ItemsProcessed;
+        public object? OutputData => Results;
+        public object? InputParameters => Metadata;
+        public string? ErrorStackTrace { get; set; }
         public List<ProjectExecutionStepDto> Steps { get; set; } = new();
         public int StepsCompleted => Steps.Count(s => s.Status == "Completed");
         public int TotalSteps => Steps.Count;

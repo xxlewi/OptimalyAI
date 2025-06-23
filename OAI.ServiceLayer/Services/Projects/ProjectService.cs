@@ -27,6 +27,7 @@ namespace OAI.ServiceLayer.Services.Projects
         // private readonly IProjectHistoryMapper _historyMapper;
         // private readonly IWorkflowDesignerService _workflowService;
         private readonly IProjectStageService _stageService;
+        private readonly IProjectExecutionService _executionService;
         private readonly ILogger<ProjectService> _logger;
 
         public ProjectService(
@@ -40,6 +41,7 @@ namespace OAI.ServiceLayer.Services.Projects
             // IProjectHistoryMapper historyMapper,
             // IWorkflowDesignerService workflowService,
             IProjectStageService stageService,
+            IProjectExecutionService executionService,
             ILogger<ProjectService> logger)
         {
             _projectRepository = projectRepository;
@@ -52,6 +54,7 @@ namespace OAI.ServiceLayer.Services.Projects
             // _historyMapper = historyMapper;
             // _workflowService = workflowService;
             _stageService = stageService;
+            _executionService = executionService;
             _logger = logger;
         }
 
@@ -274,47 +277,145 @@ namespace OAI.ServiceLayer.Services.Projects
             });
         }
 
+        public async Task<ProjectExecutionDto?> GetProjectExecutionAsync(Guid executionId, CancellationToken cancellationToken = default)
+        {
+            var execution = await _executionRepository.GetByIdAsync(executionId);
+            
+            if (execution == null)
+            {
+                return null;
+            }
+
+            return new ProjectExecutionDto
+            {
+                Id = execution.Id,
+                ProjectId = execution.ProjectId,
+                RunName = execution.WorkflowId?.ToString() ?? "Manual Run",
+                Mode = execution.ExecutionType ?? "production",
+                Status = execution.Status.ToString(),
+                Priority = "normal",
+                StartedAt = execution.StartedAt,
+                CompletedAt = execution.CompletedAt,
+                StartedBy = execution.InitiatedBy ?? "System",
+                ItemsProcessed = execution.ItemsProcessedCount,
+                ItemsSucceeded = execution.Status == ExecutionStatus.Completed ? execution.ItemsProcessedCount : 0,
+                ItemsFailed = execution.Status == ExecutionStatus.Failed ? 1 : 0,
+                ErrorMessage = execution.ErrorMessage,
+                Results = execution.OutputData,
+                Metadata = execution.InputParameters,
+                ExecutionLog = execution.ExecutionLog,
+                CurrentStage = execution.ExecutionLog?.Split('\n').LastOrDefault(l => l.Contains("Stage:"))?.Replace("Stage:", "").Trim(),
+                DurationSeconds = execution.DurationSeconds.HasValue ? (int?)Math.Round(execution.DurationSeconds.Value) : null,
+                CreatedAt = execution.CreatedAt,
+                UpdatedAt = execution.UpdatedAt
+            };
+        }
+
         public async Task<ProjectExecutionDto> ExecuteProjectAsync(CreateProjectExecutionDto executionDto, CancellationToken cancellationToken = default)
         {
             var project = await _projectRepository.GetByIdAsync(executionDto.ProjectId);
             if (project == null)
                 throw new NotFoundException("Project", executionDto.ProjectId);
 
-            var execution = new ProjectExecution
+            _logger.LogInformation("Starting execution for project {ProjectId} with mode {Mode}", 
+                executionDto.ProjectId, executionDto.Mode);
+
+            // Připravit parametry pro workflow execution
+            var parameters = new Dictionary<string, object>();
+            
+            // Přidat metadata jako parametry
+            if (executionDto.Metadata is Dictionary<string, object> metadata)
             {
-                ProjectId = executionDto.ProjectId,
-                WorkflowId = Guid.NewGuid(),
-                Status = ExecutionStatus.Running,
-                ExecutionType = executionDto.Mode,
-                InitiatedBy = executionDto.StartedBy,
-                StartedAt = DateTime.UtcNow,
-                InputParameters = JsonSerializer.Serialize(executionDto.Metadata),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+                foreach (var kvp in metadata)
+                {
+                    parameters[kvp.Key] = kvp.Value;
+                }
+            }
 
-            await _executionRepository.CreateAsync(execution);
-            await _unitOfWork.SaveChangesAsync();
-
-            // TODO: Actually execute the workflow
-            _logger.LogInformation("Started execution {ExecutionId} for project {ProjectId}", execution.Id, executionDto.ProjectId);
-
-            return new ProjectExecutionDto
+            // Přidat speciální parametry pro test mode
+            if (executionDto.Mode == "test")
             {
-                Id = execution.Id,
-                ProjectId = execution.ProjectId,
-                RunName = executionDto.RunName,
-                Mode = executionDto.Mode,
-                Status = execution.Status.ToString(),
-                Priority = executionDto.Priority,
-                TestItemLimit = executionDto.TestItemLimit,
-                EnableDebugLogging = executionDto.EnableDebugLogging,
-                StartedAt = execution.StartedAt,
-                StartedBy = execution.InitiatedBy ?? "System",
-                Metadata = executionDto.Metadata,
-                CreatedAt = execution.CreatedAt,
-                UpdatedAt = execution.UpdatedAt
-            };
+                parameters["__testMode"] = true;
+                parameters["__testItemLimit"] = executionDto.TestItemLimit;
+                parameters["__enableDebugLogging"] = executionDto.EnableDebugLogging;
+            }
+
+            try
+            {
+                // Volat skutečnou workflow execution službu
+                var result = await _executionService.StartWorkflowExecutionAsync(
+                    executionDto.ProjectId,
+                    parameters,
+                    executionDto.StartedBy);
+
+                _logger.LogInformation("Successfully started execution {ExecutionId} for project {ProjectId}", 
+                    result.Id, executionDto.ProjectId);
+
+                // Vrátit výsledek v očekávaném formátu
+                return new ProjectExecutionDto
+                {
+                    Id = result.Id,
+                    ProjectId = result.ProjectId,
+                    RunName = executionDto.RunName,
+                    Mode = executionDto.Mode,
+                    Status = result.Status.ToString(),
+                    Priority = executionDto.Priority,
+                    TestItemLimit = executionDto.TestItemLimit,
+                    EnableDebugLogging = executionDto.EnableDebugLogging,
+                    StartedAt = result.StartedAt,
+                    StartedBy = result.InitiatedBy ?? "System",
+                    ItemsProcessed = result.ItemsProcessedCount,
+                    ItemsSucceeded = result.Status == OAI.Core.Entities.Projects.ExecutionStatus.Completed ? result.ItemsProcessedCount : 0,
+                    ItemsFailed = result.Status == OAI.Core.Entities.Projects.ExecutionStatus.Failed ? 1 : 0,
+                    ErrorMessage = result.ErrorMessage,
+                    Results = result.OutputData,
+                    Metadata = executionDto.Metadata,
+                    CreatedAt = result.CreatedAt,
+                    UpdatedAt = result.UpdatedAt
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to start execution for project {ProjectId}", executionDto.ProjectId);
+                
+                // Vytvořit záznam o selhané exekuci
+                var failedExecution = new ProjectExecution
+                {
+                    ProjectId = executionDto.ProjectId,
+                    Status = ExecutionStatus.Failed,
+                    ExecutionType = executionDto.Mode,
+                    InitiatedBy = executionDto.StartedBy,
+                    StartedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow,
+                    InputParameters = JsonSerializer.Serialize(executionDto.Metadata),
+                    ErrorMessage = ex.Message,
+                    ErrorStackTrace = ex.StackTrace,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                await _executionRepository.CreateAsync(failedExecution);
+                await _unitOfWork.SaveChangesAsync();
+
+                return new ProjectExecutionDto
+                {
+                    Id = failedExecution.Id,
+                    ProjectId = failedExecution.ProjectId,
+                    RunName = executionDto.RunName,
+                    Mode = executionDto.Mode,
+                    Status = failedExecution.Status.ToString(),
+                    Priority = executionDto.Priority,
+                    TestItemLimit = executionDto.TestItemLimit,
+                    EnableDebugLogging = executionDto.EnableDebugLogging,
+                    StartedAt = failedExecution.StartedAt,
+                    CompletedAt = failedExecution.CompletedAt,
+                    StartedBy = failedExecution.InitiatedBy ?? "System",
+                    ErrorMessage = failedExecution.ErrorMessage,
+                    Metadata = executionDto.Metadata,
+                    CreatedAt = failedExecution.CreatedAt,
+                    UpdatedAt = failedExecution.UpdatedAt
+                };
+            }
         }
 
         public async Task<ProjectExecutionDto> GetExecutionAsync(Guid executionId, CancellationToken cancellationToken = default)

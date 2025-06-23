@@ -175,6 +175,28 @@ namespace OptimalyAI.Controllers
         }
 
         /// <summary>
+        /// Get project execution by ID
+        /// </summary>
+        [HttpGet("execution/{executionId}")]
+        public async Task<IActionResult> GetProjectExecution(Guid executionId)
+        {
+            try
+            {
+                var execution = await _projectService.GetProjectExecutionAsync(executionId);
+                if (execution == null)
+                {
+                    return NotFound($"Execution with ID {executionId} not found");
+                }
+                return Ok(execution);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting execution {ExecutionId}", executionId);
+                return StatusCode(500, "An error occurred while getting the execution");
+            }
+        }
+
+        /// <summary>
         /// Update orchestrator settings
         /// </summary>
         [HttpPut("{projectId}/orchestrator-settings")]

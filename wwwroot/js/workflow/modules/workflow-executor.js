@@ -58,36 +58,29 @@ export class WorkflowExecutor {
             return;
         }
         
-        // Check if workflow has any nodes
-        const nodes = Object.values(this.workflowManager.nodes);
-        if (nodes.length === 0) {
-            this.addLogEntry('❌ Workflow nemá žádné uzly', 'error');
-            toastr.error('Workflow nemá žádné uzly k provedení');
-            this.resetExecutionModal();
-            return;
-        }
+        // For project workflow, we don't need to check nodes here
+        // The project workflow is defined differently and validated on the server side
         
-        // Check if workflow has start and end nodes
-        const hasStart = nodes.some(n => n.type === 'start');
-        const hasEnd = nodes.some(n => n.type === 'end');
-        if (!hasStart || !hasEnd) {
-            this.addLogEntry('❌ Workflow musí mít start a end uzel', 'error');
-            toastr.error('Workflow musí mít start a end uzel');
-            this.resetExecutionModal();
-            return;
-        }
-        
-        // Start execution via API
+        // Start execution via API - using project execution format
         const requestData = {
-            inputParameters: parameters,
+            projectId: this.workflowManager.projectId,
+            runName: executionName || `Test execution ${new Date().toLocaleString()}`,
+            mode: "test",
+            priority: "normal",
+            testItemLimit: null,
             enableDebugLogging: enableDebug,
-            initiatedBy: "user"
+            startedBy: "user",
+            metadata: {
+                inputParameters: parameters,
+                source: "workflow-designer"
+            }
         };
         
         try {
-            this.addLogEntry('📤 Odesílám požadavek na spuštění workflow...', 'info');
+            this.addLogEntry('📤 Odesílám požadavek na spuštění project workflow...', 'info');
             
-            const response = await fetch(`/api/workflow/execute/${workflowId}`, {
+            // Use project execution API instead of generic workflow API
+            const response = await fetch('/api/projects/execute', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -104,8 +97,18 @@ export class WorkflowExecutor {
             
             const result = await response.json();
             
-            if (result.success && result.data) {
-                this.currentExecutionId = result.data.executionId;
+            if (result.id) {
+                // Project execution returns the execution object directly
+                this.currentExecutionId = result.id;
+                this.addLogEntry('✅ Project workflow spuštěno s ID: ' + this.currentExecutionId, 'success');
+                this.addLogEntry('🔄 Začínám sledovat průběh...', 'info');
+                this.addLogEntry(`📊 Status: ${result.status}`, 'info');
+                
+                // Start polling for status - faster rate for better debugging
+                this.executionCheckInterval = setInterval(() => this.checkExecutionStatus(), 1000);
+            } else if (result.success && result.data) {
+                // Handle old format response
+                this.currentExecutionId = result.data.executionId || result.data.id;
                 this.addLogEntry('✅ Workflow spuštěno s ID: ' + this.currentExecutionId, 'success');
                 this.addLogEntry('🔄 Začínám sledovat průběh...', 'info');
                 
@@ -137,7 +140,8 @@ export class WorkflowExecutor {
         if (!this.currentExecutionId) return;
         
         try {
-            const response = await fetch(`/api/workflow/status/${this.currentExecutionId}`);
+            // Use project execution API for status check
+            const response = await fetch(`/api/projects/execution/${this.currentExecutionId}`);
             
             if (!response.ok) {
                 this.addLogEntry(`⚠️ Chyba při kontrole stavu: ${response.status}`, 'warning');
@@ -146,7 +150,35 @@ export class WorkflowExecutor {
             
             const result = await response.json();
             
-            if (result.success && result.data) {
+            // Project execution returns the execution object directly
+            if (result.id) {
+                this.updateExecutionProgress(result);
+                
+                // Check if execution is complete
+                if (result.status !== 'Running' && result.status !== 'Pending' && result.status !== 'InProgress') {
+                    clearInterval(this.executionCheckInterval);
+                    this.executionCheckInterval = null;
+                    
+                    this.addLogEntry(`🏁 Project workflow dokončeno se stavem: ${result.status}`, 'info');
+                    
+                    if (result.status === 'Completed' || result.status === 'Success') {
+                        this.showExecutionSuccess();
+                        // Show execution details
+                        if (result.outputData) {
+                            this.addLogEntry('📊 Výstupní data:', 'info');
+                            this.addLogEntry(JSON.stringify(result.outputData, null, 2), 'code');
+                        }
+                    } else {
+                        const errorMsg = result.errorMessage || 'Workflow selhalo bez uvedení důvodu';
+                        this.showExecutionError(errorMsg);
+                        if (result.errorStackTrace) {
+                            this.addLogEntry('📋 Stack trace:', 'error');
+                            this.addLogEntry(result.errorStackTrace, 'code');
+                        }
+                    }
+                }
+            } else if (result.success && result.data) {
+                // Handle old format response
                 this.updateExecutionProgress(result.data);
                 
                 // Check if execution is complete
@@ -223,35 +255,73 @@ export class WorkflowExecutor {
     /**
      * Update execution progress
      */
-    updateExecutionProgress(status) {
-        // Update progress bar
-        const progress = Math.round(status.progressPercentage || 0);
-        $('#progressBar').css('width', progress + '%').text(progress + '%');
-        
-        // Add status info
-        this.addLogEntry(`Status: ${status.status}`, 'info');
-        this.addLogEntry(`Krok ${status.completedSteps}/${status.totalSteps}: ${status.currentStepName || 'Příprava'}`, 'info');
-        
-        // Update current step
-        if (status.currentStepId && status.currentStepName) {
-            // Mark previous steps as completed
-            $('.execution-step.running').removeClass('running').addClass('completed');
-            $('.execution-step.running i').removeClass('fa-spinner fa-spin').addClass('fa-check-circle');
+    updateExecutionProgress(execution) {
+        // Handle project execution format
+        if (execution.id) {
+            // Calculate progress based on items processed
+            const progress = execution.itemsProcessedCount && execution.totalItemsCount 
+                ? Math.round((execution.itemsProcessedCount / execution.totalItemsCount) * 100)
+                : 0;
+            $('#progressBar').css('width', progress + '%').text(progress + '%');
             
-            const stepExists = $(`#step-${status.currentStepId}`).length > 0;
-            if (!stepExists) {
-                this.addExecutionStep(status.currentStepId, status.currentStepName, 'running');
-                this.addLogEntry(`🚀 Spouštím: ${status.currentStepName}`, 'info');
+            // Add status info
+            this.addLogEntry(`📊 Status: ${execution.status}`, 'info');
+            if (execution.itemsProcessedCount !== undefined) {
+                this.addLogEntry(`📈 Zpracováno položek: ${execution.itemsProcessedCount}/${execution.totalItemsCount || '?'}`, 'info');
+            }
+            
+            // Show execution log if available
+            if (execution.executionLog && execution.executionLog !== this.lastExecutionLog) {
+                this.lastExecutionLog = execution.executionLog;
+                const logEntries = execution.executionLog.split('\n');
+                logEntries.forEach(entry => {
+                    if (entry.trim()) {
+                        this.addLogEntry(entry, 'system');
+                    }
+                });
+            }
+            
+            // Show current stage info
+            if (execution.currentStage) {
+                this.addLogEntry(`🎯 Aktuální fáze: ${execution.currentStage}`, 'info');
+            }
+            
+            // Show duration
+            if (execution.startedAt) {
+                const duration = execution.durationSeconds || 
+                    Math.round((new Date() - new Date(execution.startedAt)) / 1000);
+                this.addLogEntry(`⏱️ Doba běhu: ${duration}s`, 'info');
+            }
+        } else {
+            // Handle old workflow format
+            const progress = Math.round(execution.progressPercentage || 0);
+            $('#progressBar').css('width', progress + '%').text(progress + '%');
+            
+            // Add status info
+            this.addLogEntry(`Status: ${execution.status}`, 'info');
+            this.addLogEntry(`Krok ${execution.completedSteps}/${execution.totalSteps}: ${execution.currentStepName || 'Příprava'}`, 'info');
+            
+            // Update current step
+            if (execution.currentStepId && execution.currentStepName) {
+                // Mark previous steps as completed
+                $('.execution-step.running').removeClass('running').addClass('completed');
+                $('.execution-step.running i').removeClass('fa-spinner fa-spin').addClass('fa-check-circle');
+                
+                const stepExists = $(`#step-${execution.currentStepId}`).length > 0;
+                if (!stepExists) {
+                    this.addExecutionStep(execution.currentStepId, execution.currentStepName, 'running');
+                    this.addLogEntry(`🚀 Spouštím: ${execution.currentStepName}`, 'info');
+                }
+            }
+            
+            // Add detailed message
+            if (execution.message && execution.message !== 'Running') {
+                this.addLogEntry(execution.message, 'info');
             }
         }
         
-        // Add detailed message
-        if (status.message && status.message !== 'Running') {
-            this.addLogEntry(status.message, 'info');
-        }
-        
         // Show step details panel
-        this.updateStepDetails(status);
+        this.updateStepDetails(execution);
     }
     
     /**

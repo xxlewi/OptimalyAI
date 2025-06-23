@@ -445,6 +445,7 @@ public static class ServiceCollectionExtensions
         
         // Register Workflow services
         services.AddScoped<IWorkflowExecutor, WorkflowExecutor>();
+        services.AddScoped<OAI.ServiceLayer.Services.Projects.IWorkflowExecutionService, OAI.ServiceLayer.Services.Projects.WorkflowExecutionService>();
         
         // Register Web Search services
         if (!services.Any(s => s.ServiceType == typeof(OAI.ServiceLayer.Services.WebSearch.IWebSearchService)))
