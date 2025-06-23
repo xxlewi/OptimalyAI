@@ -13,15 +13,18 @@ namespace OptimalyAI.Controllers.Api
         private readonly IServiceProvider _serviceProvider;
         private readonly IOrchestratorMetrics _metrics;
         private readonly ILogger<OrchestratorsApiController> _logger;
+        private readonly IOrchestratorSettings _orchestratorSettings;
 
         public OrchestratorsApiController(
             IServiceProvider serviceProvider,
             IOrchestratorMetrics metrics,
-            ILogger<OrchestratorsApiController> logger)
+            ILogger<OrchestratorsApiController> logger,
+            IOrchestratorSettings orchestratorSettings)
         {
             _serviceProvider = serviceProvider;
             _metrics = metrics;
             _logger = logger;
+            _orchestratorSettings = orchestratorSettings;
         }
 
         /// <summary>
@@ -71,9 +74,27 @@ namespace OptimalyAI.Controllers.Api
                             var idProperty = orchestratorType.GetProperty("Id");
                             var nameProperty = orchestratorType.GetProperty("Name");
                             var descriptionProperty = orchestratorType.GetProperty("Description");
-                            var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
                             
-                            var isWorkflowNode = (bool)(isWorkflowNodeProperty?.GetValue(orchestrator) ?? false);
+                            var orchestratorId = idProperty?.GetValue(orchestrator)?.ToString() ?? orchestratorType.Name;
+                            
+                            // Try to get OrchestratorSettingsService from DI to read saved settings
+                            var isWorkflowNode = false;
+                            
+                            // Get settings service as concrete type since GetOrchestratorConfigurationAsync is not in interface
+                            var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                            if (settingsService != null)
+                            {
+                                var configuration = await settingsService.GetOrchestratorConfigurationAsync(orchestratorId);
+                                isWorkflowNode = configuration?.IsWorkflowNode ?? false;
+                                _logger.LogInformation("Orchestrator {Id} - IsWorkflowNode from settings: {IsWorkflowNode}", orchestratorId, isWorkflowNode);
+                            }
+                            else
+                            {
+                                // Fallback to property value if settings service not available
+                                var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
+                                isWorkflowNode = (bool)(isWorkflowNodeProperty?.GetValue(orchestrator) ?? false);
+                                _logger.LogWarning("Settings service not available, using property value for {Id}: {IsWorkflowNode}", orchestratorId, isWorkflowNode);
+                            }
                             
                             // Filter based on workflowOnly parameter
                             if (workflowOnly.HasValue && workflowOnly.Value && !isWorkflowNode)
@@ -83,7 +104,7 @@ namespace OptimalyAI.Controllers.Api
 
                             orchestrators.Add(new
                             {
-                                id = idProperty?.GetValue(orchestrator)?.ToString() ?? orchestratorType.Name,
+                                id = orchestratorId,
                                 name = nameProperty?.GetValue(orchestrator)?.ToString() ?? orchestratorType.Name,
                                 description = descriptionProperty?.GetValue(orchestrator)?.ToString() ?? "No description",
                                 type = orchestratorType.Name,

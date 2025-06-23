@@ -441,10 +441,45 @@ export class WorkflowDesignerApp {
             // Save orchestrator selection
             updates.selectedOrchestrator = $('#nodeOrchestratorSelect').val();
             
-            // For now, we don't have orchestrator parameters, but we can add them later
-            updates.orchestratorConfiguration = {};
+            // Collect orchestrator configuration
+            updates.orchestratorConfiguration = {
+                // Input configuration
+                inputSource: $('#orchestratorInputSource').val() || 'previousNode',
+                inputMapping: $('#orchestratorInputMapping').val() || '',
+                staticInputData: $('#orchestratorStaticData').val() || '',
+                dynamicQuery: $('#orchestratorDynamicQuery').val() || '',
+                
+                // Output configuration
+                outputFormat: $('#orchestratorOutputFormat').val() || 'original',
+                outputVariable: $('#orchestratorOutputVariable').val() || '',
+                mergeStrategy: $('#orchestratorMergeStrategy').val() || 'concat',
+                
+                // Type-specific parameters
+                conversationConfig: {
+                    systemMessage: $('#conversationSystemMessage').val() || '',
+                    maxTokens: parseInt($('#conversationMaxTokens').val()) || 2000,
+                    temperature: parseFloat($('#conversationTemperature').val()) || 0.7,
+                    model: $('#conversationModel').val() || 'auto'
+                },
+                webScrapingConfig: {
+                    urls: $('#scrapingUrls').val() || '',
+                    cssSelectors: $('#scrapingSelectors').val() || '',
+                    includeImages: $('#scrapingIncludeImages').is(':checked'),
+                    maxDepth: parseInt($('#scrapingMaxDepth').val()) || 1
+                },
+                projectConfig: {
+                    projectId: $('#projectProjectId').val() || '',
+                    projectType: $('#projectProjectType').val() || 'analysis',
+                    includeHistory: $('#projectIncludeHistory').is(':checked')
+                }
+            };
             
-            console.log('Saving orchestrator configuration:', updates.selectedOrchestrator);
+            // Execution parameters
+            updates.useReAct = $('#orchestratorUseReAct').is(':checked');
+            updates.timeoutSeconds = parseInt($('#orchestratorTimeout').val()) || 600;
+            updates.retryCount = parseInt($('#orchestratorRetryCount').val()) || 2;
+            
+            console.log('Saving orchestrator configuration:', updates);
         }
         
         this.workflowManager.updateNode(nodeId, updates);
@@ -825,23 +860,227 @@ export class WorkflowDesignerApp {
         
         let html = '';
         
-        // For now, just show orchestrator info
+        // Show orchestrator info
         html = `
-            <div class="alert alert-info">
+            <div class="alert alert-info mb-3">
                 <h6>${orchestrator.name}</h6>
-                <p>${orchestrator.description || 'Bez popisu'}</p>
-                ${orchestrator.capabilities ? `
-                    <strong>Schopnosti:</strong>
-                    <ul class="mb-0">
-                        ${orchestrator.capabilities.map(cap => `<li>${cap}</li>`).join('')}
-                    </ul>
-                ` : ''}
+                <p class="mb-0">${orchestrator.description || 'Bez popisu'}</p>
             </div>
         `;
         
-        // TODO: Add parameter configuration when orchestrators support it
+        // Add configuration sections based on orchestrator type
+        html += '<div class="orchestrator-config-sections">';
+        
+        // Input configuration section
+        html += `
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-sign-in-alt"></i> Vstupní konfigurace</h6>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Zdroj dat</label>
+                        <select class="form-control" id="orchestratorInputSource" data-param="inputSource">
+                            <option value="previousNode" ${node.orchestratorConfiguration?.inputSource === 'previousNode' ? 'selected' : ''}>Výstup předchozího uzlu</option>
+                            <option value="workflowInput" ${node.orchestratorConfiguration?.inputSource === 'workflowInput' ? 'selected' : ''}>Vstup workflow</option>
+                            <option value="staticData" ${node.orchestratorConfiguration?.inputSource === 'staticData' ? 'selected' : ''}>Statická data</option>
+                            <option value="dynamicQuery" ${node.orchestratorConfiguration?.inputSource === 'dynamicQuery' ? 'selected' : ''}>Dynamický dotaz</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="staticDataInput" style="${node.orchestratorConfiguration?.inputSource !== 'staticData' ? 'display:none;' : ''}">
+                        <label>Statická vstupní data (JSON)</label>
+                        <textarea class="form-control" rows="4" id="orchestratorStaticData" data-param="staticData">${node.orchestratorConfiguration?.staticData ? JSON.stringify(node.orchestratorConfiguration.staticData, null, 2) : ''}</textarea>
+                        <small class="form-text text-muted">Zadejte data ve formátu JSON</small>
+                    </div>
+                    
+                    <div class="form-group" id="dynamicQueryInput" style="${node.orchestratorConfiguration?.inputSource !== 'dynamicQuery' ? 'display:none;' : ''}">
+                        <label>Dynamický dotaz</label>
+                        <input type="text" class="form-control" id="orchestratorDynamicQuery" data-param="dynamicQuery" 
+                               value="${node.orchestratorConfiguration?.dynamicQuery || ''}" 
+                               placeholder="např. {{output.data}} nebo {{workflow.variables.myVar}}">
+                        <small class="form-text text-muted">Použijte {{}} pro přístup k proměnným workflow</small>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Specific parameters based on orchestrator type
+        if (orchestratorId.includes('conversation')) {
+            html += this.getConversationOrchestratorParams(node);
+        } else if (orchestratorId.includes('webscraping')) {
+            html += this.getWebScrapingOrchestratorParams(node);
+        } else if (orchestratorId.includes('project')) {
+            html += this.getProjectOrchestratorParams(node);
+        }
+        
+        // Output configuration
+        html += `
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-sign-out-alt"></i> Výstupní konfigurace</h6>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Formát výstupu</label>
+                        <select class="form-control" id="orchestratorOutputFormat" data-param="outputFormat">
+                            <option value="raw" ${node.orchestratorConfiguration?.outputFormat === 'raw' ? 'selected' : ''}>Původní formát</option>
+                            <option value="json" ${node.orchestratorConfiguration?.outputFormat === 'json' ? 'selected' : ''}>JSON</option>
+                            <option value="text" ${node.orchestratorConfiguration?.outputFormat === 'text' ? 'selected' : ''}>Text</option>
+                            <option value="structured" ${node.orchestratorConfiguration?.outputFormat === 'structured' ? 'selected' : ''}>Strukturovaná data</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Uložit výstup do proměnné</label>
+                        <input type="text" class="form-control" id="orchestratorOutputVariable" data-param="outputVariable" 
+                               value="${node.orchestratorConfiguration?.outputVariable || ''}" 
+                               placeholder="např. scrapingResult">
+                        <small class="form-text text-muted">Název proměnné pro uložení výstupu</small>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        html += '</div>';
         
         $container.html(html);
+        
+        // Setup event handlers
+        $('#orchestratorInputSource').on('change', (e) => {
+            const source = $(e.target).val();
+            $('#staticDataInput').toggle(source === 'staticData');
+            $('#dynamicQueryInput').toggle(source === 'dynamicQuery');
+        });
+    }
+    
+    /**
+     * Get conversation orchestrator specific parameters
+     */
+    getConversationOrchestratorParams(node) {
+        const config = node.orchestratorConfiguration?.conversationConfig || {};
+        return `
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-comments"></i> Parametry konverzace</h6>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Systémová zpráva</label>
+                        <textarea class="form-control" rows="3" id="conversationSystemMessage" data-param="systemMessage">${config.systemMessage || ''}</textarea>
+                        <small class="form-text text-muted">Definuje chování AI asistenta</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Maximální počet tokenů</label>
+                        <input type="number" class="form-control" id="conversationMaxTokens" data-param="maxTokens" 
+                               value="${config.maxTokens || 2000}" min="100" max="8000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Temperature (kreativita)</label>
+                        <input type="number" class="form-control" id="conversationTemperature" data-param="temperature" 
+                               value="${config.temperature || 0.7}" min="0" max="1" step="0.1">
+                        <small class="form-text text-muted">0 = deterministické, 1 = kreativní</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Model</label>
+                        <select class="form-control" id="conversationModel" data-param="model">
+                            <option value="auto" ${config.model === 'auto' ? 'selected' : ''}>Automaticky</option>
+                            <option value="gpt-4" ${config.model === 'gpt-4' ? 'selected' : ''}>GPT-4</option>
+                            <option value="gpt-3.5-turbo" ${config.model === 'gpt-3.5-turbo' ? 'selected' : ''}>GPT-3.5 Turbo</option>
+                            <option value="claude-2" ${config.model === 'claude-2' ? 'selected' : ''}>Claude 2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Get web scraping orchestrator specific parameters
+     */
+    getWebScrapingOrchestratorParams(node) {
+        const config = node.orchestratorConfiguration?.webScrapingConfig || {};
+        return `
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-globe"></i> Parametry web scrapingu</h6>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>URL nebo seznam URL</label>
+                        <textarea class="form-control" rows="3" id="scrapingUrls" data-param="urls" 
+                                  placeholder="https://example.com&#10;https://example.com/page2">${config.urls || ''}</textarea>
+                        <small class="form-text text-muted">Každá URL na novém řádku</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>CSS selektory pro extrakci</label>
+                        <textarea class="form-control" rows="2" id="scrapingSelectors" data-param="selectors" 
+                                  placeholder='{"title": "h1", "price": ".price"}'>${config.cssSelectors || ''}</textarea>
+                        <small class="form-text text-muted">JSON objekt s názvy polí a CSS selektory</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="scrapingIncludeImages" data-param="includeImages" 
+                                   ${config.includeImages ? 'checked' : ''}>
+                            <label class="custom-control-label" for="scrapingIncludeImages">Zahrnout obrázky</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Maximální hloubka procházení</label>
+                        <input type="number" class="form-control" id="scrapingMaxDepth" data-param="maxDepth" 
+                               value="${config.maxDepth || 1}" min="1" max="5">
+                        <small class="form-text text-muted">1 = pouze zadané URL, 2+ = sledovat odkazy</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Get project orchestrator specific parameters
+     */
+    getProjectOrchestratorParams(node) {
+        const config = node.orchestratorConfiguration?.projectConfig || {};
+        return `
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-project-diagram"></i> Parametry projektu</h6>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>ID projektu</label>
+                        <input type="text" class="form-control" id="projectProjectId" data-param="projectId" 
+                               value="${config.projectId || ''}" 
+                               placeholder="např. {{input.projectId}} nebo konkrétní GUID">
+                        <small class="form-text text-muted">Můžete použít dynamickou hodnotu nebo zadat přímo</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Typ analýzy projektu</label>
+                        <select class="form-control" id="projectProjectType" data-param="projectType">
+                            <option value="analysis" ${config.projectType === 'analysis' ? 'selected' : ''}>Kompletní analýza</option>
+                            <option value="status" ${config.projectType === 'status' ? 'selected' : ''}>Aktuální stav</option>
+                            <option value="timeline" ${config.projectType === 'timeline' ? 'selected' : ''}>Časová osa</option>
+                            <option value="resources" ${config.projectType === 'resources' ? 'selected' : ''}>Alokace zdrojů</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="projectIncludeHistory" data-param="includeHistory" 
+                                   ${config.includeHistory ? 'checked' : ''}>
+                            <label class="custom-control-label" for="projectIncludeHistory">Zahrnout historii projektu</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
     
     /**
