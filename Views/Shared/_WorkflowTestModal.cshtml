@@ -1,0 +1,73 @@
+<!-- Workflow Test Modal - Shared across Project Details and Workflow Designer -->
+<div class="modal fade" id="workflowTestModal" tabindex="-1" role="dialog" data-backdrop="static">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">
+                    <i class="fas fa-vial"></i> Test Workflow - Průběžné logy
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-info-circle"></i> Stav testu</h6>
+                        <div class="progress mb-3" style="height: 25px;">
+                            <div id="testProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning" role="progressbar" style="width: 0%">0%</div>
+                        </div>
+                        
+                        <div class="info-box">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-cog fa-spin" id="testStatusIcon"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Status</span>
+                                <span class="info-box-number" id="testStatus">Připravuji test...</span>
+                            </div>
+                        </div>
+                        
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-tasks"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Kroky</span>
+                                <span class="info-box-number" id="testStepsCount">0 / 0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-clock"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Doba běhu</span>
+                                <span class="info-box-number" id="testDuration">0s</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0"><i class="fas fa-terminal"></i> Průběžné logy</h6>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyTestLogs()">
+                                <i class="fas fa-copy"></i> Kopírovat logy
+                            </button>
+                        </div>
+                        <div class="bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px;" id="testLogs">
+                            <div class="text-warning">[SYSTEM] Inicializuji test workflow...</div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="autoScrollLogs" checked>
+                                <label class="custom-control-label" for="autoScrollLogs">Automaticky rolovat logy</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="cancelTest()" id="cancelTestBtn">
+                    <i class="fas fa-stop"></i> Zastavit test
+                </button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" style="display: none;" id="closeTestBtn">
+                    <i class="fas fa-times"></i> Zavřít
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

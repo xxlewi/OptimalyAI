@@ -88,6 +88,7 @@ namespace OAI.ServiceLayer.Services.Projects
             {
                 // Najít všechny orchestrátory a určit default workflow orchestrátor
                 var allOrchestrators = _serviceProvider.GetServices<IOrchestrator>().ToList();
+                _logger.LogInformation("Found {Count} registered orchestrators", allOrchestrators.Count);
                 
                 // Získat OrchestratorSettingsService pro načtení konfigurace
                 var settingsService = _serviceProvider.GetService<OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService>();
@@ -99,21 +100,34 @@ namespace OAI.ServiceLayer.Services.Projects
                 // Najít orchestrátor s příznakem IsDefaultWorkflowOrchestrator
                 IOrchestrator? defaultWorkflowOrchestrator = null;
                 
+                _logger.LogInformation("Checking orchestrator configurations...");
                 foreach (var orc in allOrchestrators)
                 {
-                    var config = await settingsService.GetOrchestratorConfigurationAsync(orc.Id);
-                    if (config?.IsDefaultWorkflowOrchestrator == true)
+                    _logger.LogInformation("Checking orchestrator: {Name} with ID {Id}", orc.Name, orc.Id);
+                    try
                     {
-                        defaultWorkflowOrchestrator = orc;
-                        _logger.LogInformation("Found default workflow orchestrator: {Name} with ID {Id}", 
-                            orc.Name, orc.Id);
-                        break;
+                        var config = await settingsService.GetOrchestratorConfigurationAsync(orc.Id);
+                        _logger.LogInformation("Orchestrator {Id} config - IsDefaultWorkflowOrchestrator: {IsDefault}", 
+                            orc.Id, config?.IsDefaultWorkflowOrchestrator);
+                        
+                        if (config?.IsDefaultWorkflowOrchestrator == true)
+                        {
+                            defaultWorkflowOrchestrator = orc;
+                            _logger.LogInformation("Found default workflow orchestrator: {Name} with ID {Id}", 
+                                orc.Name, orc.Id);
+                            break;
+                        }
+                    }
+                    catch (Exception configEx)
+                    {
+                        _logger.LogWarning(configEx, "Failed to load configuration for orchestrator {Id}", orc.Id);
                     }
                 }
                 
                 if (defaultWorkflowOrchestrator == null)
                 {
-                    throw new BusinessException("No default workflow orchestrator found. Please configure a default workflow orchestrator in the orchestrator settings.");
+                    var orchestratorInfo = string.Join(", ", allOrchestrators.Select(o => $"{o.Name}({o.Id})"));
+                    throw new BusinessException($"No default workflow orchestrator found. Available orchestrators: {orchestratorInfo}. Please configure a default workflow orchestrator in the orchestrator settings.");
                 }
 
 

@@ -18,11 +18,56 @@ export class WorkflowExecutor {
             // First save workflow
             await this.workflowManager.saveWorkflow();
             
-            // Show execution modal
+            // Use the same beautiful test functionality but directly
             $('#executionModal').modal('show');
             this.resetExecutionModal();
+            this.startExecutionWithOrchestrator();
+            
         } catch (error) {
             toastr.error('Musíte nejdříve uložit workflow');
+        }
+    }
+
+    async startExecutionWithOrchestrator() {
+        // Use the same API and approach as project details test function
+        const projectId = this.workflowManager.projectId;
+        
+        const testData = {
+            projectId: projectId,
+            runName: `Test Run - ${new Date().toLocaleString('cs-CZ')}`,
+            mode: "test",
+            priority: "normal",
+            testItemLimit: 5,
+            enableDebugLogging: true,
+            startedBy: "workflow-designer",
+            metadata: {
+                inputParameters: {
+                    testMode: true,
+                    maxItems: 5,
+                    debug: true
+                },
+                source: 'workflow-designer'
+            }
+        };
+        
+        try {
+            const response = await fetch('/api/projects/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testData)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                const executionId = result.data.id;
+                this.addLog('SUCCESS', `Projekt úspěšně spuštěn s orchestrátorem. Execution ID: ${executionId}`);
+                this.startStatusMonitoring(executionId);
+            } else {
+                this.addLog('ERROR', result.message || 'Chyba při spouštění testu');
+            }
+        } catch (error) {
+            this.addLog('ERROR', 'Nepodařilo se spustit test: ' + error.message);
         }
     }
     
@@ -595,5 +640,34 @@ export class WorkflowExecutor {
         });
         
         return header + logLines.join('\n');
+    }
+    
+    /**
+     * Copy execution logs to clipboard
+     */
+    copyExecutionLogs() {
+        const logText = this.formatLogsForFile();
+        
+        // Create temporary textarea to copy text
+        const textarea = document.createElement('textarea');
+        textarea.value = logText;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        
+        // Select and copy text
+        textarea.select();
+        textarea.setSelectionRange(0, 99999); // For mobile devices
+        
+        try {
+            document.execCommand('copy');
+            toastr.success('Logy byly zkopírovány do schránky');
+        } catch (err) {
+            toastr.error('Nepodařilo se zkopírovat logy');
+            console.error('Copy failed:', err);
+        }
+        
+        // Remove temporary textarea
+        document.body.removeChild(textarea);
     }
 }

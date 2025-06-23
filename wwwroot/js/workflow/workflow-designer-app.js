@@ -85,7 +85,7 @@ export class WorkflowDesignerApp {
             this.validateWorkflow();
         });
         
-        $('#exportWorkflowBtn, button[onclick*="testWorkflow"]').off('click').on('click', (e) => {
+        $('#exportWorkflowBtn').off('click').on('click', (e) => {
             e.preventDefault();
             this.exportWorkflow();
         });

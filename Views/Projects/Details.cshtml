@@ -530,74 +530,7 @@
     </div>
 </div>
 
-<!-- Workflow Test Modal -->
-<div class="modal fade" id="workflowTestModal" tabindex="-1" role="dialog" data-backdrop="static">
-    <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title">
-                    <i class="fas fa-vial"></i> Test Workflow - Průběžné logy
-                </h5>
-            </div>
-            <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <h6><i class="fas fa-info-circle"></i> Stav testu</h6>
-                        <div class="progress mb-3" style="height: 25px;">
-                            <div id="testProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning" role="progressbar" style="width: 0%">0%</div>
-                        </div>
-                        
-                        <div class="info-box">
-                            <span class="info-box-icon bg-warning"><i class="fas fa-cog fa-spin" id="testStatusIcon"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Status</span>
-                                <span class="info-box-number" id="testStatus">Připravuji test...</span>
-                            </div>
-                        </div>
-                        
-                        <div class="info-box">
-                            <span class="info-box-icon bg-info"><i class="fas fa-tasks"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Kroky</span>
-                                <span class="info-box-number" id="testStepsCount">0 / 0</span>
-                            </div>
-                        </div>
-                        
-                        <div class="info-box">
-                            <span class="info-box-icon bg-success"><i class="fas fa-clock"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Doba běhu</span>
-                                <span class="info-box-number" id="testDuration">0s</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-8">
-                        <h6><i class="fas fa-terminal"></i> Průběžné logy</h6>
-                        <div class="bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px;" id="testLogs">
-                            <div class="text-warning">[SYSTEM] Inicializuji test workflow...</div>
-                        </div>
-                        
-                        <div class="mt-2">
-                            <div class="custom-control custom-switch">
-                                <input type="checkbox" class="custom-control-input" id="autoScrollLogs" checked>
-                                <label class="custom-control-label" for="autoScrollLogs">Automaticky rolovat logy</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-danger" onclick="cancelTest()" id="cancelTestBtn">
-                    <i class="fas fa-stop"></i> Zastavit test
-                </button>
-                <button type="button" class="btn btn-secondary" data-dismiss="modal" style="display: none;" id="closeTestBtn">
-                    <i class="fas fa-times"></i> Zavřít
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+@await Html.PartialAsync("_WorkflowTestModal")
 
 <!-- Workflow Info Modal -->
 <div class="modal fade" id="workflowInfoModal" tabindex="-1" role="dialog">
@@ -1198,33 +1131,36 @@
             
             // Execute workflow in test mode
             const testData = {
-                inputParameters: Object.assign({
-                    testMode: true,
-                    maxItems: 5,
-                    debug: true
-                }, defaultTestData),
+                projectId: projectId,
+                runName: `Test Run - ${new Date().toLocaleString('cs-CZ')}`,
+                mode: "test",
+                priority: "normal",
+                testItemLimit: 5,
                 enableDebugLogging: true,
-                initiatedBy: 'Test Run - ' + new Date().toLocaleString('cs-CZ'),
+                startedBy: "project-detail-test",
                 metadata: {
-                    projectId: projectId,
-                    mode: 'test',
-                    testRun: true,
-                    source: 'project-detail-test'
+                    inputParameters: Object.assign({
+                        testMode: true,
+                        maxItems: 5,
+                        debug: true
+                    }, defaultTestData),
+                    source: 'project-detail-test',
+                    workflowId: workflowId
                 }
             };
             
-            addTestLog('INFO', `Spouštím workflow ${workflowId} v testovacím režimu...`);
-            addTestLog('DEBUG', `Testovací parametry: ${JSON.stringify(testData.inputParameters)}`);
+            addTestLog('INFO', `Spouštím projekt ${projectId} v testovacím režimu s orchestrátorem...`);
+            addTestLog('DEBUG', `Testovací parametry: ${JSON.stringify(testData.metadata.inputParameters)}`);
             
             $.ajax({
-                url: `/api/workflow/execute/${workflowId}`,
+                url: `/api/projects/execute`,
                 type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(testData),
                 success: function(response) {
                     if (response.success && response.data) {
-                        const executionId = response.data.executionId;
-                        addTestLog('SUCCESS', `Workflow úspěšně spuštěno. Execution ID: ${executionId}`);
+                        const executionId = response.data.id;
+                        addTestLog('SUCCESS', `Projekt úspěšně spuštěn s orchestrátorem. Execution ID: ${executionId}`);
                         $('#testProgressBar').css('width', '10%').text('10%');
                         
                         // Start monitoring execution
@@ -1290,12 +1226,89 @@
                     const elapsed = Math.round((Date.now() - window.testStartTime) / 1000);
                     $('#testDuration').text(elapsed + 's');
                     
+                    // Use project execution API instead of workflow execution API
                     const response = await $.ajax({
-                        url: `/api/workflow/status/${executionId}`,
+                        url: `/api/projects/execution/${executionId}`,
                         type: 'GET'
                     });
                     
-                    if (response.success && response.data) {
+                    if (response && response.id) {
+                        // Project execution returns the execution object directly
+                        const execution = response;
+                        
+                        // Calculate progress based on items processed
+                        const progress = execution.itemsProcessedCount && execution.totalItemsCount 
+                            ? Math.round((execution.itemsProcessedCount / execution.totalItemsCount) * 100)
+                            : 0;
+                        $('#testProgressBar').css('width', progress + '%').text(progress + '%');
+                        
+                        // Update status - handle project execution statuses
+                        const displayStatus = execution.status === 'Running' || execution.status === 'InProgress' ? 'Běží...' : execution.status;
+                        $('#testStatus').text(displayStatus);
+                        
+                        // Update step count - use items instead of steps for project execution
+                        if (execution.itemsProcessedCount !== undefined) {
+                            $('#testStepsCount').text(`${execution.itemsProcessedCount} / ${execution.totalItemsCount || 0}`);
+                        }
+                        
+                        // Add log for current stage
+                        if (execution.currentStage && execution.currentStage !== window.lastStage) {
+                            addTestLog('INFO', `Aktuální fáze: ${execution.currentStage}`);
+                            window.lastStage = execution.currentStage;
+                        }
+                        
+                        // Show execution log if available
+                        if (execution.executionLog && execution.executionLog !== window.lastExecutionLog) {
+                            window.lastExecutionLog = execution.executionLog;
+                            const logEntries = execution.executionLog.split('\n');
+                            logEntries.forEach(entry => {
+                                if (entry.trim()) {
+                                    addTestLog('DEBUG', entry);
+                                }
+                            });
+                        }
+                        
+                        // Check if execution is complete - handle project execution statuses
+                        if (execution.status !== 'Running' && execution.status !== 'Pending' && execution.status !== 'InProgress') {
+                            clearInterval(window.testMonitoringInterval);
+                            
+                            if (execution.status === 'Completed' || execution.status === 'Success') {
+                                $('#testProgressBar')
+                                    .removeClass('progress-bar-animated bg-warning')
+                                    .addClass('bg-success')
+                                    .css('width', '100%')
+                                    .text('100%');
+                                $('#testStatus').text('Dokončeno úspěšně');
+                                $('#testStatusIcon').removeClass('fa-cog fa-spin').addClass('fa-check');
+                                $('.info-box-icon.bg-warning').removeClass('bg-warning').addClass('bg-success');
+                                
+                                addTestLog('SUCCESS', '=== TEST DOKONČEN ÚSPĚŠNĚ ===');
+                                addTestLog('SUCCESS', `Execution ID: ${executionId}`);
+                                addTestLog('SUCCESS', `Doba trvání: ${execution.durationSeconds || elapsed}s`);
+                                if (execution.itemsProcessedCount !== undefined) {
+                                    addTestLog('SUCCESS', `Zpracováno položek: ${execution.itemsProcessedCount}/${execution.totalItemsCount || '?'}`);
+                                }
+                                
+                                // Show execution results if available
+                                if (execution.outputData) {
+                                    addTestLog('INFO', 'Výstupní data:');
+                                    addTestLog('DEBUG', JSON.stringify(execution.outputData, null, 2));
+                                }
+                                
+                                $('#cancelTestBtn').hide();
+                                $('#closeTestBtn').show();
+                            } else {
+                                const errorMsg = execution.errorMessage || execution.status;
+                                showTestError(`Test selhal: ${errorMsg}`);
+                                
+                                if (execution.errorStackTrace) {
+                                    addTestLog('ERROR', 'Stack trace:');
+                                    addTestLog('ERROR', execution.errorStackTrace);
+                                }
+                            }
+                        }
+                    } else if (response.success && response.data) {
+                        // Handle old format response for backward compatibility
                         const status = response.data;
                         const progress = Math.round(status.progressPercentage || 0);
                         $('#testProgressBar').css('width', progress + '%').text(progress + '%');
@@ -1312,17 +1325,6 @@
                         if (status.currentStepName && status.currentStepName !== window.lastStepName) {
                             addTestLog('INFO', `Zpracovávám krok: ${status.currentStepName}`);
                             window.lastStepName = status.currentStepName;
-                        }
-                        
-                        // Check for any logs or outputs in the status
-                        if (status.logs && Array.isArray(status.logs)) {
-                            status.logs.forEach(log => {
-                                if (!window.processedLogs || !window.processedLogs.includes(log.id)) {
-                                    addTestLog(log.level || 'INFO', log.message);
-                                    if (!window.processedLogs) window.processedLogs = [];
-                                    window.processedLogs.push(log.id);
-                                }
-                            });
                         }
                         
                         if (status.status !== 'Running' && status.status !== 'Pending') {
@@ -1678,5 +1680,65 @@
             $statusBadge.addClass('badge-' + config.color);
             $statusBadge.html('<i class="fas fa-' + config.icon + '"></i> ' + newStatus);
         }
+        
+        // Copy test logs to clipboard implementation
+        window.copyTestLogs_impl = function() {
+            const logContainer = document.getElementById('testLogs');
+            if (!logContainer) {
+                toastr.error('Logy nejsou k dispozici');
+                return;
+            }
+            
+            // Get all log entries and format them for copying
+            const logEntries = logContainer.querySelectorAll('div');
+            let logText = '';
+            
+            logEntries.forEach(entry => {
+                // Remove HTML tags and get plain text
+                const text = entry.textContent || entry.innerText || '';
+                if (text.trim()) {
+                    logText += text + '\n';
+                }
+            });
+            
+            // Create temporary textarea to copy text
+            const textarea = document.createElement('textarea');
+            textarea.value = logText;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            
+            // Select and copy text
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile devices
+            
+            try {
+                document.execCommand('copy');
+                toastr.success('Logy byly zkopírovány do schránky');
+            } catch (err) {
+                toastr.error('Nepodařilo se zkopírovat logy');
+                console.error('Copy failed:', err);
+            }
+            
+            // Remove temporary textarea
+            document.body.removeChild(textarea);
+        }
+
+        // Auto-test functionality - check for autoTest URL parameter
+        $(document).ready(function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('autoTest') === 'true') {
+                // Remove the parameter from URL
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                window.history.replaceState({path: newUrl}, '', newUrl);
+                
+                // Automatically start test after a short delay
+                setTimeout(function() {
+                    if (typeof testWorkflow === 'function') {
+                        testWorkflow();
+                    }
+                }, 500);
+            }
+        });
     </script>
 }
