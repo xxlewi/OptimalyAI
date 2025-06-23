@@ -86,63 +86,29 @@ namespace OAI.ServiceLayer.Services.Projects
 
             try
             {
-                // Najít všechny orchestrátory a určit default workflow orchestrátor
-                var allOrchestrators = _serviceProvider.GetServices<IOrchestrator>().ToList();
-                _logger.LogInformation("Found {Count} registered orchestrators", allOrchestrators.Count);
-                
-                // Získat OrchestratorSettingsService pro načtení konfigurace
-                var settingsService = _serviceProvider.GetService<OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService>();
-                if (settingsService == null)
+                // Získat ID výchozího workflow orchestrátoru
+                var defaultOrchestratorId = await _orchestratorSettings.GetDefaultWorkflowOrchestratorIdAsync();
+                if (string.IsNullOrEmpty(defaultOrchestratorId))
                 {
-                    throw new BusinessException("OrchestratorSettingsService is not registered");
+                    throw new BusinessException("No default workflow orchestrator configured. Please configure a default workflow orchestrator in the orchestrator settings.");
                 }
                 
-                // Najít orchestrátor s příznakem IsDefaultWorkflowOrchestrator
-                IOrchestrator? defaultWorkflowOrchestrator = null;
-                
-                _logger.LogInformation("Checking orchestrator configurations...");
-                foreach (var orc in allOrchestrators)
-                {
-                    _logger.LogInformation("Checking orchestrator: {Name} with ID {Id}", orc.Name, orc.Id);
-                    try
-                    {
-                        var config = await settingsService.GetOrchestratorConfigurationAsync(orc.Id);
-                        _logger.LogInformation("Orchestrator {Id} config - IsDefaultWorkflowOrchestrator: {IsDefault}", 
-                            orc.Id, config?.IsDefaultWorkflowOrchestrator);
-                        
-                        if (config?.IsDefaultWorkflowOrchestrator == true)
-                        {
-                            defaultWorkflowOrchestrator = orc;
-                            _logger.LogInformation("Found default workflow orchestrator: {Name} with ID {Id}", 
-                                orc.Name, orc.Id);
-                            break;
-                        }
-                    }
-                    catch (Exception configEx)
-                    {
-                        _logger.LogWarning(configEx, "Failed to load configuration for orchestrator {Id}", orc.Id);
-                    }
-                }
-                
-                if (defaultWorkflowOrchestrator == null)
-                {
-                    var orchestratorInfo = string.Join(", ", allOrchestrators.Select(o => $"{o.Name}({o.Id})"));
-                    throw new BusinessException($"No default workflow orchestrator found. Available orchestrators: {orchestratorInfo}. Please configure a default workflow orchestrator in the orchestrator settings.");
-                }
+                _logger.LogInformation("Using default workflow orchestrator ID: {OrchestratorId}", defaultOrchestratorId);
 
-
-                _logger.LogInformation("Using default workflow orchestrator: {OrchestratorName} with ID {OrchestratorId}", 
-                    defaultWorkflowOrchestrator.Name, defaultWorkflowOrchestrator.Id);
-
-                // Získat typovanou instanci orchestrátoru
+                // Získat typovanou instanci orchestrátoru - WorkflowOrchestratorV2 je jediný workflow orchestrátor
                 using var scope = _serviceProvider.CreateScope();
-                var orchestrator = scope.ServiceProvider
-                    .GetServices<IOrchestrator<WorkflowOrchestratorRequest, WorkflowOrchestratorResponse>>()
-                    .FirstOrDefault(o => o.Id == defaultWorkflowOrchestrator.Id);
+                var orchestrator = scope.ServiceProvider.GetService<IOrchestrator<WorkflowOrchestratorRequest, WorkflowOrchestratorResponse>>();
                 
                 if (orchestrator == null)
                 {
-                    throw new BusinessException($"Could not create orchestrator instance for ID {defaultWorkflowOrchestrator.Id}");
+                    throw new BusinessException($"Could not create orchestrator instance. WorkflowOrchestratorV2 is not registered in DI.");
+                }
+                
+                // Ověřit, že je to správný orchestrátor
+                if (orchestrator.Id != defaultOrchestratorId)
+                {
+                    _logger.LogWarning("Orchestrator ID mismatch. Expected: {Expected}, Actual: {Actual}", defaultOrchestratorId, orchestrator.Id);
+                    throw new BusinessException($"Orchestrator ID mismatch. Expected {defaultOrchestratorId} but got {orchestrator.Id}");
                 }
 
                 // Připravit workflow definition z projektu
@@ -198,7 +164,7 @@ namespace OAI.ServiceLayer.Services.Projects
                 }
 
                 // Spustit orchestrátor
-                _logger.LogInformation("Executing workflow with orchestrator {OrchestratorName}", defaultWorkflowOrchestrator.Name);
+                _logger.LogInformation("Executing workflow with orchestrator {OrchestratorName} (ID: {OrchestratorId})", orchestrator.Name, orchestrator.Id);
                 var result = await orchestrator.ExecuteAsync(request, context);
                 // Získat response z result
                 var response = result.Data;

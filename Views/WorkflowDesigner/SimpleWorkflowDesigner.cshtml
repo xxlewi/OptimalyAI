@@ -29,7 +29,6 @@
 @await Html.PartialAsync("_WorkflowTestModal")
 
 @section Scripts {
-<script src="~/js/shared/project-test.js"></script>
 <script type="module">
     import { WorkflowDesignerApp } from '/js/workflow/workflow-designer-app.js';
     
@@ -43,6 +42,9 @@
     // Initialize on DOM ready
     $(document).ready(async function() {
         try {
+            // Make app globally available for project-test.js
+            window.workflowDesignerApp = app;
+            
             await app.initialize();
             console.log('Workflow Designer initialized successfully');
         } catch (error) {
@@ -57,7 +59,7 @@
     // Expose functions globally for toolbar buttons
     window.saveWorkflow = () => app.saveWorkflow();
     window.validateWorkflow = () => app.validateWorkflow();
-    // testWorkflow is now provided by shared/project-test.js
+    window.testWorkflow = () => app.workflowExecutor.testWorkflow();
     window.clearWorkflow = () => app.clearWorkflow();
     window.autoLayout = () => app.autoLayout.performLayout();
     window.zoomIn = () => app.zoomIn();
@@ -74,49 +76,6 @@
     // Expose showAdapterConfiguration globally for now
     window.showAdapterConfiguration = function(node) {
         app.canvasRenderer.onNodeEdit(node);
-    };
-    
-    // Copy test logs implementation for workflow designer
-    window.copyTestLogs_impl = function() {
-        const logContainer = document.getElementById('testLogs');
-        if (!logContainer) {
-            toastr.error('Logy nejsou k dispozici');
-            return;
-        }
-        
-        // Get all log entries and format them for copying
-        const logEntries = logContainer.querySelectorAll('div');
-        let logText = '';
-        
-        logEntries.forEach(entry => {
-            // Remove HTML tags and get plain text
-            const text = entry.textContent || entry.innerText || '';
-            if (text.trim()) {
-                logText += text + '\n';
-            }
-        });
-        
-        // Create temporary textarea to copy text
-        const textarea = document.createElement('textarea');
-        textarea.value = logText;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        
-        // Select and copy text
-        textarea.select();
-        textarea.setSelectionRange(0, 99999); // For mobile devices
-        
-        try {
-            document.execCommand('copy');
-            toastr.success('Logy byly zkopírovány do schránky');
-        } catch (err) {
-            toastr.error('Nepodařilo se zkopírovat logy');
-            console.error('Copy failed:', err);
-        }
-        
-        // Remove temporary textarea
-        document.body.removeChild(textarea);
     };
 </script>
 

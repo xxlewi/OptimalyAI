@@ -14,6 +14,11 @@ import { WorkflowExecutor } from './modules/workflow-executor.js';
 export class WorkflowDesignerApp {
     constructor(options) {
         this.options = options;
+        this.config = {
+            projectId: options.projectId,
+            workflowId: options.workflowId,
+            projectName: options.projectName || 'unknown-project'
+        };
         this.projectId = options.projectId;
         this.projectName = options.projectName || 'unknown-project';
         

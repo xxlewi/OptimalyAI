@@ -21,5 +21,10 @@ namespace OAI.Core.Interfaces.Orchestration
         /// Check if orchestrator is default
         /// </summary>
         Task<bool> IsDefaultOrchestratorAsync(string orchestratorId);
+        
+        /// <summary>
+        /// Get the ID of the default workflow orchestrator
+        /// </summary>
+        Task<string?> GetDefaultWorkflowOrchestratorIdAsync();
     }
 }

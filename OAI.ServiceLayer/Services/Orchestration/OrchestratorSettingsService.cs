@@ -69,6 +69,26 @@ namespace OAI.ServiceLayer.Services.Orchestration
             return string.Equals(defaultId, orchestratorId, StringComparison.OrdinalIgnoreCase);
         }
 
+        public async Task<string?> GetDefaultWorkflowOrchestratorIdAsync()
+        {
+            try
+            {
+                var settings = await LoadSettingsAsync();
+                var configurations = await LoadConfigurationsAsync(settings);
+                
+                // Find the orchestrator marked as default workflow orchestrator
+                var defaultWorkflowOrchestrator = configurations.Values
+                    .FirstOrDefault(c => c.IsDefaultWorkflowOrchestrator);
+                
+                return defaultWorkflowOrchestrator?.OrchestratorId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting default workflow orchestrator ID");
+                return null;
+            }
+        }
+
         /// <summary>
         /// Saves orchestrator configuration (AI Server and Model selection)
         /// </summary>
