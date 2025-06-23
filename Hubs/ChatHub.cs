@@ -101,7 +101,7 @@ namespace OptimalyAI.Hubs
                 var userMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = conversationId,
-                    UserId = "default", // TODO: Add proper user authentication
+                    UserId = Context.UserIdentifier ?? Context.ConnectionId ?? "anonymous", // Use connection ID as fallback
                     Role = "user",
                     Content = message,
                     CreatedAt = DateTime.UtcNow
@@ -128,7 +128,7 @@ namespace OptimalyAI.Hubs
                     ConversationId = conversationId.ToString(),
                     Message = message,
                     ModelId = !string.IsNullOrEmpty(model) ? model : null, // Pass selected model or null to use orchestrator default
-                    UserId = "default", // TODO: Add proper user authentication
+                    UserId = Context.UserIdentifier ?? Context.ConnectionId ?? "anonymous", // TODO: Add proper user authentication
                     SessionId = Context.ConnectionId, // Use SignalR connection ID as session
                     EnableTools = true,
                     Stream = false, // For now, we'll handle streaming differently
@@ -216,7 +216,7 @@ namespace OptimalyAI.Hubs
                 var assistantMessage = new OAI.Core.Entities.Message
                 {
                     ConversationId = conversationId,
-                    UserId = "default", // Use the same userId as user messages
+                    UserId = Context.UserIdentifier ?? "anonymous", // Use the same userId as user messages
                     Role = "assistant",
                     Content = fullResponse,
                     TokenCount = tokenCount,
