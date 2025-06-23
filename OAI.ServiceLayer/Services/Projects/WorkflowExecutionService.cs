@@ -89,22 +89,31 @@ namespace OAI.ServiceLayer.Services.Projects
                 // Najít všechny orchestrátory a určit default workflow orchestrátor
                 var allOrchestrators = _serviceProvider.GetServices<IOrchestrator>().ToList();
                 
-                // V současné implementaci musíme použít přímý přístup k orchestrátorům
-                // a najít ten, který má IsDefaultWorkflowOrchestrator = true
+                // Získat OrchestratorSettingsService pro načtení konfigurace
+                var settingsService = _serviceProvider.GetService<OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService>();
+                if (settingsService == null)
+                {
+                    throw new BusinessException("OrchestratorSettingsService is not registered");
+                }
+                
+                // Najít orchestrátor s příznakem IsDefaultWorkflowOrchestrator
                 IOrchestrator? defaultWorkflowOrchestrator = null;
                 
-                // Použijeme WorkflowOrchestratorV2 jako default, pokud je k dispozici
-                defaultWorkflowOrchestrator = allOrchestrators.FirstOrDefault(o => o.GetType().Name == "WorkflowOrchestratorV2");
-                
-                if (defaultWorkflowOrchestrator == null)
+                foreach (var orc in allOrchestrators)
                 {
-                    // Pokud není WorkflowOrchestratorV2, použijeme první dostupný orchestrátor
-                    defaultWorkflowOrchestrator = allOrchestrators.FirstOrDefault();
+                    var config = await settingsService.GetOrchestratorConfigurationAsync(orc.Id);
+                    if (config?.IsDefaultWorkflowOrchestrator == true)
+                    {
+                        defaultWorkflowOrchestrator = orc;
+                        _logger.LogInformation("Found default workflow orchestrator: {Name} with ID {Id}", 
+                            orc.Name, orc.Id);
+                        break;
+                    }
                 }
                 
                 if (defaultWorkflowOrchestrator == null)
                 {
-                    throw new BusinessException("No orchestrators found. Please ensure at least one orchestrator is registered.");
+                    throw new BusinessException("No default workflow orchestrator found. Please configure a default workflow orchestrator in the orchestrator settings.");
                 }
 
 
