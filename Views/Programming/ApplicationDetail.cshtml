@@ -504,7 +504,6 @@
 </section>
 
 @section Scripts {
-    <script src="~/lib/microsoft/signalr/dist/browser/signalr.js"></script>
     <script>
         // Application context
         const appContext = {
@@ -516,36 +515,7 @@
             description: '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Description ?? ""))'
         };
         
-        // SignalR connection
-        let connection = null;
-        let conversationId = null;
-        
-        // Initialize SignalR
-        async function initializeSignalR() {
-            connection = new signalR.HubConnectionBuilder()
-                .withUrl("/discoveryHub")
-                .withAutomaticReconnect()
-                .build();
-            
-            connection.on("ReceiveMessage", function (message) {
-                appendMessage(message, 'assistant');
-                hideTypingIndicator();
-            });
-            
-            connection.on("ReceiveError", function (error) {
-                toastr.error(error);
-                hideTypingIndicator();
-                enableInput();
-            });
-            
-            try {
-                await connection.start();
-                console.log("SignalR connected");
-            } catch (err) {
-                console.error("SignalR connection error:", err);
-                toastr.error("Nepodařilo se připojit k AI asistentovi");
-            }
-        }
+        // No SignalR needed - using direct API calls
         
         // Send message
         async function sendMessage(event) {
@@ -578,28 +548,79 @@ ${appContext.description ? `- Popis: ${appContext.description}` : ''}
 Uživatelský dotaz: ${message}`;
                 
                 // Send to coding orchestrator
+                const requestBody = {
+                    applicationId: appContext.id,
+                    prompt: contextMessage,
+                    projectPath: appContext.projectPath
+                };
+                
+                console.log('Sending request:', requestBody);
+                
                 const response = await fetch('/api/orchestrators/coding/process', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        applicationId: appContext.id,
-                        prompt: contextMessage,
-                        projectPath: appContext.projectPath
-                    })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Chyba při komunikaci s AI asistentem');
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    
+                    let errorMessage = 'Chyba při komunikaci s AI asistentem';
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMessage = errorJson.message || errorMessage;
+                    } catch (e) {
+                        // Not JSON
+                    }
+                    
+                    throw new Error(errorMessage);
                 }
                 
                 const result = await response.json();
-                appendMessage(result.response || result.message, 'assistant');
+                
+                if (result.success && result.data) {
+                    // Format the response from CodingOrchestrator
+                    let responseMessage = '';
+                    
+                    // Check if there's an analysis
+                    if (result.data.projectAnalysis) {
+                        responseMessage += result.data.projectAnalysis + '\n\n';
+                    }
+                    
+                    // Add proposed changes if any
+                    if (result.data.proposedChanges && result.data.proposedChanges.length > 0) {
+                        responseMessage += '**Navrhované změny:**\n';
+                        result.data.proposedChanges.forEach((change, index) => {
+                            responseMessage += `${index + 1}. ${change.description}\n`;
+                            if (change.code) {
+                                responseMessage += `\`\`\`${change.language || ''}\n${change.code}\n\`\`\`\n`;
+                            }
+                        });
+                    }
+                    
+                    // Add explanation if available
+                    if (result.data.explanation) {
+                        responseMessage += result.data.explanation;
+                    }
+                    
+                    // If no content, show raw data
+                    if (!responseMessage.trim()) {
+                        responseMessage = result.data.message || JSON.stringify(result.data, null, 2);
+                    }
+                    
+                    appendMessage(responseMessage, 'assistant');
+                } else {
+                    appendMessage(result.message || 'Nepodařilo se získat odpověď', 'assistant');
+                }
                 
             } catch (error) {
                 console.error('Error:', error);
-                toastr.error('Chyba při zpracování dotazu');
+                const errorMessage = error.message || 'Chyba při zpracování dotazu';
+                toastr.error(errorMessage);
+                appendMessage(`Omlouvám se, došlo k chybě: ${errorMessage}`, 'assistant');
             } finally {
                 hideTypingIndicator();
                 enableInput();
@@ -732,7 +753,6 @@ Uživatelský dotaz: ${message}`;
         
         // Initialize on load
         document.addEventListener('DOMContentLoaded', function() {
-            initializeSignalR();
             document.getElementById('messageInput').focus();
         });
     </script>
