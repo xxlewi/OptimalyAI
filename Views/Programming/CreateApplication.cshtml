@@ -1,0 +1,485 @@
+@model OAI.Core.DTOs.Programming.CreateWebApplicationDto
+@{
+    ViewData["Title"] = "Vytvořit novou aplikaci";
+}
+
+@section Styles {
+    <style>
+        .form-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px 10px 0 0;
+            margin: 0;
+        }
+        
+        .form-section {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .form-section:last-child {
+            border-bottom: none;
+        }
+        
+        .required {
+            color: #dc3545;
+        }
+        
+        .form-help {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        
+        .select2-container .select2-selection--single {
+            height: 38px;
+            border: 1px solid #ced4da;
+        }
+        
+        .select2-container .select2-selection--single .select2-selection__rendered {
+            line-height: 36px;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="#">Programování</a></li>
+                    <li class="breadcrumb-item"><a href="@Url.Action("Applications")">Aplikace</a></li>
+                    <li class="breadcrumb-item active">Vytvořit</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <form asp-action="CreateApplication" method="post" id="createApplicationForm">
+                    <div class="form-card">
+                        <div class="section-header">
+                            <h4 class="mb-0">
+                                <i class="fas fa-plus-circle mr-2"></i>
+                                Nová webová aplikace
+                            </h4>
+                        </div>
+
+                        <!-- Základní informace -->
+                        <div class="form-section">
+                            <h5 class="mb-3">
+                                <i class="fas fa-info-circle mr-2"></i>Základní informace
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Name">Název <span class="required">*</span></label>
+                                        <input asp-for="Name" class="form-control" placeholder="Název aplikace">
+                                        <span asp-validation-for="Name" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Version">Verze</label>
+                                        <input asp-for="Version" class="form-control" placeholder="1.0.0">
+                                        <span asp-validation-for="Version" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="Description">Popis</label>
+                                <textarea asp-for="Description" class="form-control" rows="3" 
+                                         placeholder="Stručný popis aplikace a jejího účelu"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Status">Status</label>
+                                        <select asp-for="Status" class="form-control">
+                                            <option value="Development">Development</option>
+                                            <option value="Testing">Testing</option>
+                                            <option value="Production">Production</option>
+                                            <option value="Maintenance">Maintenance</option>
+                                        </select>
+                                        <span asp-validation-for="Status" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Priority">Priorita</label>
+                                        <select asp-for="Priority" class="form-control">
+                                            <option value="Low">Low</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="High">High</option>
+                                            <option value="Critical">Critical</option>
+                                        </select>
+                                        <span asp-validation-for="Priority" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Technické specifikace -->
+                        <div class="form-section">
+                            <h5 class="mb-3">
+                                <i class="fas fa-cogs mr-2"></i>Technické specifikace
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="ProgrammingLanguage">Programovací jazyk <span class="required">*</span></label>
+                                        <select asp-for="ProgrammingLanguage" class="form-control">
+                                            <option value="">Vyberte jazyk</option>
+                                            <option value="C#">C#</option>
+                                            <option value="JavaScript">JavaScript</option>
+                                            <option value="TypeScript">TypeScript</option>
+                                            <option value="Python">Python</option>
+                                            <option value="Java">Java</option>
+                                            <option value="PHP">PHP</option>
+                                            <option value="Go">Go</option>
+                                            <option value="Rust">Rust</option>
+                                            <option value="Other">Jiný</option>
+                                        </select>
+                                        <span asp-validation-for="ProgrammingLanguage" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Framework">Framework <span class="required">*</span></label>
+                                        <select asp-for="Framework" class="form-control">
+                                            <option value="">Vyberte framework</option>
+                                            <option value="ASP.NET Core">ASP.NET Core</option>
+                                            <option value="React">React</option>
+                                            <option value="Angular">Angular</option>
+                                            <option value="Vue.js">Vue.js</option>
+                                            <option value="Node.js">Node.js</option>
+                                            <option value="Django">Django</option>
+                                            <option value="Flask">Flask</option>
+                                            <option value="Spring Boot">Spring Boot</option>
+                                            <option value="Laravel">Laravel</option>
+                                            <option value="Other">Jiný</option>
+                                        </select>
+                                        <span asp-validation-for="Framework" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Architecture">Architektura</label>
+                                        <select asp-for="Architecture" class="form-control">
+                                            <option value="">Vyberte architekturu</option>
+                                            <option value="MVC">MVC</option>
+                                            <option value="Clean Architecture">Clean Architecture</option>
+                                            <option value="Microservices">Microservices</option>
+                                            <option value="Monolith">Monolith</option>
+                                            <option value="Serverless">Serverless</option>
+                                            <option value="Layered">Layered</option>
+                                            <option value="Hexagonal">Hexagonal</option>
+                                            <option value="Other">Jiná</option>
+                                        </select>
+                                        <span asp-validation-for="Architecture" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="Database">Databáze</label>
+                                        <select asp-for="Database" class="form-control">
+                                            <option value="">Vyberte databázi</option>
+                                            <option value="PostgreSQL">PostgreSQL</option>
+                                            <option value="MySQL">MySQL</option>
+                                            <option value="SQL Server">SQL Server</option>
+                                            <option value="MongoDB">MongoDB</option>
+                                            <option value="Redis">Redis</option>
+                                            <option value="SQLite">SQLite</option>
+                                            <option value="Oracle">Oracle</option>
+                                            <option value="Other">Jiná</option>
+                                        </select>
+                                        <span asp-validation-for="Database" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cesty a odkazy -->
+                        <div class="form-section">
+                            <h5 class="mb-3">
+                                <i class="fas fa-link mr-2"></i>Cesty a odkazy
+                            </h5>
+                            
+                            <div class="form-group">
+                                <label asp-for="ProjectPath">Cesta k projektu <span class="required">*</span></label>
+                                <input asp-for="ProjectPath" class="form-control" 
+                                       placeholder="/Users/username/Projects/MyApp nebo C:\Projects\MyApp">
+                                <small class="form-help">Absolutní cesta k root složce projektu na disku</small>
+                                <span asp-validation-for="ProjectPath" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="Url">URL aplikace</label>
+                                <input asp-for="Url" class="form-control" 
+                                       placeholder="https://myapp.com nebo http://localhost:3000">
+                                <small class="form-help">URL kde běží aplikace (dev/staging/prod)</small>
+                                <span asp-validation-for="Url" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="GitRepository">Git repository</label>
+                                <input asp-for="GitRepository" class="form-control" 
+                                       placeholder="https://github.com/username/repository">
+                                <small class="form-help">URL Git repository</small>
+                                <span asp-validation-for="GitRepository" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Dodatečné informace -->
+                        <div class="form-section">
+                            <h5 class="mb-3">
+                                <i class="fas fa-tags mr-2"></i>Dodatečné informace
+                            </h5>
+                            
+                            <div class="form-group">
+                                <label asp-for="Tags">Tagy</label>
+                                <input asp-for="Tags" class="form-control" 
+                                       placeholder="web, api, admin, frontend, backend">
+                                <small class="form-help">Tagy oddělené čárkami pro kategorizaci</small>
+                                <span asp-validation-for="Tags" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="Notes">Poznámky</label>
+                                <textarea asp-for="Notes" class="form-control" rows="4" 
+                                         placeholder="Podrobné poznámky, dokumentace, odkazy na další zdroje..."></textarea>
+                                <span asp-validation-for="Notes" class="text-danger"></span>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label asp-for="LastDeployment">Datum posledního deploymentu</label>
+                                        <input asp-for="LastDeployment" type="date" class="form-control">
+                                        <span asp-validation-for="LastDeployment" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch mt-4 pt-2">
+                                            <input asp-for="IsActive" type="checkbox" class="custom-control-input" id="isActiveSwitch">
+                                            <label class="custom-control-label" for="isActiveSwitch">Aktivní aplikace</label>
+                                        </div>
+                                        <small class="form-help">Označte pokud je aplikace aktivně vyvíjena nebo provozována</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tlačítka -->
+                        <div class="card-footer">
+                            <div class="d-flex justify-content-between">
+                                <a href="@Url.Action("Applications")" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left mr-1"></i>Zpět na seznam
+                                </a>
+                                <div>
+                                    <button type="reset" class="btn btn-outline-secondary mr-2">
+                                        <i class="fas fa-undo mr-1"></i>Reset
+                                    </button>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save mr-1"></i>Vytvořit aplikaci
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize form validation with AJAX submission
+            $('#createApplicationForm').on('submit', function(e) {
+                e.preventDefault(); // Prevent default form submission
+                console.log('Form submit triggered');
+                
+                const $form = $(this);
+                const $submitBtn = $form.find('button[type="submit"]');
+                
+                // Gather form data for debugging
+                let formData = {
+                    name: $('#Name').val(),
+                    projectPath: $('#ProjectPath').val(),
+                    programmingLanguage: $('#ProgrammingLanguage').val(),
+                    framework: $('#Framework').val(),
+                    lastDeployment: $('#LastDeployment').val()
+                };
+                console.log('Form data:', formData);
+                
+                // Basic client-side validation
+                let isValid = true;
+                let errors = [];
+                
+                // Check required fields
+                $('input[required], select[required]').each(function() {
+                    if (!$(this).val()) {
+                        $(this).addClass('is-invalid');
+                        isValid = false;
+                        errors.push($(this).attr('name') + ' is required');
+                    } else {
+                        $(this).removeClass('is-invalid');
+                    }
+                });
+                
+                if (!isValid) {
+                    console.error('Validation failed:', errors);
+                    toastr.error('Prosím vyplňte všechna povinná pole');
+                    return;
+                }
+                
+                console.log('Form validation passed, submitting via AJAX...');
+                
+                // Disable submit button and show loading
+                $submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Odesílám...');
+                
+                // Submit form via AJAX to capture response
+                $.ajax({
+                    url: $form.attr('action'),
+                    type: 'POST',
+                    data: $form.serialize(),
+                    success: function(response) {
+                        console.log('Form submission successful', response);
+                        // Check if response is JSON with redirect URL
+                        if (response && response.redirectUrl) {
+                            window.location.href = response.redirectUrl;
+                        } else if (typeof response === 'string' && response.includes('window.location')) {
+                            // Extract redirect URL from HTML response
+                            const match = response.match(/window\.location\.href\s*=\s*["']([^"']+)["']/);
+                            if (match && match[1]) {
+                                window.location.href = match[1];
+                            } else {
+                                // Fallback to applications list
+                                window.location.href = '/Programming/Applications';
+                            }
+                        } else {
+                            // Normal redirect after successful creation
+                            window.location.href = '/Programming/Applications';
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Form submission failed:', {
+                            status: xhr.status,
+                            statusText: xhr.statusText,
+                            responseText: xhr.responseText,
+                            error: error
+                        });
+                        
+                        // Re-enable submit button
+                        $submitBtn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i>Vytvořit aplikaci');
+                        
+                        // Try to parse error message
+                        let errorMessage = 'Chyba při vytváření aplikace';
+                        
+                        try {
+                            // Check if response is JSON
+                            const jsonResponse = JSON.parse(xhr.responseText);
+                            if (jsonResponse.message) {
+                                errorMessage = jsonResponse.message;
+                            } else if (jsonResponse.errors) {
+                                errorMessage = Object.values(jsonResponse.errors).flat().join(', ');
+                            }
+                        } catch (e) {
+                            // Response is not JSON, check if it's HTML with error
+                            if (xhr.responseText.includes('field-validation-error')) {
+                                // Extract validation errors from HTML
+                                const $html = $(xhr.responseText);
+                                const validationErrors = [];
+                                $html.find('.field-validation-error').each(function() {
+                                    validationErrors.push($(this).text());
+                                });
+                                if (validationErrors.length > 0) {
+                                    errorMessage = validationErrors.join(', ');
+                                }
+                            } else if (xhr.responseText.includes('alert-danger')) {
+                                // Extract error from alert
+                                const $html = $(xhr.responseText);
+                                const alertText = $html.find('.alert-danger').text().trim();
+                                if (alertText) {
+                                    errorMessage = alertText;
+                                }
+                            } else if (xhr.responseText.length < 500) {
+                                // If response is short, it might be the error message itself
+                                errorMessage = xhr.responseText;
+                            }
+                        }
+                        
+                        // Display error to user
+                        toastr.error(errorMessage);
+                        
+                        // Also add error to form if specific field errors
+                        if (xhr.status === 400) {
+                            // Bad request - likely validation errors
+                            console.log('Validation errors detected');
+                        }
+                    }
+                });
+            });
+            
+            // Remove validation errors on input
+            $('input, select, textarea').on('input change', function() {
+                $(this).removeClass('is-invalid');
+            });
+            
+            // Auto-format tags
+            $('#Tags').on('blur', function() {
+                let tags = $(this).val();
+                if (tags) {
+                    // Clean up tags - remove extra spaces, normalize commas
+                    tags = tags.split(',')
+                              .map(tag => tag.trim())
+                              .filter(tag => tag.length > 0)
+                              .join(', ');
+                    $(this).val(tags);
+                }
+            });
+            
+            // Path validation
+            $('#ProjectPath').on('blur', function() {
+                let path = $(this).val();
+                if (path && !path.match(/^([a-zA-Z]:|\/)/)) {
+                    toastr.warning('Cesta by měla být absolutní (začínat / nebo C:\\)');
+                }
+            });
+            
+            // URL validation
+            $('#Url, #GitRepository').on('blur', function() {
+                let url = $(this).val();
+                if (url && !url.match(/^https?:\/\//)) {
+                    $(this).val('https://' + url);
+                }
+            });
+        });
+    </script>
+}
+

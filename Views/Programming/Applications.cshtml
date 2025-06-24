@@ -1,0 +1,358 @@
+@model List<OAI.Core.DTOs.Programming.WebApplicationDto>
+@{
+    ViewData["Title"] = "Webové aplikace";
+}
+
+@section Styles {
+    <style>
+        .application-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .application-card.active {
+            border-left-color: #28a745;
+        }
+        
+        .application-card.inactive {
+            border-left-color: #dc3545;
+        }
+        
+        .application-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+        
+        .status-badge.development {
+            background-color: #cce5ff;
+            color: #0066cc;
+        }
+        
+        .status-badge.testing {
+            background-color: #fff2cc;
+            color: #cc8800;
+        }
+        
+        .status-badge.production {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.maintenance {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .priority-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+        
+        .priority-badge.low {
+            background-color: #e7f1ff;
+            color: #004085;
+        }
+        
+        .priority-badge.medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .priority-badge.high {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .priority-badge.critical {
+            background-color: #dc3545;
+            color: #ffffff;
+        }
+        
+        .tags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .tag-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+        }
+        
+        .search-box {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@ViewData["Title"]</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="#">Programování</a></li>
+                    <li class="breadcrumb-item active">Aplikace</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Search and Actions -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="search-box">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <form action="@Url.Action("SearchApplications")" method="get" class="d-flex">
+                                <input type="text" name="searchTerm" class="form-control me-2" 
+                                       placeholder="Vyhledejte aplikace podle názvu, popisu, jazyka nebo frameworku..." 
+                                       value="@ViewBag.SearchTerm">
+                                <button class="btn btn-outline-secondary" type="submit">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-4 text-md-right">
+                            <a href="@Url.Action("CreateApplication")" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Nová aplikace
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Row -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@Model.Count</h3>
+                        <p>Celkem aplikací</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-code"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@Model.Count(x => x.IsActive)</h3>
+                        <p>Aktivní</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@Model.Count(x => x.Status == "Development")</h3>
+                        <p>Ve vývoji</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-wrench"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>@Model.Count(x => x.Status == "Production")</h3>
+                        <p>V produkci</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-rocket"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Applications Grid -->
+        <div class="row">
+            @if (Model.Any())
+            {
+                @foreach (var app in Model)
+                {
+                    <div class="col-lg-6 col-xl-4 mb-4">
+                        <div class="card application-card @(app.IsActive ? "active" : "inactive") h-100">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="fas fa-globe mr-2"></i>@app.Name
+                                    @if (!app.IsActive)
+                                    {
+                                        <span class="badge badge-secondary ml-2">
+                                            <i class="fas fa-pause mr-1"></i>Neaktivní
+                                        </span>
+                                    }
+                                </h3>
+                                <div class="card-tools">
+                                    <span class="status-badge @app.Status.ToLower()">
+                                        <i class="fas fa-circle mr-1" style="font-size: 0.5rem;"></i>
+                                        @app.Status
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">@app.Description</p>
+                                
+                                <div class="row mb-3">
+                                    <div class="col-6">
+                                        <small class="text-muted">
+                                            <i class="fas fa-code mr-1"></i>@app.ProgrammingLanguage
+                                        </small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">
+                                            <i class="fas fa-cogs mr-1"></i>@app.Framework
+                                        </small>
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(app.Architecture))
+                                {
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-sitemap mr-1"></i>@app.Architecture
+                                        </small>
+                                    </div>
+                                }
+
+                                @if (!string.IsNullOrEmpty(app.Database))
+                                {
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-database mr-1"></i>@app.Database
+                                        </small>
+                                    </div>
+                                }
+
+                                <div class="row text-center mb-3">
+                                    <div class="col-6">
+                                        <div class="description-block">
+                                            <h5 class="description-header">@app.Version</h5>
+                                            <span class="description-text">Verze</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="description-block">
+                                            <span class="priority-badge @app.Priority.ToLower()">@app.Priority</span>
+                                            <br><span class="description-text">Priorita</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (app.LastDeployment.HasValue)
+                                {
+                                    <p class="text-sm text-muted">
+                                        <i class="fas fa-upload mr-1"></i>
+                                        Poslední deploy: @app.LastDeployment.Value.ToLocalTime().ToString("d.M.yyyy")
+                                    </p>
+                                }
+
+                                @if (!string.IsNullOrEmpty(app.Tags))
+                                {
+                                    <div class="tags-list">
+                                        @foreach (var tag in app.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                        {
+                                            <span class="tag-badge">@tag.Trim()</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="card-footer">
+                                <div class="d-flex justify-content-between">
+                                    <a href="@Url.Action("ApplicationDetail", new { id = app.Id })" 
+                                       class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye mr-1"></i> Detail
+                                    </a>
+                                    <div class="btn-group">
+                                        <a href="@Url.Action("EditApplication", new { id = app.Id })" 
+                                           class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        @if (!string.IsNullOrEmpty(app.Url))
+                                        {
+                                            <a href="@app.Url" target="_blank" 
+                                               class="btn btn-sm btn-outline-success" 
+                                               title="Otevřít aplikaci">
+                                                <i class="fas fa-external-link-alt"></i>
+                                            </a>
+                                        }
+                                        @if (!string.IsNullOrEmpty(app.GitRepository))
+                                        {
+                                            <a href="@app.GitRepository" target="_blank" 
+                                               class="btn btn-sm btn-outline-dark" 
+                                               title="Git repository">
+                                                <i class="fab fa-git-alt"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-code fa-4x text-muted mb-3"></i>
+                            <h4>Žádné aplikace nenalezeny</h4>
+                            @if (!string.IsNullOrEmpty(ViewBag.SearchTerm))
+                            {
+                                <p class="text-muted">Pro hledaný výraz "@ViewBag.SearchTerm" nebyly nalezeny žádné aplikace.</p>
+                                <a href="@Url.Action("Applications")" class="btn btn-secondary">
+                                    <i class="fas fa-list"></i> Zobrazit všechny aplikace
+                                </a>
+                            }
+                            else
+                            {
+                                <p class="text-muted">Zatím nebyly vytvořeny žádné webové aplikace.</p>
+                            }
+                            <a href="@Url.Action("CreateApplication")" class="btn btn-primary mt-3">
+                                <i class="fas fa-plus"></i> Vytvořit první aplikaci
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        // Auto-refresh disabled for applications
+        // Add custom JavaScript here if needed
+    </script>
+}

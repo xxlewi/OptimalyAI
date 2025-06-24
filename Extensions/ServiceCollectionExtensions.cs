@@ -111,6 +111,9 @@ public static class ServiceCollectionExtensions
         
         // Explicitní registrace AI Server Service
         services.AddScoped<OAI.ServiceLayer.Services.AI.IAiServerService, OAI.ServiceLayer.Services.AI.AiServerService>();
+        
+        // Explicitní registrace Programming Services
+        services.AddScoped<OAI.ServiceLayer.Services.Programming.IWebApplicationService, OAI.ServiceLayer.Services.Programming.WebApplicationService>();
 
         return services;
     }
@@ -398,6 +401,13 @@ public static class ServiceCollectionExtensions
             OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>();
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator>(provider => 
             provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>());
+            
+        // Register AI Coding Orchestrator
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.CodingOrchestrator>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.CodingOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.CodingOrchestratorResponseDto>, 
+            OAI.ServiceLayer.Services.Orchestration.CodingOrchestrator>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.CodingOrchestrator>());
             
         
         // Register conversation manager interface for orchestrator

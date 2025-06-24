@@ -3,6 +3,7 @@ using OAI.Core.Entities;
 using OAI.Core.Entities.Business;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Entities.Adapters;
+using OAI.Core.Entities.Programming;
 using OAI.DataLayer.Extensions;
 using System.Reflection;
 
@@ -38,6 +39,9 @@ public class AppDbContext : DbContext
     // AI Server entities
     public DbSet<AiServer> AiServers { get; set; }
     public DbSet<AiModel> AiModels { get; set; }
+    
+    // Programming entities
+    public DbSet<WebApplication> WebApplications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

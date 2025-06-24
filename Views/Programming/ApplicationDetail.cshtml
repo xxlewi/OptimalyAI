@@ -1,0 +1,467 @@
+@model OAI.Core.DTOs.Programming.WebApplicationDto
+@{
+    ViewData["Title"] = "Detail aplikace - " + Model.Name;
+}
+
+@section Styles {
+    <style>
+        .info-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .section-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px 10px 0 0;
+            margin: 0;
+        }
+        
+        .info-section {
+            padding: 20px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 140px;
+        }
+        
+        .info-value {
+            color: #6c757d;
+            flex: 1;
+            text-align: right;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .status-badge.development {
+            background-color: #cce5ff;
+            color: #0066cc;
+        }
+        
+        .status-badge.testing {
+            background-color: #fff2cc;
+            color: #cc8800;
+        }
+        
+        .status-badge.production {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.maintenance {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .priority-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .priority-badge.low {
+            background-color: #e7f1ff;
+            color: #004085;
+        }
+        
+        .priority-badge.medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .priority-badge.high {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .priority-badge.critical {
+            background-color: #dc3545;
+            color: #ffffff;
+        }
+        
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        
+        .tag-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+        
+        .external-link {
+            color: #007bff;
+            text-decoration: none;
+        }
+        
+        .external-link:hover {
+            text-decoration: underline;
+        }
+        
+        .action-button {
+            margin: 0 5px;
+        }
+        
+        .notes-content {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            white-space: pre-wrap;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+    </style>
+}
+
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">@Model.Name</h1>
+                <p class="text-muted">@Model.Description</p>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="#">Programování</a></li>
+                    <li class="breadcrumb-item"><a href="@Url.Action("Applications")">Aplikace</a></li>
+                    <li class="breadcrumb-item active">@Model.Name</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Action Buttons -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="@Url.Action("Applications")" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left mr-1"></i>Zpět na seznam
+                    </a>
+                    <div>
+                        @if (!string.IsNullOrEmpty(Model.Url))
+                        {
+                            <a href="@Model.Url" target="_blank" class="btn btn-success action-button" title="Otevřít aplikaci">
+                                <i class="fas fa-external-link-alt mr-1"></i>Otevřít aplikaci
+                            </a>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.GitRepository))
+                        {
+                            <a href="@Model.GitRepository" target="_blank" class="btn btn-dark action-button" title="Git repository">
+                                <i class="fab fa-git-alt mr-1"></i>Repository
+                            </a>
+                        }
+                        <a href="@Url.Action("EditApplication", new { id = Model.Id })" class="btn btn-primary action-button">
+                            <i class="fas fa-edit mr-1"></i>Upravit
+                        </a>
+                        <button type="button" class="btn btn-danger action-button" onclick="confirmDelete()">
+                            <i class="fas fa-trash mr-1"></i>Smazat
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Základní informace -->
+            <div class="col-lg-6">
+                <div class="info-card">
+                    <div class="section-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            Základní informace
+                        </h4>
+                    </div>
+                    <div class="info-section">
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-id-card mr-2"></i>Název
+                            </span>
+                            <span class="info-value">@Model.Name</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-tag mr-2"></i>Verze
+                            </span>
+                            <span class="info-value">@Model.Version</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-traffic-light mr-2"></i>Status
+                            </span>
+                            <span class="info-value">
+                                <span class="status-badge @Model.Status.ToLower()">
+                                    <i class="fas fa-circle mr-1" style="font-size: 0.6rem;"></i>
+                                    @Model.Status
+                                </span>
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-flag mr-2"></i>Priorita
+                            </span>
+                            <span class="info-value">
+                                <span class="priority-badge @Model.Priority.ToLower()">@Model.Priority</span>
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-power-off mr-2"></i>Aktivní
+                            </span>
+                            <span class="info-value">
+                                @if (Model.IsActive)
+                                {
+                                    <span class="badge badge-success">Ano</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">Ne</span>
+                                }
+                            </span>
+                        </div>
+                        @if (Model.LastDeployment.HasValue)
+                        {
+                            <div class="info-row">
+                                <span class="info-label">
+                                    <i class="fas fa-upload mr-2"></i>Poslední deploy
+                                </span>
+                                <span class="info-value">@Model.LastDeployment.Value.ToLocalTime().ToString("d.M.yyyy HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Technické specifikace -->
+            <div class="col-lg-6">
+                <div class="info-card">
+                    <div class="section-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-cogs mr-2"></i>
+                            Technické specifikace
+                        </h4>
+                    </div>
+                    <div class="info-section">
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-code mr-2"></i>Jazyk
+                            </span>
+                            <span class="info-value">@Model.ProgrammingLanguage</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-layer-group mr-2"></i>Framework
+                            </span>
+                            <span class="info-value">@Model.Framework</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.Architecture))
+                        {
+                            <div class="info-row">
+                                <span class="info-label">
+                                    <i class="fas fa-sitemap mr-2"></i>Architektura
+                                </span>
+                                <span class="info-value">@Model.Architecture</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.Database))
+                        {
+                            <div class="info-row">
+                                <span class="info-label">
+                                    <i class="fas fa-database mr-2"></i>Databáze
+                                </span>
+                                <span class="info-value">@Model.Database</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Cesty a odkazy -->
+            <div class="col-lg-6">
+                <div class="info-card">
+                    <div class="section-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-link mr-2"></i>
+                            Cesty a odkazy
+                        </h4>
+                    </div>
+                    <div class="info-section">
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-folder mr-2"></i>Projekt
+                            </span>
+                            <span class="info-value">
+                                <code>@Model.ProjectPath</code>
+                            </span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.Url))
+                        {
+                            <div class="info-row">
+                                <span class="info-label">
+                                    <i class="fas fa-globe mr-2"></i>URL
+                                </span>
+                                <span class="info-value">
+                                    <a href="@Model.Url" target="_blank" class="external-link">
+                                        @Model.Url <i class="fas fa-external-link-alt ml-1"></i>
+                                    </a>
+                                </span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.GitRepository))
+                        {
+                            <div class="info-row">
+                                <span class="info-label">
+                                    <i class="fab fa-git-alt mr-2"></i>Repository
+                                </span>
+                                <span class="info-value">
+                                    <a href="@Model.GitRepository" target="_blank" class="external-link">
+                                        @Model.GitRepository <i class="fas fa-external-link-alt ml-1"></i>
+                                    </a>
+                                </span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tagy a metadata -->
+            <div class="col-lg-6">
+                <div class="info-card">
+                    <div class="section-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-tags mr-2"></i>
+                            Metadata
+                        </h4>
+                    </div>
+                    <div class="info-section">
+                        @if (!string.IsNullOrEmpty(Model.Tags))
+                        {
+                            <div class="info-row">
+                                <span class="info-label">
+                                    <i class="fas fa-tags mr-2"></i>Tagy
+                                </span>
+                                <span class="info-value">
+                                    <div class="tags-container">
+                                        @foreach (var tag in Model.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                        {
+                                            <span class="tag-badge">@tag.Trim()</span>
+                                        }
+                                    </div>
+                                </span>
+                            </div>
+                        }
+                        <div class="info-row">
+                            <span class="info-label">
+                                <i class="fas fa-calendar-plus mr-2"></i>Vytvořeno
+                            </span>
+                            <span class="info-value">@Model.CreatedAt.ToLocalTime().ToString("d.M.yyyy HH:mm")</span>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div class="info-row">
+                                <span class="info-label">
+                                    <i class="fas fa-calendar-check mr-2"></i>Aktualizováno
+                                </span>
+                                <span class="info-value">@Model.UpdatedAt.Value.ToLocalTime().ToString("d.M.yyyy HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Poznámky -->
+        @if (!string.IsNullOrEmpty(Model.Notes))
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="info-card">
+                        <div class="section-header">
+                            <h4 class="mb-0">
+                                <i class="fas fa-sticky-note mr-2"></i>
+                                Poznámky
+                            </h4>
+                        </div>
+                        <div class="info-section">
+                            <div class="notes-content">
+                                @Model.Notes
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<!-- Delete Confirmation Form -->
+<form id="deleteForm" asp-action="DeleteApplication" asp-route-id="@Model.Id" method="post" style="display: none;">
+</form>
+
+@section Scripts {
+    <script>
+        function confirmDelete() {
+            Swal.fire({
+                title: 'Opravdu smazat aplikaci?',
+                text: `Aplikace "${@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Name))}" bude trvale odstraněna.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ano, smazat!',
+                cancelButtonText: 'Zrušit'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('deleteForm').submit();
+                }
+            });
+        }
+        
+        // Copy path to clipboard functionality
+        $('code').on('click', function() {
+            const text = $(this).text();
+            navigator.clipboard.writeText(text).then(() => {
+                toastr.success('Cesta zkopírována do schránky!');
+            }).catch(() => {
+                toastr.error('Nepodařilo se zkopírovat cestu');
+            });
+        });
+    </script>
+}
