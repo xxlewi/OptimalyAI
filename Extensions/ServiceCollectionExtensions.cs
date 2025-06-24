@@ -379,6 +379,7 @@ public static class ServiceCollectionExtensions
         
         // Register AI Server Service (using existing implementation)
         services.AddScoped<OAI.ServiceLayer.Services.AI.IAiServerService, OAI.ServiceLayer.Services.AI.AiServerService>();
+        // Note: OAI.Core.Interfaces.Services.IAiServerService is implemented by a different service if needed
         
         // Register main Conversation Manager
         // services.TryAddSingleton<IConversationManager, ConversationManager>();

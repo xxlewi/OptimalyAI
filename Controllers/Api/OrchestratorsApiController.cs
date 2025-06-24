@@ -457,6 +457,150 @@ namespace OptimalyAI.Controllers.Api
             }
         }
 
+        /// <summary>
+        /// Process a coding request using the CodingOrchestrator
+        /// </summary>
+        [HttpPost("coding/process")]
+        public async Task<IActionResult> ProcessCodingRequest([FromBody] CodingOrchestratorApiRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.ApplicationId))
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "ApplicationId is required"
+                    });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Prompt))
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Prompt is required"
+                    });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.ProjectPath))
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "ProjectPath is required"
+                    });
+                }
+
+                // Get the CodingOrchestrator
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("coding_orchestrator");
+                if (orchestrator == null)
+                {
+                    return NotFound(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "CodingOrchestrator not found"
+                    });
+                }
+
+                // Create the request DTO
+                var codingRequest = new CodingOrchestratorRequestDto
+                {
+                    Task = request.Prompt,
+                    ProjectPath = request.ProjectPath,
+                    Context = $"ApplicationId: {request.ApplicationId}",
+                    ModelId = request.ModelId ?? "deepseek-coder:6.7b",
+                    AutoApply = request.AutoApply ?? false
+                };
+
+                // Create context
+                var context = new OrchestratorContext(
+                    userId: User.Identity?.Name ?? "api-user",
+                    sessionId: Guid.NewGuid().ToString()
+                );
+                context.Variables["applicationId"] = request.ApplicationId;
+
+                // Execute the orchestrator
+                var startTime = DateTime.UtcNow;
+                var executionId = Guid.NewGuid().ToString();
+
+                try
+                {
+                    // Execute orchestrator with proper typing
+                    var codingOrchestrator = orchestrator as IOrchestrator<CodingOrchestratorRequestDto, CodingOrchestratorResponseDto>;
+                    if (codingOrchestrator == null)
+                    {
+                        return StatusCode(500, new ApiResponse<object>
+                        {
+                            Success = false,
+                            Message = "Invalid orchestrator type"
+                        });
+                    }
+
+                    var result = await codingOrchestrator.ExecuteAsync(codingRequest, context, CancellationToken.None);
+
+                    // Record metrics
+                    var duration = DateTime.UtcNow - startTime;
+                    await _metrics.RecordExecutionCompleteAsync("coding_orchestrator", executionId, result.IsSuccess, duration);
+
+                    if (result.IsSuccess && result.Data != null)
+                    {
+                        return Ok(new ApiResponse<object>
+                        {
+                            Success = true,
+                            Data = new
+                            {
+                                projectAnalysis = result.Data.ProjectAnalysis,
+                                proposedChanges = result.Data.ProposedChanges,
+                                appliedChanges = result.Data.AppliedChanges,
+                                explanation = result.Data.Explanation,
+                                errors = result.Data.Errors,
+                                success = true,
+                                message = "Coding request completed successfully"
+                            },
+                            Message = "Coding request processed successfully"
+                        });
+                    }
+                    else
+                    {
+                        var errorMessage = result.Error?.Message ?? "Coding request failed";
+                        return BadRequest(new ApiResponse<object>
+                        {
+                            Success = false,
+                            Message = errorMessage,
+                            Data = new
+                            {
+                                errors = result.Data?.Errors ?? new List<string> { errorMessage }
+                            }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Record failure metrics
+                    var duration = DateTime.UtcNow - startTime;
+                    await _metrics.RecordExecutionCompleteAsync("coding_orchestrator", executionId, false, duration);
+
+                    _logger.LogError(ex, "Failed to execute CodingOrchestrator");
+                    
+                    return StatusCode(500, new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = $"Failed to process coding request: {ex.Message}"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in coding orchestrator endpoint");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "An unexpected error occurred"
+                });
+            }
+        }
+
         private object? CreateRequestObject(string orchestratorId, OrchestratorExecuteRequest request)
         {
             return orchestratorId switch
@@ -478,6 +622,14 @@ namespace OptimalyAI.Controllers.Api
                     ProjectId = Guid.Empty,
                     SessionId = Guid.NewGuid().ToString()
                 },
+                "coding_orchestrator" => new CodingOrchestratorRequestDto
+                {
+                    Task = request.Input?.ToString() ?? string.Empty,
+                    ProjectPath = request.Context?.GetValueOrDefault("projectPath")?.ToString() ?? string.Empty,
+                    Context = request.Context?.GetValueOrDefault("context")?.ToString() ?? string.Empty,
+                    ModelId = request.Context?.GetValueOrDefault("modelId")?.ToString() ?? "deepseek-coder:6.7b",
+                    AutoApply = bool.TryParse(request.Context?.GetValueOrDefault("autoApply")?.ToString(), out var autoApply) && autoApply
+                },
                 _ => request.Input
             };
         }
@@ -492,5 +644,14 @@ namespace OptimalyAI.Controllers.Api
     public class OrchestratorExecuteRequestWithId : OrchestratorExecuteRequest
     {
         public string OrchestratorId { get; set; } = string.Empty;
+    }
+
+    public class CodingOrchestratorApiRequest
+    {
+        public string ApplicationId { get; set; } = string.Empty;
+        public string Prompt { get; set; } = string.Empty;
+        public string ProjectPath { get; set; } = string.Empty;
+        public string? ModelId { get; set; }
+        public bool? AutoApply { get; set; }
     }
 }
