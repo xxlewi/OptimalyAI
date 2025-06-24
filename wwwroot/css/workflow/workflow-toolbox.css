@@ -5,11 +5,13 @@
 
 /* Toolbox container */
 .toolbox {
-    width: 250px;
+    width: 220px;
+    min-width: 200px;
     background: #f8f9fa;
     border-radius: 8px;
-    padding: 20px;
+    padding: 15px;
     overflow-y: auto;
+    flex-shrink: 0; /* Don't shrink toolbox */
 }
 
 .toolbox h6 {

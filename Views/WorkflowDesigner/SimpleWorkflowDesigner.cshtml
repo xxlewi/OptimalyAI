@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="~/css/workflow/workflow-toolbox.css" />
     <link rel="stylesheet" href="~/css/workflow/workflow-nodes.css" />
     <link rel="stylesheet" href="~/css/workflow/workflow-connections.css" />
+    <link rel="stylesheet" href="~/css/workflow/discovery-chat.css" />
 }
 
 @await Html.PartialAsync("Partials/_WorkflowHeader", Model)
@@ -20,7 +21,12 @@
         <div class="designer-container">
             @await Html.PartialAsync("Partials/_WorkflowToolbox", Model)
             
-            @await Html.PartialAsync("Partials/_WorkflowCanvas", Model)
+            <div class="main-designer-area">
+                @await Html.PartialAsync("Partials/_WorkflowCanvas", Model)
+                
+                <!-- Discovery Chat Panel Container -->
+                <div id="discovery-chat-container" class="discovery-chat-panel"></div>
+            </div>
         </div>
     </div>
 </section>
@@ -29,14 +35,23 @@
 @await Html.PartialAsync("_WorkflowTestModal")
 
 @section Scripts {
+<!-- SignalR -->
+<script src="~/lib/microsoft-signalr/dist/browser/signalr.min.js"></script>
+
 <script type="module">
     import { WorkflowDesignerApp } from '/js/workflow/workflow-designer-app.js';
+    import { DiscoveryChat } from '/js/workflow/modules/discovery-chat.js';
     
     // Initialize workflow designer application
     const app = new WorkflowDesignerApp({
         projectId: '@Model.ProjectId',
         workflowId: '@Model.WorkflowId',
         projectName: '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ProjectName))'
+    });
+    
+    // Initialize Discovery Chat
+    const discoveryChat = new DiscoveryChat({
+        projectId: '@Model.ProjectId'
     });
     
     // Initialize on DOM ready
@@ -47,6 +62,10 @@
             
             await app.initialize();
             console.log('Workflow Designer initialized successfully');
+            
+            // Make discovery chat globally available (initialized automatically in constructor)
+            window.discoveryChat = discoveryChat;
+            
         } catch (error) {
             console.error('Failed to initialize Workflow Designer:', error);
             toastr.error('Chyba při inicializaci workflow designeru');

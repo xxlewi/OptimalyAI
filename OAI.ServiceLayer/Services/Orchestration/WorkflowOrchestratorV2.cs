@@ -1101,8 +1101,8 @@ Keep it under 200 words.";
             
             if (type == typeof(byte[])) return $"Binary data ({((byte[])value).Length} bytes)";
             if (type.IsArray) return $"Array ({((Array)value).Length} items)";
-            if (value is IDictionary dict) return $"Dictionary ({dict.Count} items)";
-            if (value is IEnumerable enumerable) return $"Collection ({enumerable.Cast<object>().Count()} items)";
+            if (value is System.Collections.IDictionary dict) return $"Dictionary ({dict.Count} items)";
+            if (value is System.Collections.IEnumerable enumerable) return $"Collection ({enumerable.Cast<object>().Count()} items)";
             
             return type.Name;
         }

@@ -12,6 +12,8 @@ using OAI.ServiceLayer.Services.AI.Interfaces;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Interfaces.Workflow;
 using OAI.ServiceLayer.Services.Workflow;
+using OAI.ServiceLayer.Services.Discovery;
+using OAI.ServiceLayer.Services.Orchestration;
 
 namespace OptimalyAI.Extensions;
 
@@ -106,6 +108,9 @@ public static class ServiceCollectionExtensions
 
         // Explicitní registrace zákaznických služeb
         services.AddScoped<OAI.ServiceLayer.Services.Customers.ICustomerService, OAI.ServiceLayer.Services.Customers.CustomerService>();
+        
+        // Explicitní registrace AI Server Service
+        services.AddScoped<OAI.ServiceLayer.Services.AI.IAiServerService, OAI.ServiceLayer.Services.AI.AiServerService>();
 
         return services;
     }
@@ -380,6 +385,7 @@ public static class ServiceCollectionExtensions
         
         // Register orchestrator settings
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestratorSettings, OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestratorConfigurationService, OAI.ServiceLayer.Services.Orchestration.OrchestratorConfigurationService>();
         
         // Register supporting services for RefactoredConversationOrchestrator
         services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ToolDetectionService>();
@@ -459,6 +465,9 @@ public static class ServiceCollectionExtensions
         // Register ReAct services
         services.AddReActServices(configuration);
         
+        // Register Discovery services
+        services.AddDiscoveryServices(configuration);
+        
         return services;
     }
     
@@ -478,6 +487,34 @@ public static class ServiceCollectionExtensions
         
         // Add memory cache for ReAct agent memory
         services.AddMemoryCache();
+        
+        return services;
+    }
+
+    public static IServiceCollection AddDiscoveryServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Register Discovery interfaces
+        services.AddScoped<OAI.Core.Interfaces.Discovery.IIntentAnalyzer, OAI.ServiceLayer.Services.Discovery.IntentAnalyzer>();
+        services.AddScoped<OAI.Core.Interfaces.Discovery.IComponentMatcher, OAI.ServiceLayer.Services.Discovery.ComponentMatcher>();
+        services.AddScoped<OAI.Core.Interfaces.Discovery.IWorkflowBuilder, OAI.ServiceLayer.Services.Discovery.WorkflowBuilder>();
+        
+        // Register Discovery Orchestrator
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.DiscoveryOrchestrator>();
+        services.AddScoped<DiscoveryOrchestrator>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.DiscoveryOrchestrator>());
+        
+        // Register as IOrchestrator interface implementations
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.DiscoveryOrchestrator>());
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Discovery.DiscoveryChatRequestDto, OAI.Core.DTOs.Discovery.DiscoveryResponseDto>>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.DiscoveryOrchestrator>());
+        
+        // Register IOrchestratorRegistry and IAdapterRegistry if not already registered
+        services.TryAddSingleton<OAI.Core.Interfaces.Orchestration.IOrchestratorRegistry, OAI.ServiceLayer.Services.Orchestration.OrchestratorRegistryService>();
+        services.TryAddSingleton<OAI.Core.Interfaces.Adapters.IAdapterRegistry, OAI.ServiceLayer.Services.Adapters.AdapterRegistryService>();
+        
+        // Register Step Test Executor for Discovery testing
+        services.AddScoped<IStepTestExecutor, StepTestExecutor>();
         
         return services;
     }

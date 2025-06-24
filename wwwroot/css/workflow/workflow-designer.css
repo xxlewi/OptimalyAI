@@ -8,9 +8,11 @@
     display: flex;
     height: calc(100vh - 200px);
     gap: 20px;
+    min-width: 1000px; /* Ensure minimum width for all panels */
+    overflow-x: auto; /* Add horizontal scroll if needed */
 }
 
-/* Canvas container */
+/* Canvas container - adjusted for discovery chat integration */
 .canvas-container {
     flex: 1;
     background: white;
@@ -20,6 +22,12 @@
     overflow: auto;
 }
 
+/* When discovery chat is integrated, remove conflicting styles */
+.main-designer-area .canvas-container {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem 0 0 0.375rem;
+}
+
 .canvas-container.readonly {
     width: 100%;
     flex: none;
@@ -27,7 +35,8 @@
 
 /* Main canvas */
 #workflow-canvas {
-    width: 2000px;
+    width: 100%;
+    min-width: 1200px;
     height: 1500px;
     position: relative;
     background-image: 

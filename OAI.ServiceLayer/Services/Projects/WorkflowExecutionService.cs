@@ -171,7 +171,7 @@ namespace OAI.ServiceLayer.Services.Projects
                                 AdapterId = dto.AdapterId,
                                 AdapterType = dto.AdapterType,
                                 AdapterConfiguration = dto.AdapterConfiguration != null ? 
-                                    dto.AdapterConfiguration.ToDictionary(k => k.Key, v => v.Value) : 
+                                    new Dictionary<string, Dictionary<string, object>> { ["config"] = dto.AdapterConfiguration } : 
                                     new Dictionary<string, Dictionary<string, object>>(),
                                 Condition = dto.Condition,
                                 IsFinal = dto.IsFinal

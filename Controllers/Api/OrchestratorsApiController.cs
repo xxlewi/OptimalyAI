@@ -58,7 +58,11 @@ namespace OptimalyAI.Controllers.Api
                      
                     (typeof(OAI.ServiceLayer.Services.Orchestration.WorkflowOrchestratorV2),
                      typeof(OAI.Core.DTOs.Orchestration.WorkflowOrchestratorRequest),
-                     typeof(OAI.Core.DTOs.Orchestration.WorkflowOrchestratorResponse))
+                     typeof(OAI.Core.DTOs.Orchestration.WorkflowOrchestratorResponse)),
+                     
+                    (typeof(OAI.ServiceLayer.Services.Orchestration.DiscoveryOrchestrator),
+                     typeof(OAI.Core.DTOs.Discovery.DiscoveryChatRequestDto),
+                     typeof(OAI.Core.DTOs.Discovery.DiscoveryResponseDto))
                 };
 
                 foreach (var (orchestratorType, requestType, responseType) in knownOrchestrators)
