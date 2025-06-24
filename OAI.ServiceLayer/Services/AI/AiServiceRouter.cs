@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Entities;
@@ -19,20 +20,27 @@ namespace OAI.ServiceLayer.Services.AI
     {
         private readonly IAiModelService _aiModelService;
         private readonly IAiServerService _aiServerService;
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<AiServiceRouter> _logger;
+        private readonly ILoggerFactory _loggerFactory;
+        private readonly IConfiguration _configuration;
         private readonly Dictionary<Guid, object> _serviceCache = new();
+        private readonly Dictionary<Guid, HttpClient> _httpClientCache = new();
 
         public AiServiceRouter(
             IAiModelService aiModelService,
             IAiServerService aiServerService,
-            IServiceProvider serviceProvider,
-            ILogger<AiServiceRouter> logger)
+            IServiceScopeFactory serviceScopeFactory,
+            ILogger<AiServiceRouter> logger,
+            ILoggerFactory loggerFactory,
+            IConfiguration configuration)
         {
             _aiModelService = aiModelService ?? throw new ArgumentNullException(nameof(aiModelService));
             _aiServerService = aiServerService ?? throw new ArgumentNullException(nameof(aiServerService));
-            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
         public async Task<IAIService> GetServiceForModelAsync(string modelNameOrId)
@@ -101,8 +109,12 @@ namespace OAI.ServiceLayer.Services.AI
             
             try
             {
+                // Create a new scope for database operations
+                using var scope = _serviceScopeFactory.CreateScope();
+                var scopedAiModelService = scope.ServiceProvider.GetRequiredService<IAiModelService>();
+                
                 // Find the model in database
-                var models = await _aiModelService.GetAvailableModelsAsync();
+                var models = await scopedAiModelService.GetAvailableModelsAsync();
                 _logger.LogInformation("AiServiceRouter: Found {Count} available models", models.Count);
                 
                 var model = models.FirstOrDefault(m => 
@@ -134,7 +146,9 @@ namespace OAI.ServiceLayer.Services.AI
                 // Get cached or create new service
                 if (!_serviceCache.TryGetValue(model.AiServerId, out var cachedService))
                 {
-                    var server = await _aiServerService.GetByIdAsync(model.AiServerId);
+                    // Use scoped service for database access
+                    var scopedAiServerService = scope.ServiceProvider.GetRequiredService<IAiServerService>();
+                    var server = await scopedAiServerService.GetByIdAsync(model.AiServerId);
                     if (server == null)
                     {
                         _logger.LogWarning("AiServiceRouter: Server not found for model {ModelName}", modelNameOrId);
@@ -208,29 +222,63 @@ namespace OAI.ServiceLayer.Services.AI
 
         private IOllamaService CreateOllamaService(AiServer server)
         {
-            var httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(server.BaseUrl);
-            httpClient.Timeout = TimeSpan.FromSeconds(server.TimeoutSeconds);
+            // Získat nebo vytvořit HttpClient pro tento server
+            if (!_httpClientCache.TryGetValue(server.Id, out var httpClient))
+            {
+                httpClient = new HttpClient();
+                httpClient.BaseAddress = new Uri(server.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(server.TimeoutSeconds);
+                _httpClientCache[server.Id] = httpClient;
+            }
 
-            var logger = _serviceProvider.GetRequiredService<ILogger<SimpleOllamaService>>();
+            var logger = _loggerFactory.CreateLogger<SimpleOllamaService>();
             return new SimpleOllamaService(httpClient, logger);
         }
 
         private ILMStudioService CreateLMStudioService(AiServer server)
         {
-            var httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(server.BaseUrl);
-            httpClient.Timeout = TimeSpan.FromSeconds(server.TimeoutSeconds);
+            // Získat nebo vytvořit HttpClient pro tento server
+            if (!_httpClientCache.TryGetValue(server.Id, out var httpClient))
+            {
+                httpClient = new HttpClient();
+                httpClient.BaseAddress = new Uri(server.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(server.TimeoutSeconds);
+                _httpClientCache[server.Id] = httpClient;
+            }
 
-            var logger = _serviceProvider.GetRequiredService<ILogger<LMStudioService>>();
-            var configuration = _serviceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
-            return new LMStudioService(httpClient, logger, configuration);
+            var logger = _loggerFactory.CreateLogger<LMStudioService>();
+            return new LMStudioService(httpClient, logger, _configuration);
         }
 
         private IOllamaService GetDefaultOllamaService()
         {
-            // Return the default registered Ollama service
-            return _serviceProvider.GetRequiredService<ISimpleOllamaService>();
+            // Create a default Ollama service using the configuration
+            var defaultServerId = Guid.Empty; // Use Guid.Empty as key for default service
+            
+            if (_serviceCache.TryGetValue(defaultServerId, out var cachedService))
+            {
+                return cachedService as IOllamaService;
+            }
+
+            // Create default Ollama service using configuration values directly
+            var baseUrl = _configuration["OllamaSettings:BaseUrl"] ?? "http://localhost:11434";
+            var timeoutStr = _configuration["OllamaSettings:DefaultTimeout"];
+            var timeout = int.TryParse(timeoutStr, out var t) ? t : 120;
+            
+            var httpClient = new HttpClient
+            {
+                BaseAddress = new Uri(baseUrl),
+                Timeout = TimeSpan.FromSeconds(timeout)
+            };
+            
+            _httpClientCache[defaultServerId] = httpClient;
+            
+            var logger = _loggerFactory.CreateLogger<SimpleOllamaService>();
+            var defaultService = new SimpleOllamaService(httpClient, logger);
+            
+            _serviceCache[defaultServerId] = defaultService;
+            
+            return defaultService;
         }
     }
 }

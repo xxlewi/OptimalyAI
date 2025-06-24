@@ -25,8 +25,6 @@ namespace OAI.ServiceLayer.Services.Orchestration
     public class CodingOrchestrator : BaseOrchestrator<CodingOrchestratorRequestDto, CodingOrchestratorResponseDto>
     {
         private readonly IAiServiceRouter _aiServiceRouter;
-        private readonly IServiceProvider _serviceProvider;
-        private readonly ILogger<CodingOrchestrator> _logger;
 
         public override string Id => "coding_orchestrator";
         public override string Name => "AI Coding Orchestrator";
@@ -34,13 +32,11 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
         public CodingOrchestrator(
             IAiServiceRouter aiServiceRouter,
-            IServiceProvider serviceProvider,
             ILogger<CodingOrchestrator> logger,
-            IOrchestratorMetrics metrics) : base(logger, metrics, serviceProvider)
+            IOrchestratorMetrics metrics,
+            IServiceProvider serviceProvider) : base(logger, metrics, serviceProvider)
         {
             _aiServiceRouter = aiServiceRouter ?? throw new ArgumentNullException(nameof(aiServiceRouter));
-            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         protected override async Task<CodingOrchestratorResponseDto> ExecuteCoreAsync(
@@ -220,15 +216,16 @@ Odpověz profesionálně a konkrétně.";
         {
             try
             {
+                // Používáme AiServiceRouter, který správně routuje na LM Studio nebo jiný nakonfigurovaný server
                 var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
                     modelId, 
-                    prompt, 
-                    Guid.NewGuid().ToString(), 
+                    prompt,
+                    Guid.NewGuid().ToString(), // conversationId
                     new Dictionary<string, object>
                     {
                         { "max_tokens", 4000 },
                         { "temperature", 0.1 }
-                    }, 
+                    },
                     cancellationToken);
 
                 return response ?? "Prázdná odpověď z AI modelu";

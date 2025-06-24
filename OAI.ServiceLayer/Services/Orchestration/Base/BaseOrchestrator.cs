@@ -193,16 +193,18 @@ namespace OAI.ServiceLayer.Services.Orchestration.Base
             // Check AI server health if configured
             if (_serviceProvider != null)
             {
-                var settingsService = _serviceProvider.GetService<IOrchestratorSettings>() as OrchestratorSettingsService;
-                var aiServerService = _serviceProvider.GetService<IAiServerService>();
-                
-                if (settingsService != null && aiServerService != null)
+                try
                 {
-                    var configuration = await settingsService.GetOrchestratorConfigurationAsync(Id);
+                    var configurationService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
+                    var aiServerService = _serviceProvider.GetService<IAiServerService>();
+                    
+                    if (configurationService != null && aiServerService != null)
+                {
+                    var configuration = await configurationService.GetByOrchestratorIdAsync(Id);
                     if (configuration?.AiServerId != null)
                     {
                         details["aiServerId"] = configuration.AiServerId;
-                        details["modelId"] = configuration.DefaultModelId ?? "none";
+                        details["modelId"] = configuration.DefaultModelId?.ToString() ?? "none";
                         
                         var isRunning = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
                         details["aiServerRunning"] = isRunning;
@@ -222,6 +224,12 @@ namespace OAI.ServiceLayer.Services.Orchestration.Base
                     {
                         details["aiServerConfigured"] = false;
                     }
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Service provider was disposed, skip AI server check
+                    details["aiServerCheck"] = "skipped - service provider disposed";
                 }
             }
 

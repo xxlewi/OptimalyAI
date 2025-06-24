@@ -573,6 +573,7 @@ Uživatelský dotaz: ${message}`;
                     applicationId: appContext.id,
                     prompt: contextMessage,
                     projectPath: appContext.projectPath
+                    // ModelId není specifikován - použije se výchozí model z konfigurace orchestrátoru
                 };
                 
                 console.log('Sending request:', requestBody);

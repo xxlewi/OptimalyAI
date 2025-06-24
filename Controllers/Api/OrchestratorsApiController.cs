@@ -585,13 +585,37 @@ namespace OptimalyAI.Controllers.Api
                     });
                 }
 
+                // Get orchestrator configuration to get the default model
+                string? modelId = request.ModelId;
+                if (string.IsNullOrWhiteSpace(modelId))
+                {
+                    var settingsService = _orchestratorSettings as OrchestratorSettingsService;
+                    if (settingsService != null)
+                    {
+                        var configuration = await settingsService.GetOrchestratorConfigurationAsync("coding_orchestrator");
+                        if (configuration != null)
+                        {
+                            modelId = configuration.DefaultModelId;
+                        }
+                    }
+                    
+                    if (string.IsNullOrWhiteSpace(modelId))
+                    {
+                        return BadRequest(new ApiResponse<object>
+                        {
+                            Success = false,
+                            Message = "No model specified and no default model configured for CodingOrchestrator"
+                        });
+                    }
+                }
+
                 // Create the request DTO
                 var codingRequest = new CodingOrchestratorRequestDto
                 {
                     Task = request.Prompt,
                     ProjectPath = request.ProjectPath,
                     Context = $"ApplicationId: {request.ApplicationId}",
-                    ModelId = request.ModelId ?? "deepseek-coder:6.7b",
+                    ModelId = modelId,
                     AutoApply = request.AutoApply ?? false
                 };
 
@@ -709,7 +733,7 @@ namespace OptimalyAI.Controllers.Api
                     Task = request.Input?.ToString() ?? string.Empty,
                     ProjectPath = request.Context?.GetValueOrDefault("projectPath")?.ToString() ?? string.Empty,
                     Context = request.Context?.GetValueOrDefault("context")?.ToString() ?? string.Empty,
-                    ModelId = request.Context?.GetValueOrDefault("modelId")?.ToString() ?? "deepseek-coder:6.7b",
+                    ModelId = request.Context?.GetValueOrDefault("modelId")?.ToString(), // No fallback - will be validated in orchestrator
                     AutoApply = bool.TryParse(request.Context?.GetValueOrDefault("autoApply")?.ToString(), out var autoApply) && autoApply
                 },
                 _ => request.Input
