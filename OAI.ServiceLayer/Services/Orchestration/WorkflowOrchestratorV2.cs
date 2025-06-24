@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using OAI.Core.Attributes;
 using OAI.Core.DTOs;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.DTOs.Tools;
@@ -26,6 +27,16 @@ namespace OAI.ServiceLayer.Services.Orchestration
     /// Intelligent workflow orchestrator that executes complete workflows with AI-driven validation and retry
     /// Uses configured AI server (Ollama or LM Studio) based on orchestrator configuration
     /// </summary>
+    [OrchestratorMetadata(
+        id: "workflow_orchestrator_v2",
+        name: "WorkflowOrchestratorV2",
+        description: "Intelligent workflow orchestrator with configured AI server support",
+        IsWorkflowNode = false,
+        IsEnabledByDefault = true,
+        Tags = new[] { "workflow", "execution", "ai", "automation" },
+        RequestTypeName = "OAI.Core.DTOs.Orchestration.WorkflowOrchestratorRequest",
+        ResponseTypeName = "OAI.Core.DTOs.Orchestration.WorkflowOrchestratorResponse"
+    )]
     public class WorkflowOrchestratorV2 : BaseOrchestrator<WorkflowOrchestratorRequest, WorkflowOrchestratorResponse>
     {
         private readonly IUnitOfWork _unitOfWork;
@@ -41,6 +52,17 @@ namespace OAI.ServiceLayer.Services.Orchestration
         private OrchestratorConfigurationDto _cachedConfig;
         private DateTime _configCacheTime = DateTime.MinValue;
         private readonly TimeSpan _configCacheDuration = TimeSpan.FromMinutes(5);
+
+        // Static capabilities for metadata-based discovery
+        public static OrchestratorCapabilities StaticCapabilities { get; } = new OrchestratorCapabilities
+        {
+            SupportsReActPattern = true,
+            SupportsToolCalling = true,
+            SupportsMultiModal = false,
+            MaxIterations = 50,
+            SupportedInputTypes = new[] { "workflow", "json" },
+            SupportedOutputTypes = new[] { "execution_result", "json" }
+        };
 
         public WorkflowOrchestratorV2(
             IUnitOfWork unitOfWork,

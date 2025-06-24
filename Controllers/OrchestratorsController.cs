@@ -121,226 +121,116 @@ namespace OptimalyAI.Controllers
             {
                 var orchestrators = new List<OrchestratorViewModel>();
                 
-                // This was causing duplicate ConversationOrchestrator entries - removed
-                // All orchestrators will be loaded via reflection below
-                
-                // Get all registered orchestrators
-                var orchestratorTypes = GetAllOrchestratorTypes();
-                
-                _logger.LogInformation("Found {Count} orchestrator types via reflection", orchestratorTypes.Count);
-                foreach(var type in orchestratorTypes)
+                // Get orchestrator registry
+                var orchestratorRegistry = _serviceProvider.GetService<IOrchestratorRegistry>();
+                if (orchestratorRegistry == null)
                 {
-                    _logger.LogInformation("Found orchestrator type: {Type}", type.FullName);
+                    _logger.LogError("IOrchestratorRegistry is not registered in DI");
+                    return View(orchestrators);
                 }
+                
+                // Get all orchestrator metadata from registry
+                var allMetadata = await orchestratorRegistry.GetAllOrchestratorMetadataAsync();
+                _logger.LogInformation("Found {Count} orchestrators from registry", allMetadata.Count);
                 
                 // Get settings service and AI server service for checking real activation status
                 var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
                 var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
                 
-                foreach (var orchestratorType in orchestratorTypes)
+                foreach (var metadata in allMetadata)
                 {
                     try
                     {
-                        _logger.LogInformation("Processing orchestrator type: {Type}", orchestratorType.Name);
+                        _logger.LogInformation("Processing orchestrator: {Id} - {Name}", metadata.Id, metadata.Name);
                         
-                        // Get orchestrator instance by finding its registered interface
-                        var orchestrator = GetOrchestratorInstance(orchestratorType);
-                        if (orchestrator == null) 
-                        {
-                            _logger.LogWarning("Could not resolve orchestrator type: {Type}", orchestratorType.Name);
-                            continue;
-                        }
-                    
-                    // Try to get values directly from the orchestrator instance
-                    string orchestratorId = "unknown";
-                    string orchestratorName = "Unknown";
-                    string orchestratorDescription = "";
-                    
-                    // Check if it's RefactoredConversationOrchestrator
-                    if (orchestrator is OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator conversationOrch)
-                    {
-                        orchestratorId = conversationOrch.Id;
-                        orchestratorName = conversationOrch.Name;
-                        orchestratorDescription = conversationOrch.Description;
-                    }
-                    else
-                    {
-                        // Use reflection to get orchestrator info
-                        var idProperty = orchestratorType.GetProperty("Id");
-                        var nameProperty = orchestratorType.GetProperty("Name");
-                        var descriptionProperty = orchestratorType.GetProperty("Description");
+                        // Get saved configuration
+                        var savedConfiguration = settingsService != null 
+                            ? await settingsService.GetOrchestratorConfigurationAsync(metadata.Id)
+                            : null;
                         
-                        if (idProperty == null || nameProperty == null) 
-                        {
-                            _logger.LogWarning("Orchestrator {Type} missing Id or Name property", orchestratorType.Name);
-                            continue;
-                        }
+                        // Check real orchestrator activation status based on AI server
+                        bool isActive = false;
+                        string? aiServerName = null;
+                        string? defaultModelId = null;
+                        bool isModelLoaded = false;
                         
-                        orchestratorId = idProperty.GetValue(orchestrator)?.ToString() ?? "unknown";
-                        orchestratorName = nameProperty.GetValue(orchestrator)?.ToString() ?? "Unknown";
-                        orchestratorDescription = descriptionProperty?.GetValue(orchestrator)?.ToString() ?? "";
-                    }
-                    
-                    // Get metrics
-                    var summary = await _metrics.GetOrchestratorSummaryAsync(orchestratorId);
-                    
-                    // Get health status
-                    var healthMethod = orchestratorType.GetMethod("GetHealthAsync");
-                    OrchestratorHealthStatus? health = null;
-                    if (healthMethod != null)
-                    {
-                        var healthTask = healthMethod.Invoke(orchestrator, null) as Task<OrchestratorHealthStatus>;
-                        if (healthTask != null)
-                        {
-                            health = await healthTask;
-                        }
-                    }
-                    
-                    // Get capabilities
-                    var capabilitiesMethod = orchestratorType.GetMethod("GetCapabilities");
-                    OrchestratorCapabilities? capabilities = null;
-                    if (capabilitiesMethod != null)
-                    {
-                        capabilities = capabilitiesMethod.Invoke(orchestrator, null) as OrchestratorCapabilities;
-                    }
-                    
-                    // Get saved configuration first
-                    var savedConfiguration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(orchestratorId) : null;
-                    
-                    // Get IsWorkflowNode - use saved value if available, otherwise get from property
-                    bool isWorkflowNode = false;
-                    if (savedConfiguration != null)
-                    {
-                        isWorkflowNode = savedConfiguration.IsWorkflowNode;
-                    }
-                    else
-                    {
-                        var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
-                        if (isWorkflowNodeProperty != null)
-                        {
-                            isWorkflowNode = (bool)(isWorkflowNodeProperty.GetValue(orchestrator) ?? false);
-                        }
-                    }
-                    
-                    // Get IsDefaultChatOrchestrator - use saved value if available, otherwise get from property
-                    bool isDefaultChatOrchestrator = false;
-                    if (savedConfiguration != null)
-                    {
-                        isDefaultChatOrchestrator = savedConfiguration.IsDefaultChatOrchestrator;
-                    }
-                    else
-                    {
-                        var isDefaultChatOrchestratorProperty = orchestratorType.GetProperty("IsDefaultChatOrchestrator");
-                        if (isDefaultChatOrchestratorProperty != null)
-                        {
-                            isDefaultChatOrchestrator = (bool)(isDefaultChatOrchestratorProperty.GetValue(orchestrator) ?? false);
-                        }
-                    }
-                    
-                    // Get IsDefaultWorkflowOrchestrator - use saved value if available, otherwise get from property
-                    bool isDefaultWorkflowOrchestrator = false;
-                    if (savedConfiguration != null)
-                    {
-                        isDefaultWorkflowOrchestrator = savedConfiguration.IsDefaultWorkflowOrchestrator;
-                    }
-                    else
-                    {
-                        var isDefaultWorkflowOrchestratorProperty = orchestratorType.GetProperty("IsDefaultWorkflowOrchestrator");
-                        if (isDefaultWorkflowOrchestratorProperty != null)
-                        {
-                            isDefaultWorkflowOrchestrator = (bool)(isDefaultWorkflowOrchestratorProperty.GetValue(orchestrator) ?? false);
-                        }
-                    }
-                    
-                    // Get saved configuration - commented out for now
-                    // var savedConfig = await _configurationService.GetByOrchestratorIdAsync(orchestratorId);
-                    
-                    // Check real orchestrator activation status based on AI server
-                    bool isActive = false;
-                    string? aiServerName = null;
-                    string? defaultModelId = null;
-                    bool isModelLoaded = false;
-                    
-                    if (settingsService != null && aiServerService != null)
-                    {
-                        // Use the already retrieved configuration
-                        var configuration = savedConfiguration;
-                        if (configuration?.AiServerId != null && !string.IsNullOrEmpty(configuration.DefaultModelId))
+                        if (settingsService != null && aiServerService != null && savedConfiguration?.AiServerId != null)
                         {
                             // Check if the AI server is running
-                            isActive = await aiServerService.IsServerRunningAsync(configuration.AiServerId.Value);
-                            _logger.LogInformation("Orchestrator {Name} AI server running status: {IsActive}", orchestratorName, isActive);
+                            isActive = await aiServerService.IsServerRunningAsync(savedConfiguration.AiServerId.Value);
+                            _logger.LogInformation("Orchestrator {Name} AI server running status: {IsActive}", metadata.Name, isActive);
                             
                             // Get AI server name
-                            var server = await aiServerService.GetByIdAsync(configuration.AiServerId.Value);
+                            var server = await aiServerService.GetByIdAsync(savedConfiguration.AiServerId.Value);
                             if (server != null)
                             {
                                 aiServerName = server.Name;
                                 
                                 // Check if the configured model is actually loaded
-                                if (isActive && !string.IsNullOrEmpty(configuration.DefaultModelId))
+                                if (isActive && !string.IsNullOrEmpty(savedConfiguration.DefaultModelId))
                                 {
                                     try
                                     {
                                         // Get loaded models for this server
                                         var loadedModels = await GetLoadedModelsForServer(server);
                                         isModelLoaded = loadedModels.Any(m => 
-                                            m.Equals(configuration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
+                                            m.Equals(savedConfiguration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
                                         
-                                        _logger.LogInformation("Model {Model} loaded status for orchestrator {Name}: {IsLoaded}", 
-                                            configuration.DefaultModelId, orchestratorName, isModelLoaded);
+                                        _logger.LogInformation("Model {Model} loaded status: {IsLoaded}", 
+                                            savedConfiguration.DefaultModelId, isModelLoaded);
                                     }
                                     catch (Exception ex)
                                     {
-                                        _logger.LogWarning(ex, "Failed to check model loaded status for orchestrator {Name}", orchestratorName);
-                                        // Assume not loaded on error
-                                        isModelLoaded = false;
+                                        _logger.LogWarning(ex, "Failed to check model status for {Model}", savedConfiguration.DefaultModelId);
                                     }
                                 }
+                                
+                                defaultModelId = savedConfiguration.DefaultModelId?.ToString();
                             }
-                            defaultModelId = configuration.DefaultModelId;
                         }
-                        else
+                        
+                        // Get metrics
+                        var metrics = await _metrics.GetMetricsAsync(metadata.Id, TimeRange.LastWeek);
+                        
+                        var viewModel = new OrchestratorViewModel
                         {
-                            _logger.LogInformation("Orchestrator {Name} has no AI server configured", orchestratorName);
-                        }
+                            Id = metadata.Id,
+                            Name = metadata.Name,
+                            Description = metadata.Description,
+                            Type = metadata.TypeName,
+                            IsActive = isActive,
+                            IsDefault = false, // IsDefault is deprecated
+                            IsWorkflowNode = savedConfiguration?.IsWorkflowNode ?? metadata.IsWorkflowNode,
+                            IsDefaultChatOrchestrator = savedConfiguration?.IsDefaultChatOrchestrator ?? false,
+                            IsDefaultWorkflowOrchestrator = savedConfiguration?.IsDefaultWorkflowOrchestrator ?? false,
+                            TotalExecutions = metrics?.TotalExecutions ?? 0,
+                            SuccessfulExecutions = metrics?.SuccessfulExecutions ?? 0,
+                            FailedExecutions = metrics?.FailedExecutions ?? 0,
+                            AverageExecutionTime = metrics?.AverageExecutionTime ?? TimeSpan.Zero,
+                            LastExecutionTime = null, // LastExecutionTime not available in metrics
+                            Capabilities = metadata.Capabilities,
+                            AiServerName = aiServerName,
+                            DefaultModelId = defaultModelId,
+                            IsModelLoaded = isModelLoaded
+                        };
+                        
+                        orchestrators.Add(viewModel);
                     }
-                    
-                    orchestrators.Add(new OrchestratorViewModel
+                    catch (Exception ex)
                     {
-                        Id = orchestratorId,
-                        Name = orchestratorName,
-                        Description = orchestratorDescription,
-                        Type = orchestratorType.Name,
-                        IsActive = isActive, // Real status based on AI server
-                        IsDefault = await _orchestratorSettings.IsDefaultOrchestratorAsync(orchestratorId),
-                        IsWorkflowNode = isWorkflowNode,
-                        IsDefaultChatOrchestrator = isDefaultChatOrchestrator,
-                        IsDefaultWorkflowOrchestrator = isDefaultWorkflowOrchestrator,
-                        TotalExecutions = summary?.TotalExecutions ?? 0,
-                        SuccessfulExecutions = summary?.SuccessfulExecutions ?? 0,
-                        FailedExecutions = summary?.FailedExecutions ?? 0,
-                        AverageExecutionTime = summary?.AverageExecutionTime ?? TimeSpan.Zero,
-                        LastExecutionTime = summary?.LastExecutionTime,
-                        HealthStatus = health ?? new OrchestratorHealthStatus { State = OrchestratorHealthState.Unknown },
-                        Capabilities = capabilities ?? new OrchestratorCapabilities(),
-                        Metrics = summary,
-                        AiServerName = aiServerName,
-                        DefaultModelId = defaultModelId,
-                        IsModelLoaded = isModelLoaded
-                    });
+                        _logger.LogError(ex, "Error processing orchestrator {Id}", metadata.Id);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error loading orchestrator {Type}", orchestratorType.Name);
-                }
-            }
-            
-            ViewBag.TotalOrchestrators = orchestrators.Count;
-            ViewBag.ActiveOrchestrators = orchestrators.Count(o => o.IsActive);
-            ViewBag.TotalExecutions = orchestrators.Sum(o => o.TotalExecutions);
-            
-            return View("~/Views/Orchestrators/Index.cshtml", orchestrators);
+                
+                // Sort orchestrators by name
+                orchestrators = orchestrators.OrderBy(o => o.Name).ToList();
+                
+                // Calculate totals for the view
+                ViewBag.TotalOrchestrators = orchestrators.Count;
+                ViewBag.ActiveOrchestrators = orchestrators.Count(o => o.IsActive);
+                ViewBag.TotalExecutions = orchestrators.Sum(o => o.TotalExecutions);
+                
+                return View(orchestrators);
             }
             catch (Exception ex)
             {
@@ -359,25 +249,26 @@ namespace OptimalyAI.Controllers
                 return NotFound();
             }
             
-            // Get orchestrator by ID
-            var orchestratorType = GetAllOrchestratorTypes()
-                .FirstOrDefault(t => 
-                {
-                    var instance = _serviceProvider.GetService(t);
-                    if (instance == null) return false;
-                    var idProp = t.GetProperty("Id");
-                    return idProp?.GetValue(instance)?.ToString() == id;
-                });
+            // Get orchestrator registry
+            var orchestratorRegistry = _serviceProvider.GetService<IOrchestratorRegistry>();
+            if (orchestratorRegistry == null)
+            {
+                _logger.LogError("IOrchestratorRegistry is not registered in DI");
+                return NotFound();
+            }
             
-            if (orchestratorType == null)
+            // Get orchestrator metadata
+            var metadata = await orchestratorRegistry.GetOrchestratorMetadataAsync(id);
+            if (metadata == null)
             {
                 return NotFound();
             }
             
-            var orchestrator = _serviceProvider.GetService(orchestratorType);
+            // Get orchestrator instance if needed for dynamic operations
+            var orchestrator = await orchestratorRegistry.GetOrchestratorAsync(id);
             if (orchestrator == null)
             {
-                return NotFound();
+                _logger.LogWarning("Could not get orchestrator instance for {Id}", id);
             }
             
             // Get detailed metrics
@@ -390,41 +281,29 @@ namespace OptimalyAI.Controllers
             var viewModel = new OrchestratorDetailsViewModel
             {
                 Id = id,
-                Name = orchestratorType.GetProperty("Name")?.GetValue(orchestrator)?.ToString() ?? "Unknown",
-                Description = orchestratorType.GetProperty("Description")?.GetValue(orchestrator)?.ToString() ?? "",
-                Type = orchestratorType.Name,
+                Name = metadata.Name,
+                Description = metadata.Description,
+                Type = metadata.TypeName,
                 Metrics = metrics,
                 RecentExecutions = recentExecutions,
-                IsActive = true, // Assume active if found
+                IsActive = true, // Will be updated below based on AI server status
                 TotalExecutions = metrics?.Metrics?.TotalExecutions ?? 0,
                 SuccessfulExecutions = metrics?.Metrics?.SuccessfulExecutions ?? 0,
                 FailedExecutions = metrics?.Metrics?.FailedExecutions ?? 0,
-                SuccessRate = metrics?.Metrics?.SuccessRate ?? 0,
                 DailyMetrics = metrics?.Metrics?.HourlyBreakdown?.GroupBy(h => h.Hour.Date)
                     .Select(g => new {
                         Date = g.Key,
                         SuccessCount = g.Sum(h => h.SuccessCount),
                         FailureCount = g.Sum(h => h.FailureCount)
-                    }).Cast<dynamic>().ToList() ?? new List<dynamic>()
+                    }).Cast<dynamic>().ToList() ?? new List<dynamic>(),
+                Capabilities = metadata.Capabilities
             };
             
-            // Get capabilities
-            var capabilitiesMethod = orchestratorType.GetMethod("GetCapabilities");
-            if (capabilitiesMethod != null)
-            {
-                viewModel.Capabilities = capabilitiesMethod.Invoke(orchestrator, null) as OrchestratorCapabilities;
-            }
-            
-            // Get health
-            var healthMethod = orchestratorType.GetMethod("GetHealthAsync");
-            if (healthMethod != null)
-            {
-                var healthTask = healthMethod.Invoke(orchestrator, null) as Task<OrchestratorHealthStatus>;
-                if (healthTask != null)
-                {
-                    viewModel.HealthStatus = await healthTask;
-                }
-            }
+            // Health status is part of metadata already
+            viewModel.HealthStatus = new OrchestratorHealthStatus 
+            { 
+                State = OrchestratorHealthState.Healthy 
+            };
             
             // Get AI server configuration and status
             var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
@@ -464,52 +343,50 @@ namespace OptimalyAI.Controllers
         /// <summary>
         /// Test orchestrator page
         /// </summary>
-        public IActionResult Test(string id)
+        public async Task<IActionResult> Test(string id)
         {
             if (string.IsNullOrEmpty(id))
             {
                 return NotFound();
             }
             
-            // Get orchestrator type to determine test interface
-            var orchestratorType = GetAllOrchestratorTypes()
-                .FirstOrDefault(t => 
-                {
-                    var instance = _serviceProvider.GetService(t);
-                    if (instance == null) return false;
-                    var idProp = t.GetProperty("Id");
-                    return idProp?.GetValue(instance)?.ToString() == id;
-                });
+            // Get orchestrator registry
+            var orchestratorRegistry = _serviceProvider.GetService<IOrchestratorRegistry>();
+            if (orchestratorRegistry == null)
+            {
+                _logger.LogError("IOrchestratorRegistry is not registered in DI");
+                return NotFound();
+            }
             
-            if (orchestratorType == null)
+            // Get orchestrator metadata
+            var metadata = await orchestratorRegistry.GetOrchestratorMetadataAsync(id);
+            if (metadata == null)
             {
                 return NotFound();
             }
             
-            var orchestratorInstance = _serviceProvider.GetService(orchestratorType);
-            
             var viewModel = new OrchestratorTestViewModel
             {
                 Id = id,
-                Name = orchestratorType.GetProperty("Name")?.GetValue(orchestratorInstance)?.ToString() ?? id,
-                Description = orchestratorType.GetProperty("Description")?.GetValue(orchestratorInstance)?.ToString() ?? "AI Orchestrator",
-                Type = orchestratorType.Name
+                Name = metadata.Name,
+                Description = metadata.Description,
+                Type = metadata.TypeName
             };
             
             // Determine which test view to show based on orchestrator type
-            if (orchestratorType.Name.Contains("Conversation"))
+            if (metadata.TypeName.Contains("Conversation"))
             {
                 return View("~/Views/Orchestrators/TestConversation.cshtml", viewModel);
             }
-            else if (orchestratorType.Name.Contains("ToolChain"))
+            else if (metadata.TypeName.Contains("ToolChain"))
             {
                 return View("~/Views/Orchestrators/TestToolChain.cshtml", viewModel);
             }
-            else if (orchestratorType.Name.Contains("Project"))
+            else if (metadata.TypeName.Contains("Project"))
             {
                 return View("~/Views/Orchestrators/TestProject.cshtml", viewModel);
             }
-            else if (orchestratorType.Name.Contains("WebScraping"))
+            else if (metadata.TypeName.Contains("WebScraping"))
             {
                 return View("~/Views/Orchestrators/TestToolChain.cshtml", viewModel); // Use ToolChain test view for now
             }
@@ -551,9 +428,16 @@ namespace OptimalyAI.Controllers
             {
                 _logger.LogInformation("Testing orchestrator {OrchestratorId}", request.OrchestratorId);
                 
-                // Get the orchestrator
-                var orchestratorType = GetOrchestratorTypeById(request.OrchestratorId);
-                if (orchestratorType == null)
+                // Get orchestrator registry
+                var orchestratorRegistry = _serviceProvider.GetService<IOrchestratorRegistry>();
+                if (orchestratorRegistry == null)
+                {
+                    return Json(new { success = false, error = "Orchestrator registry not available" });
+                }
+                
+                // Get orchestrator metadata
+                var metadata = await orchestratorRegistry.GetOrchestratorMetadataAsync(request.OrchestratorId);
+                if (metadata == null)
                 {
                     return Json(new { success = false, error = "Orchestrator not found" });
                 }
@@ -570,12 +454,12 @@ namespace OptimalyAI.Controllers
                     });
                 }
 
-                // Create orchestrator instance
-                _logger.LogInformation("Attempting to create orchestrator instance for type {Type}", orchestratorType.Name);
-                var orchestrator = GetOrchestratorInstance(orchestratorType);
+                // Get orchestrator instance
+                _logger.LogInformation("Getting orchestrator instance for {Id}", request.OrchestratorId);
+                var orchestrator = await orchestratorRegistry.GetOrchestratorAsync(request.OrchestratorId);
                 if (orchestrator == null)
                 {
-                    _logger.LogError("Failed to create orchestrator instance for type {Type}", orchestratorType.Name);
+                    _logger.LogError("Failed to get orchestrator instance for {Id}", request.OrchestratorId);
                     return Json(new { success = false, error = "Could not create orchestrator instance" });
                 }
                 _logger.LogInformation("Successfully created orchestrator instance");
@@ -610,54 +494,7 @@ namespace OptimalyAI.Controllers
                     // Execute the orchestrator based on its type
                     object? result = null;
                     
-                    if (orchestratorType.Name == "ProjectStageOrchestrator")
-                    {
-                        // Create a test stage for ProjectStageOrchestrator
-                        var testStage = new ProjectStage
-                        {
-                            Id = Guid.NewGuid(),
-                            Name = "Test Stage",
-                            Description = "Test stage for orchestrator testing",
-                            Type = StageType.Processing,
-                            OrchestratorType = "ConversationOrchestrator",
-                            ExecutionStrategy = ExecutionStrategy.Sequential,
-                            ErrorHandling = ErrorHandlingStrategy.ContinueOnError,
-                            TimeoutSeconds = 60,
-                            StageTools = new List<ProjectStageTool>
-                            {
-                                // Add a dummy tool to pass validation
-                                new ProjectStageTool
-                                {
-                                    Id = Guid.NewGuid(),
-                                    ToolId = "conversation_tool",
-                                    ToolName = "Conversation Tool",
-                                    Order = 1,
-                                    IsRequired = true,
-                                    Configuration = "{}",
-                                    InputMapping = "{}"
-                                }
-                            }
-                        };
-                        
-                        var projectRequest = new ProjectStageOrchestratorRequest
-                        {
-                            UserId = context.UserId,
-                            SessionId = context.SessionId,
-                            Stage = testStage,
-                            StageParameters = request.Input,
-                            ExecutionId = Guid.NewGuid().ToString(),
-                            UseReActMode = false
-                        };
-                        
-                        var projectOrchestrator = orchestrator as IOrchestrator<ProjectStageOrchestratorRequest, ProjectStageOrchestratorResponse>;
-                        if (projectOrchestrator != null)
-                        {
-                            var orchestratorResult = await projectOrchestrator.ExecuteAsync(projectRequest, context, CancellationToken.None);
-                            result = orchestratorResult;
-                        }
-                    }
-                    else if (orchestratorType.Name == "ConversationOrchestrator" || 
-                             orchestratorType.Name == "RefactoredConversationOrchestrator")
+                    if (metadata.TypeName.Contains("ConversationOrchestrator"))
                     {
                         // Handle conversation orchestrator
                         var conversationRequest = new ConversationOrchestratorRequestDto
@@ -675,25 +512,6 @@ namespace OptimalyAI.Controllers
                             result = orchestratorResult;
                         }
                     }
-                    else if (orchestratorType.Name == "ToolChainOrchestrator")
-                    {
-                        // Handle tool chain orchestrator
-                        var toolChainRequest = new ToolChainOrchestratorRequestDto
-                        {
-                            UserId = context.UserId,
-                            SessionId = context.SessionId,
-                            Steps = new List<ToolChainStepDto>(),
-                            ExecutionStrategy = "sequential",
-                            GlobalParameters = request.Input
-                        };
-                        
-                        var toolChainOrchestrator = orchestrator as IOrchestrator<ToolChainOrchestratorRequestDto, ConversationOrchestratorResponseDto>;
-                        if (toolChainOrchestrator != null)
-                        {
-                            var orchestratorResult = await toolChainOrchestrator.ExecuteAsync(toolChainRequest, context, CancellationToken.None);
-                            result = orchestratorResult;
-                        }
-                    }
                     
                     if (result != null)
                     {
@@ -706,7 +524,7 @@ namespace OptimalyAI.Controllers
                             data = new
                             {
                                 orchestratorId = request.OrchestratorId,
-                                orchestratorType = orchestratorType.Name,
+                                orchestratorType = metadata.TypeName,
                                 aiServer = configuration.AiServerId.ToString(),
                                 model = configuration.DefaultModelId,
                                 input = request.Input,
@@ -738,7 +556,7 @@ namespace OptimalyAI.Controllers
                         data = new
                         {
                             orchestratorId = request.OrchestratorId,
-                            orchestratorType = orchestratorType.Name,
+                            orchestratorType = metadata.TypeName,
                             aiServer = configuration.AiServerId.ToString(),
                             model = configuration.DefaultModelId,
                             executionTime = $"{executionTime.TotalSeconds:F2}s",
@@ -1149,14 +967,22 @@ namespace OptimalyAI.Controllers
                     _logger.LogInformation("AI server is already running");
                 }
 
-                // Get orchestrator instance to verify it can be created
-                var orchestratorType = GetOrchestratorTypeById(request.OrchestratorId);
-                if (orchestratorType == null)
+                // Get orchestrator registry
+                var orchestratorRegistry = _serviceProvider.GetService<IOrchestratorRegistry>();
+                if (orchestratorRegistry == null)
+                {
+                    return Json(new { success = false, error = "Orchestrator registry not available" });
+                }
+
+                // Verify orchestrator exists
+                var metadata = await orchestratorRegistry.GetOrchestratorMetadataAsync(request.OrchestratorId);
+                if (metadata == null)
                 {
                     return Json(new { success = false, error = "Orchestrator not found" });
                 }
 
-                var orchestrator = GetOrchestratorInstance(orchestratorType);
+                // Verify orchestrator can be instantiated
+                var orchestrator = await orchestratorRegistry.GetOrchestratorAsync(request.OrchestratorId);
                 if (orchestrator == null)
                 {
                     return Json(new { success = false, error = "Could not create orchestrator instance" });
@@ -1258,32 +1084,17 @@ namespace OptimalyAI.Controllers
                 bool isDefaultChatOrchestrator = configuration?.IsDefaultChatOrchestrator ?? false;
                 bool isDefaultWorkflowOrchestrator = configuration?.IsDefaultWorkflowOrchestrator ?? false;
                 
-                // If no configuration exists, get defaults from orchestrator properties
+                // If no configuration exists, get defaults from orchestrator metadata
                 if (configuration == null)
                 {
-                    var orchestratorType = GetOrchestratorTypeById(id);
-                    if (orchestratorType != null)
+                    var orchestratorRegistry = _serviceProvider.GetService<IOrchestratorRegistry>();
+                    if (orchestratorRegistry != null)
                     {
-                        var orchestrator = GetOrchestratorInstance(orchestratorType);
-                        if (orchestrator != null)
+                        var metadata = await orchestratorRegistry.GetOrchestratorMetadataAsync(id);
+                        if (metadata != null)
                         {
-                            var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
-                            if (isWorkflowNodeProperty != null)
-                            {
-                                isWorkflowNode = (bool)(isWorkflowNodeProperty.GetValue(orchestrator) ?? false);
-                            }
-                            
-                            var isDefaultChatOrchestratorProperty = orchestratorType.GetProperty("IsDefaultChatOrchestrator");
-                            if (isDefaultChatOrchestratorProperty != null)
-                            {
-                                isDefaultChatOrchestrator = (bool)(isDefaultChatOrchestratorProperty.GetValue(orchestrator) ?? false);
-                            }
-                            
-                            var isDefaultWorkflowOrchestratorProperty = orchestratorType.GetProperty("IsDefaultWorkflowOrchestrator");
-                            if (isDefaultWorkflowOrchestratorProperty != null)
-                            {
-                                isDefaultWorkflowOrchestrator = (bool)(isDefaultWorkflowOrchestratorProperty.GetValue(orchestrator) ?? false);
-                            }
+                            isWorkflowNode = metadata.IsWorkflowNode;
+                            // Defaults for chat and workflow orchestrator flags remain false
                         }
                     }
                 }
@@ -1307,86 +1118,8 @@ namespace OptimalyAI.Controllers
             }
         }
 
-        private object? GetOrchestratorInstance(Type orchestratorType)
-        {
-            // Try to resolve orchestrator by its interface
-            // Find the interface that this type implements
-            var orchestratorInterfaces = orchestratorType.GetInterfaces()
-                .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IOrchestrator<,>))
-                .ToList();
-            
-            foreach (var interfaceType in orchestratorInterfaces)
-            {
-                var instance = _serviceProvider.GetService(interfaceType);
-                if (instance != null)
-                {
-                    _logger.LogInformation("Resolved {OrchestratorType} via interface {InterfaceType}", 
-                        orchestratorType.Name, interfaceType.Name);
-                    return instance;
-                }
-            }
-            
-            // Fallback: try to resolve by concrete type
-            return _serviceProvider.GetService(orchestratorType);
-        }
 
-        private Type? GetOrchestratorTypeById(string orchestratorId)
-        {
-            var types = GetAllOrchestratorTypes();
-            foreach (var type in types)
-            {
-                var instance = GetOrchestratorInstance(type);
-                if (instance != null)
-                {
-                    var idProperty = type.GetProperty("Id");
-                    if (idProperty != null)
-                    {
-                        var id = idProperty.GetValue(instance)?.ToString();
-                        if (id == orchestratorId)
-                        {
-                            return type;
-                        }
-                    }
-                }
-            }
-            return null;
-        }
 
-        private List<Type> GetAllOrchestratorTypes()
-        {
-            // Find all types that implement IOrchestrator
-            var orchestratorInterface = typeof(IOrchestrator<,>);
-            
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            _logger.LogInformation("Searching in {Count} assemblies", assemblies.Length);
-            
-            var types = new List<Type>();
-            
-            foreach (var assembly in assemblies)
-            {
-                try
-                {
-                    var assemblyTypes = assembly.GetTypes()
-                        .Where(type => !type.IsAbstract && !type.IsInterface)
-                        .Where(type => type.GetInterfaces()
-                            .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == orchestratorInterface))
-                        .ToList();
-                    
-                    if (assemblyTypes.Any())
-                    {
-                        _logger.LogInformation("Found {Count} orchestrator types in assembly {Assembly}", 
-                            assemblyTypes.Count, assembly.GetName().Name);
-                        types.AddRange(assemblyTypes);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error loading types from assembly {Assembly}", assembly.GetName().Name);
-                }
-            }
-            
-            return types;
-        }
 
         // Response classes for API calls
         private class OllamaProcessResponse

@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Mvc;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.DTOs;
 using OAI.Core.DTOs.Orchestration;
+using OAI.Core.DTOs.Discovery;
 using System.Text.Json;
+using OAI.ServiceLayer.Services.Orchestration.Base;
+using OAI.ServiceLayer.Services.Orchestration;
 
 namespace OptimalyAI.Controllers.Api
 {
@@ -10,18 +13,18 @@ namespace OptimalyAI.Controllers.Api
     [ApiController]
     public class OrchestratorsApiController : ControllerBase
     {
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IOrchestratorRegistry _orchestratorRegistry;
         private readonly IOrchestratorMetrics _metrics;
         private readonly ILogger<OrchestratorsApiController> _logger;
         private readonly IOrchestratorSettings _orchestratorSettings;
 
         public OrchestratorsApiController(
-            IServiceProvider serviceProvider,
+            IOrchestratorRegistry orchestratorRegistry,
             IOrchestratorMetrics metrics,
             ILogger<OrchestratorsApiController> logger,
             IOrchestratorSettings orchestratorSettings)
         {
-            _serviceProvider = serviceProvider;
+            _orchestratorRegistry = orchestratorRegistry;
             _metrics = metrics;
             _logger = logger;
             _orchestratorSettings = orchestratorSettings;
@@ -35,98 +38,35 @@ namespace OptimalyAI.Controllers.Api
         {
             try
             {
-                var orchestrators = new List<object>();
+                // Get all orchestrator metadata from registry
+                var allMetadata = await _orchestratorRegistry.GetAllOrchestratorMetadataAsync();
                 
-                // Manually add known orchestrators since they're registered by their interfaces
-                var knownOrchestrators = new List<(Type type, Type requestType, Type responseType)>
+                // Filter based on workflowOnly parameter
+                if (workflowOnly.HasValue && workflowOnly.Value)
                 {
-                    (typeof(OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator), 
-                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto),
-                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto)),
-                    
-                    (typeof(OAI.ServiceLayer.Services.Orchestration.Implementations.WebScrapingOrchestrator),
-                     typeof(OAI.Core.DTOs.Orchestration.WebScrapingOrchestratorRequestDto),
-                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto)),
-                    
-                    (typeof(OAI.ServiceLayer.Services.Orchestration.Implementations.ToolChainOrchestrator),
-                     typeof(OAI.Core.DTOs.Orchestration.ToolChainOrchestratorRequestDto),
-                     typeof(OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto)),
-                    
-                    (typeof(OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestrator),
-                     typeof(OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorRequest),
-                     typeof(OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorResponse)),
-                     
-                    (typeof(OAI.ServiceLayer.Services.Orchestration.WorkflowOrchestratorV2),
-                     typeof(OAI.Core.DTOs.Orchestration.WorkflowOrchestratorRequest),
-                     typeof(OAI.Core.DTOs.Orchestration.WorkflowOrchestratorResponse)),
-                     
-                    (typeof(OAI.ServiceLayer.Services.Orchestration.DiscoveryOrchestrator),
-                     typeof(OAI.Core.DTOs.Discovery.DiscoveryChatRequestDto),
-                     typeof(OAI.Core.DTOs.Discovery.DiscoveryResponseDto))
-                };
-
-                foreach (var (orchestratorType, requestType, responseType) in knownOrchestrators)
-                {
-                    try
-                    {
-                        // Get the service through the interface
-                        var interfaceType = typeof(IOrchestrator<,>).MakeGenericType(requestType, responseType);
-                        var orchestrator = _serviceProvider.GetService(interfaceType);
-                        
-                        if (orchestrator != null)
-                        {
-                            var idProperty = orchestratorType.GetProperty("Id");
-                            var nameProperty = orchestratorType.GetProperty("Name");
-                            var descriptionProperty = orchestratorType.GetProperty("Description");
-                            
-                            var orchestratorId = idProperty?.GetValue(orchestrator)?.ToString() ?? orchestratorType.Name;
-                            
-                            // Try to get OrchestratorSettingsService from DI to read saved settings
-                            var isWorkflowNode = false;
-                            
-                            // Get settings service as concrete type since GetOrchestratorConfigurationAsync is not in interface
-                            var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-                            if (settingsService != null)
-                            {
-                                var configuration = await settingsService.GetOrchestratorConfigurationAsync(orchestratorId);
-                                isWorkflowNode = configuration?.IsWorkflowNode ?? false;
-                                _logger.LogInformation("Orchestrator {Id} - IsWorkflowNode from settings: {IsWorkflowNode}", orchestratorId, isWorkflowNode);
-                            }
-                            else
-                            {
-                                // Fallback to property value if settings service not available
-                                var isWorkflowNodeProperty = orchestratorType.GetProperty("IsWorkflowNode");
-                                isWorkflowNode = (bool)(isWorkflowNodeProperty?.GetValue(orchestrator) ?? false);
-                                _logger.LogWarning("Settings service not available, using property value for {Id}: {IsWorkflowNode}", orchestratorId, isWorkflowNode);
-                            }
-                            
-                            // Filter based on workflowOnly parameter
-                            if (workflowOnly.HasValue && workflowOnly.Value && !isWorkflowNode)
-                            {
-                                continue;
-                            }
-
-                            orchestrators.Add(new
-                            {
-                                id = orchestratorId,
-                                name = nameProperty?.GetValue(orchestrator)?.ToString() ?? orchestratorType.Name,
-                                description = descriptionProperty?.GetValue(orchestrator)?.ToString() ?? "No description",
-                                type = orchestratorType.Name,
-                                isWorkflowNode = isWorkflowNode
-                            });
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Orchestrator {Type} not found in DI container", orchestratorType.Name);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to get orchestrator {Type}", orchestratorType.Name);
-                    }
+                    allMetadata = allMetadata.Where(m => m.IsWorkflowNode).ToList();
                 }
 
-                return Ok(new ApiResponse<List<object>>
+                // Transform to response format
+                var orchestrators = allMetadata.Select(metadata => new
+                {
+                    id = metadata.Id,
+                    name = metadata.Name,
+                    description = metadata.Description,
+                    type = metadata.TypeName,
+                    isWorkflowNode = metadata.IsWorkflowNode,
+                    isEnabled = metadata.IsEnabled,
+                    tags = metadata.Tags,
+                    healthStatus = metadata.HealthStatus,
+                    capabilities = new
+                    {
+                        supportsReActPattern = metadata.SupportsReActPattern,
+                        supportsToolCalling = metadata.SupportsToolCalling,
+                        supportsMultiModal = metadata.SupportsMultiModal
+                    }
+                }).ToList();
+
+                return Ok(new ApiResponse<object>
                 {
                     Success = true,
                     Data = orchestrators,
@@ -140,6 +80,64 @@ namespace OptimalyAI.Controllers.Api
                 {
                     Success = false,
                     Message = "Failed to retrieve orchestrators"
+                });
+            }
+        }
+
+        /// <summary>
+        /// Get specific orchestrator by ID
+        /// </summary>
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetOrchestrator(string id)
+        {
+            try
+            {
+                var metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync(id);
+                if (metadata == null)
+                {
+                    return NotFound(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = $"Orchestrator with ID '{id}' not found"
+                    });
+                }
+
+                // Get metrics for this orchestrator
+                var metrics = await _metrics.GetOrchestratorSummaryAsync(id);
+
+                var response = new
+                {
+                    id = metadata.Id,
+                    name = metadata.Name,
+                    description = metadata.Description,
+                    type = metadata.TypeName,
+                    isWorkflowNode = metadata.IsWorkflowNode,
+                    isEnabled = metadata.IsEnabled,
+                    tags = metadata.Tags,
+                    healthStatus = metadata.HealthStatus,
+                    capabilities = new
+                    {
+                        supportsReActPattern = metadata.SupportsReActPattern,
+                        supportsToolCalling = metadata.SupportsToolCalling,
+                        supportsMultiModal = metadata.SupportsMultiModal
+                    },
+                    metrics = metrics
+                };
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Data = response,
+                    Message = "Orchestrator retrieved successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get orchestrator {OrchestratorId}", id);
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to retrieve orchestrator"
                 });
             }
         }
@@ -170,17 +168,9 @@ namespace OptimalyAI.Controllers.Api
         {
             try
             {
-                // Find orchestrator by ID
-                var orchestratorType = GetAllOrchestratorTypes()
-                    .FirstOrDefault(t => 
-                    {
-                        var instance = _serviceProvider.GetService(t);
-                        if (instance == null) return false;
-                        var idProp = t.GetProperty("Id");
-                        return idProp?.GetValue(instance)?.ToString() == id;
-                    });
-
-                if (orchestratorType == null)
+                // Get orchestrator from registry
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync(id);
+                if (orchestrator == null)
                 {
                     return NotFound(new ApiResponse<object>
                     {
@@ -189,22 +179,40 @@ namespace OptimalyAI.Controllers.Api
                     });
                 }
 
-                var orchestrator = _serviceProvider.GetService(orchestratorType);
-                if (orchestrator == null)
-                {
-                    return StatusCode(500, new ApiResponse<object>
-                    {
-                        Success = false,
-                        Message = "Failed to resolve orchestrator instance"
-                    });
-                }
-
                 // Record execution start
                 var startTime = DateTime.UtcNow;
+                var executionId = Guid.NewGuid().ToString();
 
                 try
                 {
-                    // Execute orchestrator dynamically
+                    // Create appropriate request object based on orchestrator ID
+                    object? requestObject = CreateRequestObject(id, request);
+                    if (requestObject == null)
+                    {
+                        return BadRequest(new ApiResponse<object>
+                        {
+                            Success = false,
+                            Message = "Unable to create request object for this orchestrator"
+                        });
+                    }
+
+                    // Create context
+                    var context = new OrchestratorContext(
+                        userId: User.Identity?.Name ?? "api-user",
+                        sessionId: Guid.NewGuid().ToString()
+                    );
+
+                    // Add context variables if provided
+                    if (request.Context != null)
+                    {
+                        foreach (var kvp in request.Context)
+                        {
+                            context.Variables[kvp.Key] = kvp.Value?.ToString() ?? string.Empty;
+                        }
+                    }
+
+                    // Execute orchestrator using reflection since we don't know the exact types
+                    var orchestratorType = orchestrator.GetType();
                     var executeMethod = orchestratorType.GetMethod("ExecuteAsync");
                     if (executeMethod == null)
                     {
@@ -215,44 +223,7 @@ namespace OptimalyAI.Controllers.Api
                         });
                     }
 
-                    // Create request object directly based on orchestrator type
-                    object? requestObject = null;
-                    
-                    if (orchestratorType.Name.Contains("Conversation"))
-                    {
-                        requestObject = new ConversationOrchestratorRequestDto
-                        {
-                            SessionId = Guid.NewGuid().ToString(),
-                            UserId = "test-user",
-                            Message = request.Input?.ToString() ?? string.Empty
-                        };
-                    }
-                    else if (orchestratorType.Name.Contains("ToolChain"))
-                    {
-                        requestObject = new ToolChainOrchestratorRequestDto
-                        {
-                            SessionId = Guid.NewGuid().ToString(),
-                            UserId = "test-user",
-                            Steps = new List<ToolChainStepDto>()
-                        };
-                    }
-                    else if (orchestratorType.Name.Contains("WebScraping"))
-                    {
-                        requestObject = new WebScrapingOrchestratorRequestDto
-                        {
-                            SessionId = Guid.NewGuid().ToString(),
-                            UserId = "test-user",
-                            Url = request.Input?.ToString() ?? string.Empty
-                        };
-                    }
-                    else
-                    {
-                        // Generic request
-                        requestObject = request.Input ?? new { };
-                    }
-
-                    // Execute
-                    var task = executeMethod.Invoke(orchestrator, new[] { requestObject }) as Task;
+                    var task = executeMethod.Invoke(orchestrator, new[] { requestObject, context, CancellationToken.None }) as Task;
                     if (task == null)
                     {
                         return StatusCode(500, new ApiResponse<object>
@@ -268,10 +239,43 @@ namespace OptimalyAI.Controllers.Api
                     var resultProperty = task.GetType().GetProperty("Result");
                     var result = resultProperty?.GetValue(task);
 
-                    // Record metrics
-                    var duration = DateTime.UtcNow - startTime;
-                    var executionId = Guid.NewGuid().ToString();
-                    await _metrics.RecordExecutionCompleteAsync(id, executionId, true, duration);
+                    // Check if result is IOrchestratorResult
+                    var isSuccessProperty = result?.GetType().GetProperty("IsSuccess");
+                    var dataProperty = result?.GetType().GetProperty("Data");
+                    var errorProperty = result?.GetType().GetProperty("Error");
+
+                    if (isSuccessProperty != null && dataProperty != null)
+                    {
+                        var isSuccess = (bool)isSuccessProperty.GetValue(result)!;
+                        var data = dataProperty.GetValue(result);
+                        
+                        // Record metrics
+                        var duration = DateTime.UtcNow - startTime;
+                        await _metrics.RecordExecutionCompleteAsync(id, executionId, isSuccess, duration);
+
+                        if (isSuccess)
+                        {
+                            return Ok(new ApiResponse<object>
+                            {
+                                Success = true,
+                                Data = data,
+                                Message = "Orchestrator executed successfully"
+                            });
+                        }
+                        else
+                        {
+                            var error = errorProperty?.GetValue(result)?.ToString() ?? "Unknown error";
+                            return BadRequest(new ApiResponse<object>
+                            {
+                                Success = false,
+                                Message = $"Orchestrator execution failed: {error}"
+                            });
+                        }
+                    }
+
+                    // Fallback for direct response
+                    var duration2 = DateTime.UtcNow - startTime;
+                    await _metrics.RecordExecutionCompleteAsync(id, executionId, true, duration2);
 
                     return Ok(new ApiResponse<object>
                     {
@@ -284,7 +288,6 @@ namespace OptimalyAI.Controllers.Api
                 {
                     // Record failure metrics
                     var duration = DateTime.UtcNow - startTime;
-                    var executionId = Guid.NewGuid().ToString();
                     await _metrics.RecordExecutionCompleteAsync(id, executionId, false, duration);
 
                     _logger.LogError(ex, "Failed to execute orchestrator {OrchestratorId}", id);
@@ -313,25 +316,63 @@ namespace OptimalyAI.Controllers.Api
         [HttpGet("{id}/config")]
         public async Task<IActionResult> GetConfig(string id)
         {
-            // TODO: Implement configuration retrieval
-            var config = new
+            try
             {
-                maxConcurrentExecutions = 5,
-                timeout = 30000,
-                retryPolicy = new
+                // Check if orchestrator exists
+                if (!await _orchestratorRegistry.IsRegisteredAsync(id))
                 {
-                    maxRetries = 3,
-                    retryDelay = 1000
-                },
-                enableLogging = true,
-                logLevel = "Information"
-            };
+                    return NotFound(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = $"Orchestrator with ID '{id}' not found"
+                    });
+                }
 
-            return Ok(new ApiResponse<object>
+                // Get configuration from settings service
+                var settingsService = _orchestratorSettings as OrchestratorSettingsService;
+                if (settingsService != null)
+                {
+                    var configuration = await settingsService.GetOrchestratorConfigurationAsync(id);
+                    if (configuration != null)
+                    {
+                        return Ok(new ApiResponse<object>
+                        {
+                            Success = true,
+                            Data = configuration
+                        });
+                    }
+                }
+
+                // Return default configuration
+                var config = new
+                {
+                    orchestratorId = id,
+                    maxConcurrentExecutions = 5,
+                    timeout = 30000,
+                    retryPolicy = new
+                    {
+                        maxRetries = 3,
+                        retryDelay = 1000
+                    },
+                    enableLogging = true,
+                    logLevel = "Information"
+                };
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Data = config
+                });
+            }
+            catch (Exception ex)
             {
-                Success = true,
-                Data = config
-            });
+                _logger.LogError(ex, "Failed to get configuration for orchestrator {OrchestratorId}", id);
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to retrieve configuration"
+                });
+            }
         }
 
         /// <summary>
@@ -340,33 +381,105 @@ namespace OptimalyAI.Controllers.Api
         [HttpPut("{id}/config")]
         public async Task<IActionResult> UpdateConfig(string id, [FromBody] JsonDocument config)
         {
-            // TODO: Implement configuration update
-            return Ok(new ApiResponse<object>
+            try
             {
-                Success = true,
-                Message = "Configuration updated successfully"
-            });
+                // Check if orchestrator exists
+                if (!await _orchestratorRegistry.IsRegisteredAsync(id))
+                {
+                    return NotFound(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = $"Orchestrator with ID '{id}' not found"
+                    });
+                }
+
+                // TODO: Implement configuration update through settings service
+                _logger.LogInformation("Configuration update requested for orchestrator {OrchestratorId}", id);
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "Configuration updated successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update configuration for orchestrator {OrchestratorId}", id);
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to update configuration"
+                });
+            }
         }
 
-        private List<Type> GetAllOrchestratorTypes()
+        /// <summary>
+        /// Get orchestrator health status
+        /// </summary>
+        [HttpGet("{id}/health")]
+        public async Task<IActionResult> GetHealth(string id)
         {
-            var orchestratorInterface = typeof(IOrchestrator<,>);
-            
-            var types = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic && a.FullName != null && 
-                           (a.FullName.StartsWith("OAI") || a.FullName.StartsWith("OptimalyAI")))
-                .SelectMany(a => 
+            try
+            {
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync(id);
+                if (orchestrator == null)
                 {
-                    try { return a.GetExportedTypes(); }
-                    catch { return Array.Empty<Type>(); }
-                })
-                .Where(t => t.IsClass && !t.IsAbstract && 
-                           t.GetInterfaces().Any(i => 
-                               i.IsGenericType && 
-                               i.GetGenericTypeDefinition() == orchestratorInterface))
-                .ToList();
+                    return NotFound(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = $"Orchestrator with ID '{id}' not found"
+                    });
+                }
 
-            return types;
+                var health = await orchestrator.GetHealthStatusAsync();
+                var metrics = await _metrics.GetOrchestratorSummaryAsync(id);
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Data = new
+                    {
+                        status = health.State.ToString(),
+                        details = health.Details,
+                        lastChecked = health.LastChecked,
+                        metrics = metrics
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get health status for orchestrator {OrchestratorId}", id);
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to retrieve health status"
+                });
+            }
+        }
+
+        private object? CreateRequestObject(string orchestratorId, OrchestratorExecuteRequest request)
+        {
+            return orchestratorId switch
+            {
+                "refactored_conversation_orchestrator" => new ConversationOrchestratorRequestDto
+                {
+                    SessionId = Guid.NewGuid().ToString(),
+                    UserId = User.Identity?.Name ?? "api-user",
+                    Message = request.Input?.ToString() ?? string.Empty
+                },
+                "workflow_orchestrator_v2" => new WorkflowOrchestratorRequest
+                {
+                    WorkflowId = Guid.Parse(request.Input?.ToString() ?? Guid.Empty.ToString()),
+                    InitialParameters = request.Context ?? new Dictionary<string, object>()
+                },
+                "discovery_orchestrator" => new DiscoveryChatRequestDto
+                {
+                    Message = request.Input?.ToString() ?? string.Empty,
+                    ProjectId = Guid.Empty,
+                    SessionId = Guid.NewGuid().ToString()
+                },
+                _ => request.Input
+            };
         }
     }
 

@@ -393,24 +393,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ConversationContextManager>();
         
         // Register refactored conversation orchestrator
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>();
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
             OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>());
             
-        // Register tool chain orchestrator
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.ToolChainOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
-            OAI.ServiceLayer.Services.Orchestration.Implementations.ToolChainOrchestrator>();
-            
-        // Register project stage orchestrator
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorRequest, OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestratorResponse>, 
-            OAI.ServiceLayer.Services.Orchestration.ProjectStageOrchestrator>();
-            
-        // Register web scraping orchestrator with HttpClient
-        services.AddHttpClient<OAI.ServiceLayer.Services.Orchestration.Implementations.WebScrapingOrchestrator>(client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.WebScrapingOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
-            OAI.ServiceLayer.Services.Orchestration.Implementations.WebScrapingOrchestrator>();
         
         // Register conversation manager interface for orchestrator
         services.AddScoped<OAI.Core.Interfaces.AI.IConversationManager, OAI.ServiceLayer.Services.AI.ConversationManagerService>();
@@ -441,8 +429,11 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<OAI.ServiceLayer.Services.AI.LMStudioService>());
             
         // Register Workflow Orchestrator V2
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.WorkflowOrchestratorV2>();
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.WorkflowOrchestratorRequest, OAI.Core.DTOs.Orchestration.WorkflowOrchestratorResponse>, 
             OAI.ServiceLayer.Services.Orchestration.WorkflowOrchestratorV2>();
+        services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator>(provider => 
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.WorkflowOrchestratorV2>());
         
         // Register Tool services needed for orchestrators
         services.TryAddSingleton<OAI.Core.Interfaces.Tools.IToolRegistry, OAI.ServiceLayer.Services.Tools.ToolRegistryService>();
@@ -461,6 +452,7 @@ public static class ServiceCollectionExtensions
         
         // Register concrete tool implementations
         services.TryAddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.SimpleWebSearchTool>();
+        
         
         // Register ReAct services
         services.AddReActServices(configuration);

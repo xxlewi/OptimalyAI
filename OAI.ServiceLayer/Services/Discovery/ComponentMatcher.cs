@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using OAI.Core.DTOs.Orchestration;
 using OAI.Core.Interfaces.Discovery;
 using OAI.Core.Interfaces.Tools;
 using OAI.Core.Interfaces.Adapters;
@@ -146,9 +147,9 @@ namespace OAI.ServiceLayer.Services.Discovery
             CancellationToken cancellationToken)
         {
             var matches = new List<ComponentMatch>();
-            var orchestrators = await _orchestratorRegistry.GetAllOrchestratorsAsync();
+            var orchestratorMetadata = await _orchestratorRegistry.GetAllOrchestratorMetadataAsync();
 
-            foreach (var orchestrator in orchestrators.Where(o => o.IsEnabled && o.IsWorkflowNode))
+            foreach (var orchestrator in orchestratorMetadata.Where(o => o.IsEnabled && o.IsWorkflowNode))
             {
                 var confidence = CalculateOrchestratorConfidence(orchestrator, intent);
                 if (confidence > 0.3)
@@ -268,7 +269,7 @@ namespace OAI.ServiceLayer.Services.Discovery
             return confidence;
         }
 
-        private double CalculateOrchestratorConfidence(IOrchestrator orchestrator, WorkflowIntent intent)
+        private double CalculateOrchestratorConfidence(OrchestratorMetadataDto orchestrator, WorkflowIntent intent)
         {
             double confidence = 0.0;
 
@@ -372,7 +373,7 @@ namespace OAI.ServiceLayer.Services.Discovery
             return $"Tool matches intent requirements";
         }
 
-        private string GenerateOrchestratorReason(IOrchestrator orchestrator, WorkflowIntent intent)
+        private string GenerateOrchestratorReason(OrchestratorMetadataDto orchestrator, WorkflowIntent intent)
         {
             if (orchestrator.Id == "workflow_orchestrator")
             {

@@ -19,18 +19,18 @@ namespace OptimalyAI.Controllers
     public class WorkflowDiscoveryController : ControllerBase
     {
         private readonly ILogger<WorkflowDiscoveryController> _logger;
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IOrchestratorRegistry _orchestratorRegistry;
         private readonly IOrchestratorMetrics _metrics;
         private readonly IStepTestExecutor _stepTestExecutor;
 
         public WorkflowDiscoveryController(
             ILogger<WorkflowDiscoveryController> logger,
-            IServiceProvider serviceProvider,
+            IOrchestratorRegistry orchestratorRegistry,
             IOrchestratorMetrics metrics,
             IStepTestExecutor stepTestExecutor)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _orchestratorRegistry = orchestratorRegistry ?? throw new ArgumentNullException(nameof(orchestratorRegistry));
             _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
             _stepTestExecutor = stepTestExecutor ?? throw new ArgumentNullException(nameof(stepTestExecutor));
         }
@@ -50,12 +50,20 @@ namespace OptimalyAI.Controllers
             {
                 _logger.LogInformation("Workflow discovery request received: {Message}", request.Message);
 
-                // Get the Discovery Orchestrator
-                var orchestrator = _serviceProvider.GetService(typeof(DiscoveryOrchestrator)) as DiscoveryOrchestrator;
+                // Get the Discovery Orchestrator from registry
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("discovery_orchestrator");
                 if (orchestrator == null)
                 {
-                    _logger.LogError("Discovery Orchestrator not found in service provider");
+                    _logger.LogError("Discovery Orchestrator not found in registry");
                     return StatusCode(500, "Discovery Orchestrator service not available");
+                }
+
+                // Cast to the specific orchestrator type
+                var discoveryOrchestrator = orchestrator as IOrchestrator<DiscoveryChatRequestDto, DiscoveryResponseDto>;
+                if (discoveryOrchestrator == null)
+                {
+                    _logger.LogError("Discovery Orchestrator is not of the expected type");
+                    return StatusCode(500, "Discovery Orchestrator type mismatch");
                 }
 
                 // Create context for orchestrator execution
@@ -71,7 +79,7 @@ namespace OptimalyAI.Controllers
                 }
 
                 // Execute the orchestrator
-                var result = await orchestrator.ExecuteAsync(request, context, cancellationToken);
+                var result = await discoveryOrchestrator.ExecuteAsync(request, context, cancellationToken);
 
                 if (result.IsSuccess)
                 {
@@ -99,27 +107,54 @@ namespace OptimalyAI.Controllers
         {
             try
             {
-                var orchestrator = _serviceProvider.GetService(typeof(DiscoveryOrchestrator)) as DiscoveryOrchestrator;
-                if (orchestrator == null)
+                var metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync("discovery_orchestrator");
+                if (metadata == null)
                 {
                     return Ok(new { available = false, message = "Discovery Orchestrator not registered" });
                 }
 
-                var health = await orchestrator.GetHealthStatusAsync();
-                var capabilities = orchestrator.GetCapabilities();
-                var metrics = await _metrics.GetOrchestratorSummaryAsync(orchestrator.Id);
-
-                return Ok(new
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("discovery_orchestrator");
+                if (orchestrator != null)
                 {
-                    available = true,
-                    orchestratorId = orchestrator.Id,
-                    name = orchestrator.Name,
-                    description = orchestrator.Description,
-                    health = health,
-                    capabilities = capabilities,
-                    metrics = metrics,
-                    isWorkflowNode = orchestrator.IsWorkflowNode
-                });
+                    var health = await orchestrator.GetHealthStatusAsync();
+                    var capabilities = orchestrator.GetCapabilities();
+                    var metrics = await _metrics.GetOrchestratorSummaryAsync(orchestrator.Id);
+
+                    return Ok(new
+                    {
+                        available = true,
+                        orchestratorId = metadata.Id,
+                        name = metadata.Name,
+                        description = metadata.Description,
+                        health = health,
+                        capabilities = capabilities,
+                        metrics = metrics,
+                        isWorkflowNode = metadata.IsWorkflowNode,
+                        tags = metadata.Tags,
+                        isEnabled = metadata.IsEnabled
+                    });
+                }
+                else
+                {
+                    // Return metadata only if instance not available
+                    return Ok(new
+                    {
+                        available = true,
+                        orchestratorId = metadata.Id,
+                        name = metadata.Name,
+                        description = metadata.Description,
+                        health = new { status = "Unknown" },
+                        capabilities = new
+                        {
+                            supportsReActPattern = metadata.SupportsReActPattern,
+                            supportsToolCalling = metadata.SupportsToolCalling,
+                            supportsMultiModal = metadata.SupportsMultiModal
+                        },
+                        isWorkflowNode = metadata.IsWorkflowNode,
+                        tags = metadata.Tags,
+                        isEnabled = metadata.IsEnabled
+                    });
+                }
             }
             catch (Exception ex)
             {

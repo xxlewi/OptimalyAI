@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OAI.Core.Attributes;
 using OAI.Core.DTOs.Discovery;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.DTOs.Workflow;
@@ -22,17 +24,36 @@ namespace OAI.ServiceLayer.Services.Orchestration
     /// Discovery Orchestrator - AI-powered workflow builder from natural language
     /// Registered as a proper orchestrator with AI server/model selection
     /// </summary>
+    [OrchestratorMetadata(
+        id: "discovery_orchestrator",
+        name: "Discovery Orchestrator",
+        description: "AI-powered workflow builder from natural language. Helps users create workflows by understanding their intent and suggesting appropriate tools, adapters, and orchestrators.",
+        IsWorkflowNode = true,
+        Tags = new[] { "ai", "workflow", "discovery", "builder" },
+        RequestTypeName = "OAI.Core.DTOs.Discovery.DiscoveryChatRequestDto",
+        ResponseTypeName = "OAI.Core.DTOs.Discovery.DiscoveryResponseDto"
+    )]
     public class DiscoveryOrchestrator : BaseOrchestrator<DiscoveryChatRequestDto, DiscoveryResponseDto>
     {
         private readonly IToolRegistry _toolRegistry;
         private readonly IAdapterRegistry _adapterRegistry;
-        private readonly IOrchestratorRegistry _orchestratorRegistry;
         private readonly IIntentAnalyzer _intentAnalyzer;
         private readonly IComponentMatcher _componentMatcher;
         private readonly IWorkflowBuilder _workflowBuilder;
         private readonly IOrchestratorConfigurationService _configService;
         private readonly IAiServerService _aiServerService;
         private readonly new ILogger<DiscoveryOrchestrator> _logger;
+
+        // Static capabilities for metadata-based discovery
+        public static OrchestratorCapabilities StaticCapabilities { get; } = new OrchestratorCapabilities
+        {
+            SupportsReActPattern = true,
+            SupportsToolCalling = true,
+            SupportsMultiModal = false,
+            MaxIterations = 10,
+            SupportedInputTypes = new[] { "text" },
+            SupportedOutputTypes = new[] { "workflow", "json" }
+        };
 
         public override string Id => "discovery_orchestrator";
         public override string Name => "Discovery Orchestrator";
@@ -42,26 +63,38 @@ namespace OAI.ServiceLayer.Services.Orchestration
         public DiscoveryOrchestrator(
             IToolRegistry toolRegistry,
             IAdapterRegistry adapterRegistry,
-            IOrchestratorRegistry orchestratorRegistry,
+            IServiceProvider serviceProvider,
             IIntentAnalyzer intentAnalyzer,
             IComponentMatcher componentMatcher,
             IWorkflowBuilder workflowBuilder,
             IOrchestratorConfigurationService configService,
             IAiServerService aiServerService,
             ILogger<DiscoveryOrchestrator> logger,
-            IOrchestratorMetrics metrics,
-            IServiceProvider serviceProvider)
+            IOrchestratorMetrics metrics)
             : base(logger, metrics, serviceProvider)
         {
             _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
             _adapterRegistry = adapterRegistry ?? throw new ArgumentNullException(nameof(adapterRegistry));
-            _orchestratorRegistry = orchestratorRegistry ?? throw new ArgumentNullException(nameof(orchestratorRegistry));
             _intentAnalyzer = intentAnalyzer ?? throw new ArgumentNullException(nameof(intentAnalyzer));
             _componentMatcher = componentMatcher ?? throw new ArgumentNullException(nameof(componentMatcher));
             _workflowBuilder = workflowBuilder ?? throw new ArgumentNullException(nameof(workflowBuilder));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
             _aiServerService = aiServerService ?? throw new ArgumentNullException(nameof(aiServerService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        // Lazy-loaded to avoid circular dependency
+        private IOrchestratorRegistry? GetOrchestratorRegistry()
+        {
+            try
+            {
+                return _serviceProvider.GetService<IOrchestratorRegistry>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not get IOrchestratorRegistry service");
+                return null;
+            }
         }
 
         protected override async Task<DiscoveryResponseDto> ExecuteCoreAsync(

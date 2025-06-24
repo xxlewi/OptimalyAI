@@ -36,7 +36,7 @@ namespace OAI.ServiceLayer.Services.Business
         private readonly ILogger<RequestExecutionService> _logger;
         private readonly IRequestService _requestService;
         private readonly IWorkflowTemplateService _workflowService;
-        private readonly IOrchestrator<ToolChainOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
+        private readonly IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> _orchestrator;
         private readonly DbContext _dbContext;
 
         public RequestExecutionService(
@@ -47,7 +47,7 @@ namespace OAI.ServiceLayer.Services.Business
             ILogger<RequestExecutionService> logger,
             IRequestService requestService,
             IWorkflowTemplateService workflowService,
-            IOrchestrator<ToolChainOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator,
+            IOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto> orchestrator,
             DbContext dbContext) 
             : base(repository, unitOfWork)
         {
@@ -159,49 +159,21 @@ namespace OAI.ServiceLayer.Services.Business
             }
         }
 
-        private ToolChainOrchestratorRequestDto BuildOrchestratorRequest(WorkflowTemplateDto workflow)
+        private ConversationOrchestratorRequestDto BuildOrchestratorRequest(WorkflowTemplateDto workflow)
         {
-            // Parse workflow configuration JSON
-            var config = string.IsNullOrEmpty(workflow.Configuration) 
-                ? new Dictionary<string, object>()
-                : JsonSerializer.Deserialize<Dictionary<string, object>>(workflow.Configuration) ?? new Dictionary<string, object>();
-            
-            // Build tool chain from workflow steps
-            var steps = new List<ToolChainStepDto>();
-            
-            foreach (var step in workflow.Steps.OrderBy(s => s.Order))
+            // Convert workflow to conversation request
+            var message = $"Execute workflow: {workflow.Name}";
+            if (!string.IsNullOrEmpty(workflow.Description))
             {
-                var toolChainStep = new ToolChainStepDto
-                {
-                    StepId = $"step_{step.Id}",
-                    ToolId = step.ExecutorId,
-                    Parameters = string.IsNullOrEmpty(step.InputMapping) 
-                        ? new Dictionary<string, object>()
-                        : JsonSerializer.Deserialize<Dictionary<string, object>>(step.InputMapping) ?? new Dictionary<string, object>(),
-                    IsRequired = !step.ContinueOnError
-                };
-
-                if (step.MaxRetries > 1)
-                {
-                    toolChainStep.RetryConfig = new RetryConfigDto
-                    {
-                        MaxAttempts = step.MaxRetries ?? 1,
-                        DelaySeconds = 1,
-                        ExponentialBackoff = true
-                    };
-                }
-
-                steps.Add(toolChainStep);
+                message += $"\nDescription: {workflow.Description}";
             }
-
-            return new ToolChainOrchestratorRequestDto
+            
+            return new ConversationOrchestratorRequestDto
             {
-                Steps = steps,
-                ExecutionStrategy = config.ContainsKey("executionStrategy") 
-                    ? config["executionStrategy"]?.ToString() ?? "sequential" 
-                    : "sequential",
-                StopOnError = true,
-                TimeoutSeconds = workflow.Steps.Sum(s => s.TimeoutSeconds ?? 30)
+                Message = message,
+                EnableTools = true,
+                ModelId = "llama3.2:3b",
+                ConversationId = Guid.NewGuid().ToString()
             };
         }
 

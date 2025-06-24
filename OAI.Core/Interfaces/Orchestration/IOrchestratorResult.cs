@@ -189,5 +189,13 @@ namespace OAI.Core.Interfaces.Orchestration
         public IList<string> SupportedToolCategories { get; set; }
         public IList<string> SupportedModels { get; set; }
         public IDictionary<string, object> CustomCapabilities { get; set; }
+        
+        // ReAct and AI capabilities
+        public bool SupportsReActPattern { get; set; }
+        public bool SupportsToolCalling { get; set; }
+        public bool SupportsMultiModal { get; set; }
+        public int MaxIterations { get; set; }
+        public string[] SupportedInputTypes { get; set; }
+        public string[] SupportedOutputTypes { get; set; }
     }
 }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OAI.Core.Attributes;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.Orchestration;
@@ -46,6 +47,16 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
     /// <summary>
     /// Refactored orchestrator that manages conversations between AI models and tools
     /// </summary>
+    [OrchestratorMetadata(
+        id: "refactored_conversation_orchestrator",
+        name: "Conversation Orchestrator",
+        description: "Orchestrates conversations between AI models and tools",
+        IsWorkflowNode = false,
+        IsEnabledByDefault = true,
+        Tags = new[] { "conversation", "ai", "chat", "tools" },
+        RequestTypeName = "OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto",
+        ResponseTypeName = "OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto"
+    )]
     public class RefactoredConversationOrchestrator : BaseOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto>
     {
         // Core services
@@ -63,6 +74,17 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         // Configuration
         private readonly ConversationOrchestratorOptions _options;
         private readonly OAI.ServiceLayer.Services.AI.IAiModelService _aiModelService;
+
+        // Static capabilities for metadata-based discovery
+        public static OrchestratorCapabilities StaticCapabilities { get; } = new OrchestratorCapabilities
+        {
+            SupportsReActPattern = true,
+            SupportsToolCalling = true,
+            SupportsMultiModal = false,
+            MaxIterations = 10,
+            SupportedInputTypes = new[] { "text", "conversation" },
+            SupportedOutputTypes = new[] { "text", "json" }
+        };
 
         public override string Id => "refactored_conversation_orchestrator";
         public override string Name => "Conversation Orchestrator";
