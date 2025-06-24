@@ -508,11 +508,11 @@
         // Application context
         const appContext = {
             id: '@Model.Id',
-            name: '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Name))',
-            projectPath: '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ProjectPath))',
+            name: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Name)),
+            projectPath: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ProjectPath)),
             language: '@Model.ProgrammingLanguage',
             framework: '@Model.Framework',
-            description: '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Description ?? ""))'
+            description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Description ?? ""))
         };
         
         // No SignalR needed - using direct API calls
