@@ -458,6 +458,88 @@ namespace OptimalyAI.Controllers.Api
         }
 
         /// <summary>
+        /// Get AI server status for coding orchestrator
+        /// </summary>
+        [HttpGet("coding/status")]
+        public async Task<IActionResult> GetCodingOrchestratorStatus()
+        {
+            try
+            {
+                // Get orchestrator health
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("coding_orchestrator");
+                if (orchestrator == null)
+                {
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Data = new
+                        {
+                            orchestratorAvailable = false,
+                            aiServerStatus = "unknown",
+                            modelStatus = "unknown",
+                            message = "CodingOrchestrator not found"
+                        }
+                    });
+                }
+
+                var health = await orchestrator.GetHealthStatusAsync();
+                
+                // Try to get AI server status
+                var aiServerStatus = "unknown";
+                var modelStatus = "unknown";
+                var availableModels = new List<string>();
+                
+                try
+                {
+                    // Check if we can access AI service
+                    var settingsService = _orchestratorSettings as OrchestratorSettingsService;
+                    if (settingsService != null)
+                    {
+                        var config = await settingsService.GetOrchestratorConfigurationAsync("coding_orchestrator");
+                        if (config != null && config.AiServerId.HasValue)
+                        {
+                            // TODO: Get AI server status from AiServerService
+                            aiServerStatus = "checking";
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to check AI server status");
+                }
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Data = new
+                    {
+                        orchestratorAvailable = true,
+                        orchestratorHealth = health.State.ToString(),
+                        aiServerStatus = aiServerStatus,
+                        modelStatus = modelStatus,
+                        availableModels = availableModels,
+                        lastChecked = DateTime.UtcNow
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get coding orchestrator status");
+                return Ok(new ApiResponse<object>
+                {
+                    Success = false,
+                    Data = new
+                    {
+                        orchestratorAvailable = false,
+                        aiServerStatus = "error",
+                        modelStatus = "error",
+                        message = ex.Message
+                    }
+                });
+            }
+        }
+
+        /// <summary>
         /// Process a coding request using the CodingOrchestrator
         /// </summary>
         [HttpPost("coding/process")]

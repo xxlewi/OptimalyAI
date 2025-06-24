@@ -88,6 +88,14 @@
             font-size: 1.1rem;
         }
         
+        .gap-2 {
+            gap: 0.5rem;
+        }
+        
+        .ms-1 {
+            margin-left: 0.25rem;
+        }
+        
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -446,9 +454,15 @@
             <div class="app-chat-panel">
                 <div class="chat-header">
                     <h4><i class="fas fa-comments mr-2"></i>AI Asistent pro vývoj</h4>
-                    <button class="btn btn-sm btn-light" onclick="clearChat()" title="Vymazat konverzaci">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <div id="aiStatusIndicator" class="d-flex align-items-center" title="Stav AI serveru">
+                            <i class="fas fa-circle text-secondary" id="statusIcon" style="font-size: 0.8rem;"></i>
+                            <span class="ms-1 small text-white" id="statusText">Kontroluji...</span>
+                        </div>
+                        <button class="btn btn-sm btn-light" onclick="clearChat()" title="Vymazat konverzaci">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="chat-messages" id="chatMessages">
@@ -525,6 +539,13 @@
             const message = input.value.trim();
             
             if (!message) return;
+            
+            // Check if AI is available before sending
+            const statusIcon = document.getElementById('statusIcon');
+            if (statusIcon.classList.contains('text-danger')) {
+                toastr.warning('AI server není dostupný. Zkuste to prosím později.');
+                return;
+            }
             
             // Add user message
             appendMessage(message, 'user');
@@ -751,9 +772,49 @@ Uživatelský dotaz: ${message}`;
             });
         });
         
+        // Check AI server status
+        async function checkAIStatus() {
+            try {
+                const response = await fetch('/api/orchestrators/coding/status');
+                const result = await response.json();
+                
+                const statusIcon = document.getElementById('statusIcon');
+                const statusText = document.getElementById('statusText');
+                
+                if (result.success && result.data) {
+                    const data = result.data;
+                    
+                    if (!data.orchestratorAvailable) {
+                        statusIcon.className = 'fas fa-circle text-danger';
+                        statusText.textContent = 'Orchestrátor nedostupný';
+                    } else if (data.orchestratorHealth !== 'Healthy') {
+                        statusIcon.className = 'fas fa-circle text-warning';
+                        statusText.textContent = 'Orchestrátor má problémy';
+                    } else if (data.aiServerStatus === 'error') {
+                        statusIcon.className = 'fas fa-circle text-danger';
+                        statusText.textContent = 'AI server nedostupný';
+                    } else {
+                        statusIcon.className = 'fas fa-circle text-success';
+                        statusText.textContent = 'AI připraveno';
+                    }
+                } else {
+                    statusIcon.className = 'fas fa-circle text-danger';
+                    statusText.textContent = 'Chyba připojení';
+                }
+            } catch (error) {
+                console.error('Failed to check AI status:', error);
+                document.getElementById('statusIcon').className = 'fas fa-circle text-danger';
+                document.getElementById('statusText').textContent = 'Chyba připojení';
+            }
+        }
+        
         // Initialize on load
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('messageInput').focus();
+            
+            // Check AI status immediately and then every 30 seconds
+            checkAIStatus();
+            setInterval(checkAIStatus, 30000);
         });
     </script>
 }
