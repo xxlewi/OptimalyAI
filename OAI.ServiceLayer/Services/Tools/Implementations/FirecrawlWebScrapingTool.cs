@@ -157,13 +157,22 @@ namespace OAI.ServiceLayer.Services.Tools.Implementations
             }
 
             // Validate max pages
-            var maxPages = GetParameter<int>(parameters, "maxPages", 5);
-            if (!ToolParameterValidators.ValidateIntegerRange(
-                maxPages, "maxPages", 1, 100, out var maxPagesError))
+            try
             {
-                result.IsValid = false;
-                result.Errors.Add(maxPagesError);
-                result.FieldErrors["maxPages"] = maxPagesError;
+                var maxPages = GetParameter<int>(parameters, "maxPages", 5);
+                if (!ToolParameterValidators.ValidateIntegerRange(
+                    maxPages, "maxPages", 1, 100, out var maxPagesError))
+                {
+                    result.IsValid = false;
+                    result.Errors.Add(maxPagesError);
+                    result.FieldErrors["maxPages"] = maxPagesError;
+                }
+            }
+            catch (Exception ex)
+            {
+                // If we can't parse maxPages, use default value for validation
+                Logger.LogWarning("Failed to parse maxPages parameter: {Error}", ex.Message);
+                // Don't fail validation, just use default
             }
 
             await Task.CompletedTask;

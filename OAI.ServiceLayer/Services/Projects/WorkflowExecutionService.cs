@@ -131,20 +131,112 @@ namespace OAI.ServiceLayer.Services.Projects
                     configuration = string.IsNullOrEmpty(project.Configuration) ? null : JsonSerializer.Deserialize<object>(project.Configuration)
                 };
 
+                // Log project stages info
+                _logger.LogInformation("Project {ProjectId} has {StageCount} stages", project.Id, project.Stages.Count);
+                
+                // Try to get workflow from workflow designer first
+                List<OAI.Core.DTOs.Workflow.WorkflowStep> workflowSteps = null;
+                
+                try
+                {
+                    // Get workflow designer service
+                    var workflowDesignerService = scope.ServiceProvider.GetService<OAI.Core.Interfaces.Workflow.IWorkflowDesignerService>();
+                    if (workflowDesignerService != null)
+                    {
+                        var workflowData = await workflowDesignerService.GetWorkflowAsync(projectId);
+                        if (workflowData != null && workflowData.Steps != null && workflowData.Steps.Any())
+                        {
+                            _logger.LogInformation("Found workflow designer data with {StepCount} steps", workflowData.Steps.Count);
+                            
+                            // Debug: Log each step details
+                            foreach (var step in workflowData.Steps)
+                            {
+                                _logger.LogInformation("Step '{StepName}' (Type: {StepType}, AdapterId: {AdapterId}, AdapterType: {AdapterType})", 
+                                    step.Name, step.Type, step.AdapterId ?? "NULL", step.AdapterType ?? "NULL");
+                            }
+                            // Convert WorkflowStepDto to WorkflowStep
+                            workflowSteps = workflowData.Steps.Select(dto => new OAI.Core.DTOs.Workflow.WorkflowStep
+                            {
+                                Id = dto.Id,
+                                Name = dto.Name,
+                                Type = dto.Type,
+                                Description = dto.Description,
+                                Position = dto.Position,
+                                Next = dto.Next,
+                                Tool = dto.Tool,
+                                UseReAct = dto.UseReAct,
+                                TimeoutSeconds = dto.TimeoutSeconds,
+                                RetryCount = dto.RetryCount,
+                                Configuration = dto.Configuration ?? new Dictionary<string, object>(),
+                                AdapterId = dto.AdapterId,
+                                AdapterType = dto.AdapterType,
+                                AdapterConfiguration = dto.AdapterConfiguration != null ? 
+                                    dto.AdapterConfiguration.ToDictionary(k => k.Key, v => v.Value) : 
+                                    new Dictionary<string, Dictionary<string, object>>(),
+                                Condition = dto.Condition,
+                                IsFinal = dto.IsFinal
+                            }).ToList();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Could not load workflow designer data: {Error}", ex.Message);
+                }
+                
+                // If no workflow designer data, use project stages
+                if (workflowSteps == null || !workflowSteps.Any())
+                {
+                    _logger.LogInformation("Using project stages for workflow steps");
+                    foreach (var stage in project.Stages.OrderBy(s => s.Order))
+                    {
+                        _logger.LogInformation("Stage: {StageName} (Order: {Order}, Tools: {ToolCount})", 
+                            stage.Name, stage.Order, stage.StageTools.Count);
+                    }
+                    
+                    workflowSteps = project.Stages.OrderBy(s => s.Order).Select((stage, index) => new OAI.Core.DTOs.Workflow.WorkflowStep
+                        {
+                            Id = stage.Id.ToString(),
+                            Name = stage.Name,
+                            Type = "default", // Default step type
+                            Position = stage.Order,
+                            Next = index < project.Stages.Count - 1 ? project.Stages.OrderBy(s => s.Order).Skip(index + 1).First().Id.ToString() : null,
+                            Tool = stage.StageTools.FirstOrDefault()?.ToolName, // Primary tool for the stage
+                            UseReAct = true, // Enable ReAct pattern by default
+                            TimeoutSeconds = 300,
+                            RetryCount = 3,
+                            Configuration = new Dictionary<string, object>
+                            {
+                                ["stageId"] = stage.Id,
+                                ["stageName"] = stage.Name,
+                                ["stageOrder"] = stage.Order,
+                                ["tools"] = stage.StageTools.Select(t => t.ToolName).ToList()
+                            },
+                            IsFinal = index == project.Stages.Count - 1
+                        }).ToList();
+                }
+                
                 // Připravit request pro orchestrátor
                 var request = new WorkflowOrchestratorRequest
                 {
                     WorkflowId = projectId, // Use project ID as workflow ID
                     WorkflowDefinition = new OAI.Core.DTOs.Workflow.WorkflowDefinition
                     {
-                        // WorkflowDefinition properties
-                        Steps = new List<OAI.Core.DTOs.Workflow.WorkflowStep>()
+                        Steps = workflowSteps
                     },
                     InitialParameters = parameters,
                     AIModel = "default", // Will be set from orchestrator settings
                     EnableIntelligentRetry = true,
                     MaxRetries = 3
                 };
+                
+                // Log converted workflow steps
+                _logger.LogInformation("Converted to {StepCount} workflow steps", request.WorkflowDefinition.Steps.Count);
+                foreach (var step in request.WorkflowDefinition.Steps)
+                {
+                    _logger.LogInformation("Workflow Step: {StepId} - {StepName} (Tool: {Tool}, IsFinal: {IsFinal})", 
+                        step.Id, step.Name, step.Tool ?? "none", step.IsFinal);
+                }
 
                 // Vytvořit orchestration context
                 var context = new OAI.ServiceLayer.Services.Orchestration.Base.OrchestratorContext(

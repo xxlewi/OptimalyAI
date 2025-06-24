@@ -67,6 +67,40 @@ namespace OAI.ServiceLayer.Services.Tools.Base
         {
             if (value == null) return DefaultValue;
 
+            // Special handling for JsonElement
+            if (value is System.Text.Json.JsonElement jsonElement)
+            {
+                return Type switch
+                {
+                    ToolParameterType.String => jsonElement.ToString(),
+                    ToolParameterType.Integer => jsonElement.ValueKind switch
+                    {
+                        System.Text.Json.JsonValueKind.Number => jsonElement.GetInt32(),
+                        System.Text.Json.JsonValueKind.String => int.Parse(jsonElement.GetString()),
+                        _ => throw new InvalidCastException($"Cannot convert {jsonElement.ValueKind} to integer")
+                    },
+                    ToolParameterType.Decimal => jsonElement.ValueKind switch
+                    {
+                        System.Text.Json.JsonValueKind.Number => jsonElement.GetDecimal(),
+                        System.Text.Json.JsonValueKind.String => decimal.Parse(jsonElement.GetString()),
+                        _ => throw new InvalidCastException($"Cannot convert {jsonElement.ValueKind} to decimal")
+                    },
+                    ToolParameterType.Boolean => jsonElement.ValueKind switch
+                    {
+                        System.Text.Json.JsonValueKind.True => true,
+                        System.Text.Json.JsonValueKind.False => false,
+                        System.Text.Json.JsonValueKind.String => bool.Parse(jsonElement.GetString()),
+                        _ => throw new InvalidCastException($"Cannot convert {jsonElement.ValueKind} to boolean")
+                    },
+                    ToolParameterType.DateTime => jsonElement.ValueKind switch
+                    {
+                        System.Text.Json.JsonValueKind.String => DateTime.Parse(jsonElement.GetString()),
+                        _ => throw new InvalidCastException($"Cannot convert {jsonElement.ValueKind} to DateTime")
+                    },
+                    _ => jsonElement
+                };
+            }
+
             return Type switch
             {
                 ToolParameterType.String => value.ToString(),

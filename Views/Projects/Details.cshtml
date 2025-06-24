@@ -83,9 +83,6 @@
                         </div>
                     </div>
                     
-                    <button class="btn btn-warning mr-2" onclick="showRunModal('test')">
-                        <i class="fas fa-vial"></i> Test
-                    </button>
                     <button class="btn btn-success mr-2" onclick="showRunModal('production')">
                         <i class="fas fa-play"></i> Spustit
                     </button>
@@ -530,7 +527,6 @@
     </div>
 </div>
 
-@await Html.PartialAsync("_WorkflowTestModal")
 
 <!-- Workflow Info Modal -->
 <div class="modal fade" id="workflowInfoModal" tabindex="-1" role="dialog">
@@ -645,13 +641,12 @@
     
     <script>
         let projectId = '@Model.Id';
-        let currentRunMode = '';
         let workflowData = null;
         let workflowViewer = null;
         
         $(document).ready(function() {
             // Initialize workflow diagram viewer
-            const diagramViewer = new WorkflowDiagramViewer('workflowDiagramContainer', projectId);
+            workflowViewer = new WorkflowDiagramViewer('workflowDiagramContainer', projectId);
             
             // Load other components
             loadWorkflowSteps(projectId);
@@ -769,10 +764,12 @@
         }
         
         function loadWorkflowSteps(projectId) {
+            console.log('Loading workflow steps for project:', projectId);
             $.ajax({
                 url: `/api/workflow-designer/${projectId}`,
                 type: 'GET',
                 success: function(response) {
+                    console.log('Workflow response:', response);
                     if (response.success && response.data) {
                         // Store workflow data including workflow ID
                         workflowData = response.data;
@@ -786,11 +783,13 @@
                         renderWorkflowSteps(workflowWrapper);
                     }
                 },
-                error: function() {
+                error: function(xhr) {
+                    console.error('Failed to load workflow steps:', xhr);
                     $('#workflowSteps').html(`
                         <div class="text-center py-3">
                             <i class="fas fa-exclamation-triangle text-warning"></i>
                             <p class="text-muted">Unable to load workflow steps</p>
+                            <small class="text-danger">${xhr.status} ${xhr.statusText}</small>
                         </div>
                     `);
                 }
@@ -911,13 +910,8 @@
         }
         
         function showRunModal(mode) {
-            currentRunMode = mode;
-            
-            if (mode === 'test') {
-                // For test mode, open the test modal directly
-                testWorkflow();
-            } else {
-                // For production run, execute directly without modal
+            // Only production mode is supported
+            if (mode === 'production') {
                 runProductionWorkflow();
             }
         }
@@ -1079,58 +1073,10 @@
             linkElement.click();
         }
         
-        function testWorkflow() {
-            // Get workflow ID from the project's workflow
-            const workflowId = workflowData?.id || workflowData?.workflowId;
-            if (!workflowId) {
-                toastr.error('Projekt nemá přiřazené workflow');
-                console.error('Workflow data:', workflowData);
-                return;
-            }
-            
-            // Check if workflow has input adapter configuration
-            let inputType = 'manual';
-            let defaultTestData = {};
-            
-            if (workflowData?.input?.type) {
-                inputType = workflowData.input.type;
-                addTestLog('INFO', `Detekován vstupní adaptér typu: ${inputType}`);
-            }
-            
-            // Prepare test data based on workflow steps
-            if (workflowData?.steps && workflowData.steps.length > 0) {
-                const firstStep = workflowData.steps[0];
-                addTestLog('INFO', `První krok workflow: ${firstStep.name} (${firstStep.type})`);
-                
-                // If first step is a web scraping tool, add URL
-                if (firstStep.name && firstStep.name.toLowerCase().includes('web') || 
-                    firstStep.tool === 'web_scraper' || 
-                    firstStep.type === 'tool') {
-                    defaultTestData.url = 'https://example.com';
-                    defaultTestData.selector = 'body';
-                }
-            }
-            
-            // Reset test modal
-            $('#workflowTestModal').modal('show');
-            $('#testProgressBar').css('width', '0%').text('0%').removeClass('bg-success bg-danger').addClass('bg-warning');
-            $('#testLogs').html('<div class="text-warning">[SYSTEM] Inicializuji test workflow...</div>');
-            $('#testStatus').text('Spouštím test...');
-            $('#testStepsCount').text('0 / ' + (workflowData?.steps?.length || 0));
-            $('#testDuration').text('0s');
-            $('#testStatusIcon').removeClass('fa-check fa-times').addClass('fa-cog fa-spin');
-            $('#cancelTestBtn').show();
-            $('#closeTestBtn').hide();
-            
-            // Track test start time
-            window.testStartTime = Date.now();
-            
-            // Add log entry
-            addTestLog('INFO', 'Připravuji testovací data...');
-            addTestLog('DEBUG', `Workflow má ${workflowData?.steps?.length || 0} kroků`);
-            
-            // Execute workflow in test mode
-            const testData = {
+        /* Test workflow functionality removed - use Workflow Designer for testing */
+        
+        /* Test functions removed - use Workflow Designer for testing
+        const testData = {
                 projectId: projectId,
                 runName: `Test Run - ${new Date().toLocaleString('cs-CZ')}`,
                 mode: "test",
@@ -1185,6 +1131,9 @@
             });
         }
         
+        */
+        
+        /* Test functions removed - use Workflow Designer for testing
         function addTestLog(level, message) {
             const timestamp = new Date().toLocaleTimeString('cs-CZ');
             let colorClass = 'text-light';
@@ -1219,6 +1168,9 @@
             }
         }
         
+        */
+        
+        /* Test monitoring removed - use Workflow Designer for testing
         function monitorTestExecution(executionId) {
             window.testMonitoringInterval = setInterval(async () => {
                 try {
@@ -1389,6 +1341,9 @@
             }, 3000);
         }
         
+        */
+        
+        /* Test error handling removed - use Workflow Designer for testing
         function showTestError(message) {
             $('#testProgressBar')
                 .removeClass('progress-bar-animated bg-warning')
@@ -1410,6 +1365,9 @@
             if (window.logFetchInterval) clearInterval(window.logFetchInterval);
         }
         
+        */
+        
+        /* Test cancel removed - use Workflow Designer for testing  
         function cancelTest() {
             addTestLog('WARNING', 'Test byl zrušen uživatelem');
             
@@ -1422,8 +1380,9 @@
             window.processedLogs = [];
             window.processedLogIds = [];
             
-            $('#workflowTestModal').modal('hide');
+            // $('#workflowTestModal').modal('hide');
         }
+        */
         
         function refreshHistory() {
             $('#executionHistoryBody').html(`
@@ -1681,7 +1640,7 @@
             $statusBadge.html('<i class="fas fa-' + config.icon + '"></i> ' + newStatus);
         }
         
-        // Copy test logs to clipboard implementation
+        /* Test log copy removed - use Workflow Designer for testing
         window.copyTestLogs_impl = function() {
             const logContainer = document.getElementById('testLogs');
             if (!logContainer) {
@@ -1724,21 +1683,11 @@
             document.body.removeChild(textarea);
         }
 
-        // Auto-test functionality - check for autoTest URL parameter
+        */
+        
+        // Initialize project details page
         $(document).ready(function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('autoTest') === 'true') {
-                // Remove the parameter from URL
-                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-                window.history.replaceState({path: newUrl}, '', newUrl);
-                
-                // Automatically start test after a short delay
-                setTimeout(function() {
-                    if (typeof testWorkflow === 'function') {
-                        testWorkflow();
-                    }
-                }, 500);
-            }
+            // Project details initialization
         });
     </script>
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -367,6 +368,9 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 case "ai-conversation":
                     return await ExecuteAIConversationAsync(step, resolvedParams, context, config, cancellationToken);
                     
+                case "orchestrator":
+                    return await ExecuteOrchestratorStepAsync(step, resolvedParams, context, config, cancellationToken);
+                    
                 case "decision":
                     return await ExecuteDecisionStepAsync(step, resolvedParams, context);
                     
@@ -422,6 +426,224 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 model = context.AIModel,
                 serverType = context.AiServerType
             };
+        }
+
+        private async Task<object> ExecuteOrchestratorStepAsync(
+            WorkflowStep step,
+            Dictionary<string, object> parameters,
+            WorkflowExecutionContext context,
+            OrchestratorConfigurationDto config,
+            CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("🤖 ORCHESTRATOR ANALYSIS STARTING for step '{StepName}'", step.Name);
+            _logger.LogInformation("📊 Current context variables: {Variables}", string.Join(", ", context.Variables.Keys));
+            
+            // Analyze workflow flow and next steps
+            await AnalyzeWorkflowFlowAsync(step, context);
+
+            // Smart orchestration: Detect if next steps need images and we have URLs
+            var processedData = await ProcessDataForNextStepsAsync(context, step, cancellationToken);
+
+            // Build orchestrator prompt from context
+            var contextPrompt = $@"
+Analyze the following workflow data and provide orchestration decisions:
+
+Step: {step.Name}
+Description: {step.Description ?? "AI Orchestrator"}
+
+Previous step outputs:
+{JsonSerializer.Serialize(context.Variables, new JsonSerializerOptions { WriteIndented = true })}
+
+Processed data:
+{JsonSerializer.Serialize(processedData, new JsonSerializerOptions { WriteIndented = true })}
+
+Configuration:
+{JsonSerializer.Serialize(parameters, new JsonSerializerOptions { WriteIndented = true })}
+
+Based on this information, provide analysis and decisions for the next workflow steps.
+Return structured data that can be used by subsequent steps.";
+
+            var aiResponse = await GenerateWithConfiguredAIAsync(contextPrompt, context, config, cancellationToken);
+
+            // Update context with processed data (especially downloaded images)
+            if (processedData.ContainsKey("downloadedImages"))
+            {
+                context.Variables["orchestrator_images"] = processedData["downloadedImages"];
+                _logger.LogInformation("Added {Count} downloaded images to context as 'orchestrator_images'", 
+                    ((List<Dictionary<string, object>>)processedData["downloadedImages"]).Count);
+            }
+
+            return new
+            {
+                orchestratorResponse = aiResponse,
+                contextSummary = context.Variables.Keys.ToList(),
+                processedData = processedData,
+                model = context.AIModel,
+                serverType = context.AiServerType,
+                stepAnalysis = "Orchestrator step completed successfully with smart data processing"
+            };
+        }
+
+        private async Task<Dictionary<string, object>> ProcessDataForNextStepsAsync(
+            WorkflowExecutionContext context, 
+            WorkflowStep currentStep,
+            CancellationToken cancellationToken)
+        {
+            var result = new Dictionary<string, object>();
+
+            try
+            {
+                // Look for image URLs in previous step outputs
+                var imageUrls = ExtractImageUrlsFromContext(context);
+                
+                if (imageUrls.Any())
+                {
+                    _logger.LogInformation("Found {Count} image URLs, downloading for next steps...", imageUrls.Count);
+                    
+                    var downloadedImages = await DownloadImagesAsync(imageUrls, cancellationToken);
+                    
+                    if (downloadedImages.Any())
+                    {
+                        result["downloadedImages"] = downloadedImages;
+                        result["imageCount"] = downloadedImages.Count;
+                        _logger.LogInformation("Successfully downloaded {Count} images", downloadedImages.Count);
+                    }
+                }
+
+                // Include original context data
+                foreach (var kvp in context.Variables)
+                {
+                    if (!result.ContainsKey(kvp.Key))
+                    {
+                        result[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing data for next steps");
+                result["processingError"] = ex.Message;
+            }
+
+            return result;
+        }
+
+        private List<string> ExtractImageUrlsFromContext(WorkflowExecutionContext context)
+        {
+            var imageUrls = new List<string>();
+
+            foreach (var variable in context.Variables)
+            {
+                var urls = ExtractUrlsFromValue(variable.Value);
+                imageUrls.AddRange(urls.Where(IsImageUrl));
+            }
+
+            return imageUrls.Distinct().ToList();
+        }
+
+        private List<string> ExtractUrlsFromValue(object value)
+        {
+            var urls = new List<string>();
+
+            if (value is string str)
+            {
+                // Find URLs in string using regex
+                var urlPattern = @"https?://[^\s<>\""]+\.(jpg|jpeg|png|gif|webp|bmp|tiff)(?:\?[^\s<>\""]*)?";
+                var matches = System.Text.RegularExpressions.Regex.Matches(str, urlPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    urls.Add(match.Value);
+                }
+            }
+            else if (value != null)
+            {
+                // Try to serialize and search in JSON
+                try
+                {
+                    var json = JsonSerializer.Serialize(value);
+                    return ExtractUrlsFromValue(json);
+                }
+                catch
+                {
+                    // Ignore serialization errors
+                }
+            }
+
+            return urls;
+        }
+
+        private bool IsImageUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
+            
+            var lowerUrl = url.ToLowerInvariant();
+            return lowerUrl.Contains(".jpg") || lowerUrl.Contains(".jpeg") || 
+                   lowerUrl.Contains(".png") || lowerUrl.Contains(".gif") || 
+                   lowerUrl.Contains(".webp") || lowerUrl.Contains(".bmp") || 
+                   lowerUrl.Contains(".tiff");
+        }
+
+        private async Task<List<Dictionary<string, object>>> DownloadImagesAsync(
+            List<string> imageUrls, 
+            CancellationToken cancellationToken)
+        {
+            var downloadedImages = new List<Dictionary<string, object>>();
+            
+            using var httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(30);
+            httpClient.DefaultRequestHeaders.Add("User-Agent", "OptimalyAI-Orchestrator/1.0");
+
+            var semaphore = new SemaphoreSlim(5, 5); // Limit concurrent downloads
+
+            var downloadTasks = imageUrls.Select(async url =>
+            {
+                await semaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    return await DownloadSingleImageAsync(httpClient, url, cancellationToken);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(downloadTasks);
+            downloadedImages.AddRange(results.Where(r => r != null));
+
+            return downloadedImages;
+        }
+
+        private async Task<Dictionary<string, object>> DownloadSingleImageAsync(
+            HttpClient httpClient, 
+            string url, 
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                _logger.LogInformation("Downloading image from: {Url}", url);
+                
+                var response = await httpClient.GetAsync(url, cancellationToken);
+                response.EnsureSuccessStatusCode();
+
+                var imageBytes = await response.Content.ReadAsByteArrayAsync();
+                var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+
+                return new Dictionary<string, object>
+                {
+                    ["url"] = url,
+                    ["imageData"] = imageBytes,
+                    ["contentType"] = contentType,
+                    ["size"] = imageBytes.Length,
+                    ["downloadedAt"] = DateTime.UtcNow
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to download image from {Url}", url);
+                return null;
+            }
         }
 
         private async Task<ValidationResult> ValidateStepOutputAsync(
@@ -722,7 +944,16 @@ Keep it under 200 words.";
             Dictionary<string, object> parameters,
             CancellationToken cancellationToken)
         {
-            var adapterId = step.AdapterId ?? throw new InvalidOperationException("Adapter ID is required");
+            _logger.LogInformation("Executing adapter step '{StepName}' (ID: {StepId}, Type: {StepType}, AdapterId: {AdapterId})", 
+                step.Name, step.Id, step.Type, step.AdapterId ?? "NULL");
+                
+            if (string.IsNullOrEmpty(step.AdapterId))
+            {
+                _logger.LogError("Adapter step '{StepName}' has no AdapterId. Available adapters need to be configured in workflow designer.", step.Name);
+                throw new InvalidOperationException($"Adapter ID is required for step '{step.Name}'. Please configure the adapter in workflow designer.");
+            }
+            
+            var adapterId = step.AdapterId;
             var adapter = await _adapterRegistry.GetAdapterAsync(adapterId);
             
             if (adapter == null)
@@ -825,6 +1056,55 @@ Keep it under 200 words.";
                     ["supports_configured_ai_server"] = true
                 }
             };
+        }
+
+        private async Task AnalyzeWorkflowFlowAsync(WorkflowStep currentStep, WorkflowExecutionContext context)
+        {
+            try
+            {
+                _logger.LogInformation("🔍 WORKFLOW FLOW ANALYSIS:");
+                
+                // Analyze current context data
+                _logger.LogInformation("📋 CONTEXT DATA ANALYSIS:");
+                foreach (var variable in context.Variables)
+                {
+                    var dataType = GetDataTypeDescription(variable.Value);
+                    _logger.LogInformation("   📝 {Key}: {DataType}", variable.Key, dataType);
+                    
+                    if (variable.Value is string str && str.Contains("http") && IsImageUrl(str))
+                    {
+                        _logger.LogInformation("   🔗 Found image URL in data: {Key}", variable.Key);
+                    }
+                }
+                
+                _logger.LogInformation("🤖 Orchestrator will now analyze data and decide next actions...");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during workflow flow analysis");
+            }
+        }
+
+        private string GetDataTypeDescription(object value)
+        {
+            if (value == null) return "null";
+            
+            var type = value.GetType();
+            
+            if (type == typeof(string))
+            {
+                var str = (string)value;
+                if (str.StartsWith("http")) return "URL";
+                if (str.Length > 100) return $"Large text ({str.Length} chars)";
+                return $"Text ({str.Length} chars)";
+            }
+            
+            if (type == typeof(byte[])) return $"Binary data ({((byte[])value).Length} bytes)";
+            if (type.IsArray) return $"Array ({((Array)value).Length} items)";
+            if (value is IDictionary dict) return $"Dictionary ({dict.Count} items)";
+            if (value is IEnumerable enumerable) return $"Collection ({enumerable.Cast<object>().Count()} items)";
+            
+            return type.Name;
         }
     }
 

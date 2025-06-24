@@ -263,6 +263,32 @@ namespace OAI.ServiceLayer.Services.Tools.Base
             if (value is T directValue)
                 return directValue;
 
+            // Special handling for JsonElement
+            if (value is System.Text.Json.JsonElement jsonElement)
+            {
+                try
+                {
+                    // Try to deserialize JsonElement to target type
+                    var json = jsonElement.GetRawText();
+                    var result = System.Text.Json.JsonSerializer.Deserialize<T>(json);
+                    return result ?? defaultValue;
+                }
+                catch
+                {
+                    // If deserialization fails, try basic conversions
+                    if (typeof(T) == typeof(int) && jsonElement.TryGetInt32(out var intValue))
+                        return (T)(object)intValue;
+                    if (typeof(T) == typeof(long) && jsonElement.TryGetInt64(out var longValue))
+                        return (T)(object)longValue;
+                    if (typeof(T) == typeof(double) && jsonElement.TryGetDouble(out var doubleValue))
+                        return (T)(object)doubleValue;
+                    if (typeof(T) == typeof(bool) && (jsonElement.ValueKind == System.Text.Json.JsonValueKind.True || jsonElement.ValueKind == System.Text.Json.JsonValueKind.False))
+                        return (T)(object)jsonElement.GetBoolean();
+                    if (typeof(T) == typeof(string))
+                        return (T)(object)jsonElement.ToString();
+                }
+            }
+
             try
             {
                 return (T)Convert.ChangeType(value, typeof(T));
