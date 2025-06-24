@@ -283,22 +283,11 @@
                         </li>
                         
                         <li class="nav-header">PROGRAMOVÁNÍ</li>
-                        <li class="nav-item has-treeview" id="programming-menu">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon fas fa-code"></i>
-                                <p>
-                                    Programování
-                                    <i class="right fas fa-angle-left"></i>
-                                </p>
+                        <li class="nav-item">
+                            <a asp-controller="Programming" asp-action="Applications" class="nav-link">
+                                <i class="nav-icon fas fa-globe"></i>
+                                <p>Aplikace</p>
                             </a>
-                            <ul class="nav nav-treeview">
-                                <li class="nav-item">
-                                    <a asp-controller="Programming" asp-action="Applications" class="nav-link">
-                                        <i class="fas fa-globe nav-icon"></i>
-                                        <p>Aplikace</p>
-                                    </a>
-                                </li>
-                            </ul>
                         </li>
                         
                         <li class="nav-header">KOMUNIKACE</li>
@@ -645,6 +634,11 @@
             if (isInAiSystem) {
                 $('#ai-system-menu').addClass('menu-open');
                 $('#ai-system-menu > .nav-link').addClass('active');
+            }
+            
+            // Special handling for Programming menu
+            if (currentPath.startsWith('/programming')) {
+                $('.nav-sidebar .nav-link[href*="/Programming/Applications"]').addClass('active');
             }
         });
     </script>
