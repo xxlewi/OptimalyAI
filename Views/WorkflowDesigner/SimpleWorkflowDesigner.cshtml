@@ -49,11 +49,6 @@
         projectName: '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ProjectName))'
     });
     
-    // Initialize Discovery Chat
-    const discoveryChat = new DiscoveryChat({
-        projectId: '@Model.ProjectId'
-    });
-    
     // Initialize on DOM ready
     $(document).ready(async function() {
         try {
@@ -63,12 +58,43 @@
             await app.initialize();
             console.log('Workflow Designer initialized successfully');
             
-            // Make discovery chat globally available (initialized automatically in constructor)
-            window.discoveryChat = discoveryChat;
-            
         } catch (error) {
             console.error('Failed to initialize Workflow Designer:', error);
             toastr.error('Chyba při inicializaci workflow designeru');
+        }
+        
+        // Initialize Discovery Chat separately to avoid blocking main app
+        try {
+            console.log('Initializing Discovery Chat...');
+            console.log('app.workflowManager:', app.workflowManager);
+            console.log('app.canvasRenderer:', app.canvasRenderer);
+            
+            const discoveryChat = new DiscoveryChat({
+                projectId: '@Model.ProjectId',
+                workflowManager: app.workflowManager,
+                canvasRenderer: app.canvasRenderer
+            });
+            
+            // Wait for async initialization to complete
+            await discoveryChat.initPromise;
+            
+            // Make discovery chat globally available
+            window.discoveryChat = discoveryChat;
+            console.log('Discovery Chat initialized successfully');
+            
+        } catch (error) {
+            console.error('Failed to initialize Discovery Chat:', error);
+            // Try to initialize without dependencies
+            try {
+                console.log('Trying basic Discovery Chat initialization...');
+                const discoveryChat = new DiscoveryChat({
+                    projectId: '@Model.ProjectId'
+                });
+                window.discoveryChat = discoveryChat;
+                console.log('Basic Discovery Chat initialized');
+            } catch (basicError) {
+                console.error('Failed basic Discovery Chat initialization:', basicError);
+            }
         }
     });
     
@@ -96,6 +122,49 @@
     window.showAdapterConfiguration = function(node) {
         app.canvasRenderer.onNodeEdit(node);
     };
+    
+    // Discovery Chat Test Function
+    window.testDiscoveryChat = function() {
+        const results = {
+            timestamp: new Date().toISOString(),
+            discoveryChat: window.discoveryChat ? 'exists' : 'missing',
+            sendButton: null,
+            inputField: null,
+            isConnected: null,
+            domElements: {
+                sendButton: document.getElementById('discovery-send') ? 'found' : 'missing',
+                inputField: document.getElementById('discovery-input') ? 'found' : 'missing',
+                clearButton: document.getElementById('clear-chat') ? 'found' : 'missing',
+                componentsButton: document.getElementById('get-components') ? 'found' : 'missing'
+            }
+        };
+        
+        if (window.discoveryChat) {
+            results.sendButton = window.discoveryChat.sendButton ? 'found' : 'missing';
+            results.inputField = window.discoveryChat.inputField ? 'found' : 'missing';
+            results.isConnected = window.discoveryChat.isConnected;
+            
+            // Try manual send test
+            try {
+                if (window.discoveryChat.inputField) {
+                    window.discoveryChat.inputField.value = 'test message automated';
+                    window.discoveryChat.sendMessage();
+                    results.manualTest = 'success - message sent';
+                }
+            } catch (e) {
+                results.manualTest = 'error: ' + e.message;
+            }
+        }
+        
+        console.log('=== DISCOVERY CHAT TEST RESULTS ===');
+        console.log(JSON.stringify(results, null, 2));
+        return results;
+    };
+    
+    // Auto-test after initialization
+    setTimeout(() => {
+        window.testDiscoveryChat();
+    }, 2000);
 </script>
 
 <script>

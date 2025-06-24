@@ -34,14 +34,19 @@ export class DiscoveryChat {
         this.onWorkflowSuggested = options.onWorkflowSuggested || null;
         this.onWorkflowStepAdded = options.onWorkflowStepAdded || null;
         
-        this.init();
+        // Store the init promise so callers can await it
+        this.initPromise = this.init();
     }
     
     async init() {
         try {
+            console.log('DiscoveryChat init() started');
             this.createUI();
+            console.log('UI created');
             await this.initializeSignalR();
+            console.log('SignalR initialized');
             this.bindEvents();
+            console.log('Events bound');
             
             console.log('Discovery Chat initialized successfully');
         } catch (error) {
@@ -387,15 +392,27 @@ export class DiscoveryChat {
     }
     
     bindEvents() {
+        console.log('bindEvents called');
+        console.log('sendButton:', this.sendButton);
+        console.log('inputField:', this.inputField);
+        
+        if (!this.sendButton || !this.inputField) {
+            console.error('Critical UI elements not found!');
+            return;
+        }
+        
         // Send button
         this.sendButton.addEventListener('click', () => {
+            console.log('Send button clicked');
             this.sendMessage();
         });
         
         // Stop button
-        this.stopButton.addEventListener('click', () => {
-            this.stopDiscovery();
-        });
+        if (this.stopButton) {
+            this.stopButton.addEventListener('click', () => {
+                this.stopDiscovery();
+            });
+        }
         
         // Input field - Enter to send
         this.inputField.addEventListener('keydown', (e) => {
@@ -406,19 +423,34 @@ export class DiscoveryChat {
         });
         
         // Clear chat
-        document.getElementById('clear-chat').addEventListener('click', () => {
-            this.clearChat();
-        });
+        const clearButton = document.getElementById('clear-chat');
+        console.log('clearButton:', clearButton);
+        if (clearButton) {
+            clearButton.addEventListener('click', () => {
+                console.log('Clear button clicked');
+                this.clearChat();
+            });
+        }
         
         // Get components
-        document.getElementById('get-components').addEventListener('click', () => {
-            this.requestAvailableComponents();
-        });
+        const componentsButton = document.getElementById('get-components');
+        console.log('componentsButton:', componentsButton);
+        if (componentsButton) {
+            componentsButton.addEventListener('click', () => {
+                console.log('Components button clicked');
+                this.requestAvailableComponents();
+            });
+        }
+        
+        console.log('Event binding completed');
     }
     
     async sendMessage() {
+        console.log('sendMessage called');
         const message = this.inputField.value.trim();
+        console.log('Message:', message, 'isProcessing:', this.isProcessing, 'isConnected:', this.isConnected);
         if (!message || this.isProcessing || !this.isConnected) {
+            console.log('Message blocked - empty message, processing, or not connected');
             return;
         }
         
@@ -459,11 +491,15 @@ export class DiscoveryChat {
     }
     
     async requestAvailableComponents() {
+        console.log('requestAvailableComponents called');
+        console.log('isConnected:', this.isConnected);
         if (!this.isConnected) {
+            console.log('Not connected, aborting');
             return;
         }
         
         try {
+            console.log('Invoking RequestAvailableComponents');
             await this.connection.invoke('RequestAvailableComponents');
         } catch (error) {
             console.error('Failed to request components:', error);

@@ -117,37 +117,39 @@ namespace OptimalyAI.Controllers
         /// </summary>
         public async Task<IActionResult> Index()
         {
-            var orchestrators = new List<OrchestratorViewModel>();
-            
-            // This was causing duplicate ConversationOrchestrator entries - removed
-            // All orchestrators will be loaded via reflection below
-            
-            // Get all registered orchestrators
-            var orchestratorTypes = GetAllOrchestratorTypes();
-            
-            _logger.LogInformation("Found {Count} orchestrator types via reflection", orchestratorTypes.Count);
-            foreach(var type in orchestratorTypes)
+            try
             {
-                _logger.LogInformation("Found orchestrator type: {Type}", type.FullName);
-            }
-            
-            // Get settings service and AI server service for checking real activation status
-            var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-            var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
-            
-            foreach (var orchestratorType in orchestratorTypes)
-            {
-                try
+                var orchestrators = new List<OrchestratorViewModel>();
+                
+                // This was causing duplicate ConversationOrchestrator entries - removed
+                // All orchestrators will be loaded via reflection below
+                
+                // Get all registered orchestrators
+                var orchestratorTypes = GetAllOrchestratorTypes();
+                
+                _logger.LogInformation("Found {Count} orchestrator types via reflection", orchestratorTypes.Count);
+                foreach(var type in orchestratorTypes)
                 {
-                    _logger.LogInformation("Processing orchestrator type: {Type}", orchestratorType.Name);
-                    
-                    // Get orchestrator instance by finding its registered interface
-                    var orchestrator = GetOrchestratorInstance(orchestratorType);
-                    if (orchestrator == null) 
+                    _logger.LogInformation("Found orchestrator type: {Type}", type.FullName);
+                }
+                
+                // Get settings service and AI server service for checking real activation status
+                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
+                
+                foreach (var orchestratorType in orchestratorTypes)
+                {
+                    try
                     {
-                        _logger.LogWarning("Could not resolve orchestrator type: {Type}", orchestratorType.Name);
-                        continue;
-                    }
+                        _logger.LogInformation("Processing orchestrator type: {Type}", orchestratorType.Name);
+                        
+                        // Get orchestrator instance by finding its registered interface
+                        var orchestrator = GetOrchestratorInstance(orchestratorType);
+                        if (orchestrator == null) 
+                        {
+                            _logger.LogWarning("Could not resolve orchestrator type: {Type}", orchestratorType.Name);
+                            continue;
+                        }
                     
                     // Try to get values directly from the orchestrator instance
                     string orchestratorId = "unknown";
@@ -339,6 +341,12 @@ namespace OptimalyAI.Controllers
             ViewBag.TotalExecutions = orchestrators.Sum(o => o.TotalExecutions);
             
             return View("~/Views/Orchestrators/Index.cshtml", orchestrators);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fatal error in OrchestratorsController.Index");
+                return StatusCode(500, "Internal server error: " + ex.Message);
+            }
         }
 
         /// <summary>
