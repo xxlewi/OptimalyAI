@@ -9,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Attributes;
 using OAI.Core.DTOs.Orchestration;
-using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.AI;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
@@ -556,8 +555,43 @@ Asistent:";
         }
 
         /// <summary>
-        /// Helper třída pro parsování ReAct odpovědi
+        /// Helper třídy pro ReAct pattern - lokální implementace
         /// </summary>
+        private class AgentScratchpad
+        {
+            public string OriginalInput { get; set; } = "";
+            public string FinalAnswer { get; set; } = "";
+            public List<AgentThought> Thoughts { get; set; } = new();
+            public List<AgentAction> Actions { get; set; } = new();
+            public List<AgentObservation> Observations { get; set; } = new();
+        }
+
+        private class AgentThought
+        {
+            public string Content { get; set; } = "";
+            public int StepNumber { get; set; }
+            public DateTime CreatedAt { get; set; }
+        }
+
+        private class AgentAction
+        {
+            public string ToolName { get; set; } = "";
+            public Dictionary<string, object> Parameters { get; set; } = new();
+            public int StepNumber { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public bool IsFinalAnswer { get; set; }
+            public string FinalAnswer { get; set; } = "";
+        }
+
+        private class AgentObservation
+        {
+            public string ToolName { get; set; } = "";
+            public string Content { get; set; } = "";
+            public bool IsSuccess { get; set; }
+            public int StepNumber { get; set; }
+            public DateTime CreatedAt { get; set; }
+        }
+
         private class ReActParsedResponse
         {
             public string Thought { get; set; } = "";

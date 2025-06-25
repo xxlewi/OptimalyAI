@@ -388,10 +388,6 @@ public static class ServiceCollectionExtensions
         // Register orchestrator settings
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestratorSettings, OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService>();
         
-        // Register supporting services for RefactoredConversationOrchestrator
-        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ToolDetectionService>();
-        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ConversationResponseBuilder>();
-        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ConversationContextManager>();
         
         // Register refactored conversation orchestrator
         services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>();
@@ -462,8 +458,6 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<OAI.Core.Interfaces.Tools.ITool, OAI.ServiceLayer.Services.Tools.Implementations.SimpleWebSearchTool>();
         
         
-        // Register ReAct services
-        services.AddReActServices(configuration);
         
         // Register Discovery services
         services.AddDiscoveryServices(configuration);
@@ -471,25 +465,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
     
-    public static IServiceCollection AddReActServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        // Register ReAct interfaces with their implementations
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IReActAgent, OAI.ServiceLayer.Services.Orchestration.ReAct.UniversalReActAgent>();
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IAgentMemory, OAI.ServiceLayer.Services.Orchestration.ReAct.AgentMemory>();
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IThoughtProcess, OAI.ServiceLayer.Services.Orchestration.ReAct.ThoughtProcess>();
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IActionExecutor, OAI.ServiceLayer.Services.Orchestration.ReAct.ActionExecutor>();
-        services.AddScoped<OAI.Core.Interfaces.Orchestration.IObservationProcessor, OAI.ServiceLayer.Services.Orchestration.ReAct.ObservationProcessor>();
-        
-        // Register supporting classes
-        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.ReAct.ThoughtParser>();
-        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.ReAct.ActionParser>();
-        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.ReAct.ObservationFormatter>();
-        
-        // Add memory cache for ReAct agent memory
-        services.AddMemoryCache();
-        
-        return services;
-    }
 
     public static IServiceCollection AddDiscoveryServices(this IServiceCollection services, IConfiguration configuration)
     {
