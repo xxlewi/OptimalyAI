@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OAI.Core.DTOs;
@@ -8,6 +9,8 @@ using OAI.Core.Entities;
 using OAI.Core.Interfaces;
 using OAI.Core.Interfaces.Orchestration;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 
 namespace OAI.ServiceLayer.Services.Orchestration
 {
@@ -41,7 +44,12 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 }
 
                 var repo = _unitOfWork.GetRepository<OAI.Core.Entities.OrchestratorConfiguration>();
-                var configs = await repo.GetAsync(c => c.OrchestratorId == orchestratorId && c.IsActive);
+                var configs = await repo.GetAsync(
+                    filter: c => c.OrchestratorId == orchestratorId && c.IsActive,
+                    include: q => q.Include(c => c.AiServer)
+                                   .Include(c => c.DefaultModel)
+                                   .Include(c => c.ConversationModel)
+                );
                 var config = configs.FirstOrDefault();
 
                 if (config == null)
@@ -71,8 +79,13 @@ namespace OAI.ServiceLayer.Services.Orchestration
             {
                 var repo = _unitOfWork.GetRepository<OAI.Core.Entities.OrchestratorConfiguration>();
                 
-                // Check if configuration already exists
-                var existingConfigs = await repo.GetAsync(c => c.OrchestratorId == orchestratorId);
+                // Check if configuration already exists (including inactive ones)
+                var existingConfigs = await repo.GetAsync(
+                    filter: c => c.OrchestratorId == orchestratorId,
+                    include: q => q.Include(c => c.AiServer)
+                                   .Include(c => c.DefaultModel)
+                                   .Include(c => c.ConversationModel)
+                );
                 var existing = existingConfigs.FirstOrDefault();
                 
                 if (existing != null)
@@ -81,6 +94,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                     existing.Name = dto.Name;
                     existing.AiServerId = dto.AiServerId;
                     existing.DefaultModelId = dto.DefaultModelId;
+                    existing.ConversationModelId = dto.ConversationModelId;
                     existing.ConfigurationJson = dto.Configuration != null 
                         ? JsonSerializer.Serialize(dto.Configuration) 
                         : null;
@@ -99,6 +113,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                         IsDefault = false,
                         AiServerId = dto.AiServerId,
                         DefaultModelId = dto.DefaultModelId,
+                        ConversationModelId = dto.ConversationModelId,
                         ConfigurationJson = dto.Configuration != null 
                             ? JsonSerializer.Serialize(dto.Configuration) 
                             : null,
@@ -201,7 +216,12 @@ namespace OAI.ServiceLayer.Services.Orchestration
             try
             {
                 var repo = _unitOfWork.GetRepository<OAI.Core.Entities.OrchestratorConfiguration>();
-                var configs = await repo.GetAsync(c => c.IsDefault && c.IsActive);
+                var configs = await repo.GetAsync(
+                    filter: c => c.IsDefault && c.IsActive,
+                    include: q => q.Include(c => c.AiServer)
+                                   .Include(c => c.DefaultModel)
+                                   .Include(c => c.ConversationModel)
+                );
                 var config = configs.FirstOrDefault();
                 
                 return config != null ? MapToDto(config) : null;
@@ -218,7 +238,12 @@ namespace OAI.ServiceLayer.Services.Orchestration
             try
             {
                 var repo = _unitOfWork.GetRepository<OAI.Core.Entities.OrchestratorConfiguration>();
-                var configs = await repo.GetAsync(c => c.IsActive);
+                var configs = await repo.GetAsync(
+                    filter: c => c.IsActive,
+                    include: q => q.Include(c => c.AiServer)
+                                   .Include(c => c.DefaultModel)
+                                   .Include(c => c.ConversationModel)
+                );
                 
                 return configs.Select(MapToDto).ToList();
             }
@@ -242,6 +267,8 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 AiServerType = entity.AiServer?.ServerType,
                 DefaultModelId = entity.DefaultModelId,
                 DefaultModelName = entity.DefaultModel?.Name,
+                ConversationModelId = entity.ConversationModelId,
+                ConversationModelName = entity.ConversationModel?.Name,
                 IsActive = entity.IsActive,
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = entity.UpdatedAt
@@ -252,7 +279,23 @@ namespace OAI.ServiceLayer.Services.Orchestration
             {
                 try
                 {
-                    dto.Configuration = JsonSerializer.Deserialize<Dictionary<string, object>>(entity.ConfigurationJson);
+                    var jsonOptions = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    };
+                    using var doc = JsonDocument.Parse(entity.ConfigurationJson);
+                    dto.Configuration = new Dictionary<string, object>();
+                    foreach (var property in doc.RootElement.EnumerateObject())
+                    {
+                        dto.Configuration[property.Name] = property.Value.ValueKind switch
+                        {
+                            JsonValueKind.True => true,
+                            JsonValueKind.False => false,
+                            JsonValueKind.Number => property.Value.GetDouble(),
+                            JsonValueKind.String => property.Value.GetString(),
+                            _ => property.Value.GetRawText()
+                        };
+                    }
                 }
                 catch (Exception ex)
                 {

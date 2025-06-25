@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OAI.Core.DTOs;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.Entities.Projects;
 using OAI.Core.Interfaces.Orchestration;
@@ -133,9 +134,10 @@ namespace OptimalyAI.Controllers
                 var allMetadata = await orchestratorRegistry.GetAllOrchestratorMetadataAsync();
                 _logger.LogInformation("Found {Count} orchestrators from registry", allMetadata.Count);
                 
-                // Get settings service and AI server service for checking real activation status
-                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
+                // Get configuration service and AI server service for checking real activation status
+                var configService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
                 var aiServerService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
+                var aiModelService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiModelService>();
                 
                 foreach (var metadata in allMetadata)
                 {
@@ -143,22 +145,25 @@ namespace OptimalyAI.Controllers
                     {
                         _logger.LogInformation("Processing orchestrator: {Id} - {Name}", metadata.Id, metadata.Name);
                         
-                        // Get saved configuration
-                        var savedConfiguration = settingsService != null 
-                            ? await settingsService.GetOrchestratorConfigurationAsync(metadata.Id)
+                        // Get saved configuration from database
+                        var savedConfiguration = configService != null 
+                            ? await configService.GetByOrchestratorIdAsync(metadata.Id)
                             : null;
                         
                         // Check real orchestrator activation status based on AI server
-                        bool isActive = false;
+                        bool isServerRunning = false;
                         string? aiServerName = null;
                         string? defaultModelId = null;
+                        string? defaultModelName = null;
+                        string? conversationModelName = null;
                         bool isModelLoaded = false;
+                        bool isConversationModelLoaded = false;
                         
-                        if (settingsService != null && aiServerService != null && savedConfiguration?.AiServerId != null)
+                        if (configService != null && aiServerService != null && savedConfiguration?.AiServerId != null)
                         {
                             // Check if the AI server is running
-                            isActive = await aiServerService.IsServerRunningAsync(savedConfiguration.AiServerId.Value);
-                            _logger.LogInformation("Orchestrator {Name} AI server running status: {IsActive}", metadata.Name, isActive);
+                            isServerRunning = await aiServerService.IsServerRunningAsync(savedConfiguration.AiServerId.Value);
+                            _logger.LogInformation("Orchestrator {Name} AI server running status: {IsActive}", metadata.Name, isServerRunning);
                             
                             // Get AI server name
                             var server = await aiServerService.GetByIdAsync(savedConfiguration.AiServerId.Value);
@@ -166,31 +171,85 @@ namespace OptimalyAI.Controllers
                             {
                                 aiServerName = server.Name;
                                 
-                                // Check if the configured model is actually loaded
-                                if (isActive && !string.IsNullOrEmpty(savedConfiguration.DefaultModelId))
+                                // Get model names
+                                if (savedConfiguration.DefaultModelId.HasValue && aiModelService != null)
                                 {
-                                    try
+                                    var model = await aiModelService.GetByIdAsync(savedConfiguration.DefaultModelId.Value);
+                                    if (model != null)
                                     {
-                                        // Get loaded models for this server
-                                        var loadedModels = await GetLoadedModelsForServer(server);
-                                        isModelLoaded = loadedModels.Any(m => 
-                                            m.Equals(savedConfiguration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
+                                        defaultModelId = model.Id.ToString();
+                                        defaultModelName = model.Name;
                                         
-                                        _logger.LogInformation("Model {Model} loaded status: {IsLoaded}", 
-                                            savedConfiguration.DefaultModelId, isModelLoaded);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        _logger.LogWarning(ex, "Failed to check model status for {Model}", savedConfiguration.DefaultModelId);
+                                        // Check if the model is actually loaded
+                                        if (isServerRunning)
+                                        {
+                                            try
+                                            {
+                                                var loadedModels = await GetLoadedModelsForServer(server);
+                                                isModelLoaded = loadedModels.Any(m => 
+                                                    m.Equals(model.Name, StringComparison.OrdinalIgnoreCase));
+                                                
+                                                _logger.LogInformation("Model {Model} loaded status: {IsLoaded}", 
+                                                    model.Name, isModelLoaded);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                _logger.LogWarning(ex, "Failed to check model status for {Model}", model.Name);
+                                            }
+                                        }
                                     }
                                 }
                                 
-                                defaultModelId = savedConfiguration.DefaultModelId?.ToString();
+                                // Get conversation model name and check if loaded
+                                if (savedConfiguration.ConversationModelId.HasValue && aiModelService != null)
+                                {
+                                    var convModel = await aiModelService.GetByIdAsync(savedConfiguration.ConversationModelId.Value);
+                                    if (convModel != null)
+                                    {
+                                        conversationModelName = convModel.Name;
+                                        
+                                        // Check if the conversation model is loaded
+                                        if (isServerRunning)
+                                        {
+                                            try
+                                            {
+                                                var loadedModels = await GetLoadedModelsForServer(server);
+                                                isConversationModelLoaded = loadedModels.Any(m => 
+                                                    m.Equals(convModel.Name, StringComparison.OrdinalIgnoreCase));
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                _logger.LogWarning(ex, "Failed to check conversation model status for {Model}", convModel.Name);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         
+                        // Determine if orchestrator is truly active (server running AND at least one model loaded)
+                        bool isActive = isServerRunning && (isModelLoaded || isConversationModelLoaded);
+                        
                         // Get metrics
                         var metrics = await _metrics.GetMetricsAsync(metadata.Id, TimeRange.LastWeek);
+                        
+                        // Get flags from configuration
+                        bool isWorkflowNode = metadata.IsWorkflowNode;
+                        bool isDefaultCodingOrchestrator = false;
+                        bool isDefaultChatOrchestrator = false;
+                        bool isDefaultWorkflowOrchestrator = false;
+                        
+                        if (savedConfiguration?.Configuration != null)
+                        {
+                            if (savedConfiguration.Configuration.TryGetValue("isWorkflowNode", out var wn))
+                                isWorkflowNode = Convert.ToBoolean(wn);
+                            if (savedConfiguration.Configuration.TryGetValue("isDefaultCodingOrchestrator", out var dco))
+                                isDefaultCodingOrchestrator = Convert.ToBoolean(dco);
+                            if (savedConfiguration.Configuration.TryGetValue("isDefaultChatOrchestrator", out var dch))
+                                isDefaultChatOrchestrator = Convert.ToBoolean(dch);
+                            if (savedConfiguration.Configuration.TryGetValue("isDefaultWorkflowOrchestrator", out var dwo))
+                                isDefaultWorkflowOrchestrator = Convert.ToBoolean(dwo);
+                        }
                         
                         var viewModel = new OrchestratorViewModel
                         {
@@ -200,9 +259,10 @@ namespace OptimalyAI.Controllers
                             Type = metadata.TypeName,
                             IsActive = isActive,
                             IsDefault = false, // IsDefault is deprecated
-                            IsWorkflowNode = savedConfiguration?.IsWorkflowNode ?? metadata.IsWorkflowNode,
-                            IsDefaultChatOrchestrator = savedConfiguration?.IsDefaultChatOrchestrator ?? false,
-                            IsDefaultWorkflowOrchestrator = savedConfiguration?.IsDefaultWorkflowOrchestrator ?? false,
+                            IsWorkflowNode = isWorkflowNode,
+                            IsDefaultCodingOrchestrator = isDefaultCodingOrchestrator,
+                            IsDefaultChatOrchestrator = isDefaultChatOrchestrator,
+                            IsDefaultWorkflowOrchestrator = isDefaultWorkflowOrchestrator,
                             TotalExecutions = metrics?.TotalExecutions ?? 0,
                             SuccessfulExecutions = metrics?.SuccessfulExecutions ?? 0,
                             FailedExecutions = metrics?.FailedExecutions ?? 0,
@@ -210,8 +270,10 @@ namespace OptimalyAI.Controllers
                             LastExecutionTime = null, // LastExecutionTime not available in metrics
                             Capabilities = metadata.Capabilities,
                             AiServerName = aiServerName,
-                            DefaultModelId = defaultModelId,
-                            IsModelLoaded = isModelLoaded
+                            DefaultModelId = defaultModelName ?? defaultModelId,
+                            ConversationModelName = conversationModelName,
+                            IsModelLoaded = isModelLoaded,
+                            IsConversationModelLoaded = isConversationModelLoaded
                         };
                         
                         orchestrators.Add(viewModel);
@@ -306,14 +368,14 @@ namespace OptimalyAI.Controllers
             };
             
             // Get AI server configuration and status
-            var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-            if (settingsService != null)
+            var configService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
+            if (configService != null)
             {
-                var configuration = await settingsService.GetOrchestratorConfigurationAsync(id);
+                var configuration = await configService.GetByOrchestratorIdAsync(id);
                 if (configuration != null)
                 {
                     viewModel.AiServerId = configuration.AiServerId;
-                    viewModel.DefaultModelId = configuration.DefaultModelId;
+                    viewModel.DefaultModelId = configuration.DefaultModelId?.ToString();
                     
                     // Get AI server details and status
                     if (configuration.AiServerId.HasValue)
@@ -443,10 +505,10 @@ namespace OptimalyAI.Controllers
                 }
 
                 // Get the saved configuration to use the correct AI server and model
-                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(request.OrchestratorId) : null;
+                var configService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
+                var configuration = configService != null ? await configService.GetByOrchestratorIdAsync(request.OrchestratorId) : null;
                 
-                if (configuration?.AiServerId == null || string.IsNullOrEmpty(configuration.DefaultModelId))
+                if (configuration?.AiServerId == null || !configuration.DefaultModelId.HasValue)
                 {
                     return Json(new { 
                         success = false, 
@@ -472,7 +534,7 @@ namespace OptimalyAI.Controllers
                 
                 // Add AI configuration to context
                 context.Variables["aiServerId"] = configuration.AiServerId.ToString();
-                context.Variables["modelId"] = configuration.DefaultModelId;
+                context.Variables["modelId"] = configuration.DefaultModelId?.ToString();
                 
                 // Add test-specific metadata
                 context.Metadata["isTest"] = true;
@@ -526,7 +588,7 @@ namespace OptimalyAI.Controllers
                                 orchestratorId = request.OrchestratorId,
                                 orchestratorType = metadata.TypeName,
                                 aiServer = configuration.AiServerId.ToString(),
-                                model = configuration.DefaultModelId,
+                                model = configuration.DefaultModelId?.ToString(),
                                 input = request.Input,
                                 output = result,
                                 executionTime = $"{executionTime.TotalSeconds:F2}s",
@@ -558,7 +620,7 @@ namespace OptimalyAI.Controllers
                             orchestratorId = request.OrchestratorId,
                             orchestratorType = metadata.TypeName,
                             aiServer = configuration.AiServerId.ToString(),
-                            model = configuration.DefaultModelId,
+                            model = configuration.DefaultModelId?.ToString(),
                             executionTime = $"{executionTime.TotalSeconds:F2}s",
                             timestamp = DateTime.UtcNow,
                             stackTrace = ex.StackTrace
@@ -597,10 +659,10 @@ namespace OptimalyAI.Controllers
                 steps.Add(new { message = $"Loading orchestrator configuration for {request.OrchestratorId}...", status = "info" });
 
                 // Get orchestrator configuration
-                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(request.OrchestratorId) : null;
+                var configService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
+                var configuration = configService != null ? await configService.GetByOrchestratorIdAsync(request.OrchestratorId) : null;
                 
-                if (configuration?.AiServerId == null || string.IsNullOrEmpty(configuration.DefaultModelId))
+                if (configuration?.AiServerId == null || !configuration.DefaultModelId.HasValue)
                 {
                     steps.Add(new { message = "No AI server configured for this orchestrator", status = "error" });
                     steps.Add(new { message = "Cannot proceed without server configuration", status = "error" });
@@ -642,7 +704,7 @@ namespace OptimalyAI.Controllers
                 {
                     steps.Add(new { message = $"Found AI server: {server.Name} ({server.ServerType})", status = "success" });
                     steps.Add(new { message = $"Server URL: {server.BaseUrl}", status = "info" });
-                    steps.Add(new { message = $"Model to load: {configuration?.DefaultModelId ?? "None"}", status = "info" });
+                    steps.Add(new { message = $"Model to load: {configuration?.DefaultModelId?.ToString() ?? "None"}", status = "info" });
                 }
                 else
                 {
@@ -782,33 +844,44 @@ namespace OptimalyAI.Controllers
                 }
 
                 // Load the model if server is running and model is specified
-                if (isRunning && server != null && !string.IsNullOrEmpty(configuration?.DefaultModelId))
+                string? modelName = null;
+                if (configuration?.DefaultModelId.HasValue == true)
                 {
-                    steps.Add(new { message = $"Checking if model {configuration.DefaultModelId} is loaded...", status = "info" });
+                    var aiModelService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiModelService>();
+                    if (aiModelService != null)
+                    {
+                        var model = await aiModelService.GetByIdAsync(configuration.DefaultModelId.Value);
+                        modelName = model?.Name;
+                    }
+                }
+                
+                if (isRunning && server != null && !string.IsNullOrEmpty(modelName))
+                {
+                    steps.Add(new { message = $"Checking if model {modelName} is loaded...", status = "info" });
                     
                     try
                     {
                         // Check if model is already loaded
                         var loadedModels = await GetLoadedModelsForServer(server);
                         bool modelAlreadyLoaded = loadedModels.Any(m => 
-                            m.Equals(configuration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
+                            m.Equals(modelName, StringComparison.OrdinalIgnoreCase));
                         
                         if (modelAlreadyLoaded)
                         {
-                            steps.Add(new { message = $"Model {configuration.DefaultModelId} is already loaded", status = "success" });
+                            steps.Add(new { message = $"Model {modelName} is already loaded", status = "success" });
                         }
                         else
                         {
-                            steps.Add(new { message = $"Model {configuration.DefaultModelId} needs to be loaded", status = "warning" });
+                            steps.Add(new { message = $"Model {modelName} needs to be loaded", status = "warning" });
                             
                             // Load the model based on server type
                             if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama)
                             {
-                                steps.Add(new { message = $"Loading Ollama model: {configuration.DefaultModelId}", status = "info" });
+                                steps.Add(new { message = $"Loading Ollama model: {modelName}", status = "info" });
                                 
                                 // Pull the model if needed
-                                steps.Add(new { message = $"Executing: ollama pull {configuration.DefaultModelId}", status = "info" });
-                                var pullResult = await ExecuteOllamaCommand($"pull {configuration.DefaultModelId}");
+                                steps.Add(new { message = $"Executing: ollama pull {modelName}", status = "info" });
+                                var pullResult = await ExecuteOllamaCommand($"pull {modelName}");
                                 if (!pullResult.success)
                                 {
                                     steps.Add(new { message = $"Failed to pull model: {pullResult.message}", status = "error" });
@@ -825,10 +898,10 @@ namespace OptimalyAI.Controllers
                             }
                             else if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
                             {
-                                steps.Add(new { message = $"Loading LM Studio model: {configuration.DefaultModelId}", status = "info" });
-                                steps.Add(new { message = $"Executing: lms load \"{configuration.DefaultModelId}\" --yes --quiet", status = "info" });
+                                steps.Add(new { message = $"Loading LM Studio model: {modelName}", status = "info" });
+                                steps.Add(new { message = $"Executing: lms load \"{modelName}\" --yes --quiet", status = "info" });
                                 
-                                var loadResult = await ExecuteLMStudioCommand($"load \"{configuration.DefaultModelId}\" --yes --quiet");
+                                var loadResult = await ExecuteLMStudioCommand($"load \"{modelName}\" --yes --quiet");
                                 if (!loadResult.success)
                                 {
                                     steps.Add(new { message = $"Failed to load model: {loadResult.message}", status = "error" });
@@ -859,21 +932,21 @@ namespace OptimalyAI.Controllers
                             
                             loadedModels = await GetLoadedModelsForServer(server);
                             modelAlreadyLoaded = loadedModels.Any(m => 
-                                m.Equals(configuration.DefaultModelId, StringComparison.OrdinalIgnoreCase));
+                                m.Equals(modelName, StringComparison.OrdinalIgnoreCase));
                             
                             if (modelAlreadyLoaded)
                             {
-                                steps.Add(new { message = $"Model {configuration.DefaultModelId} is now loaded!", status = "success" });
+                                steps.Add(new { message = $"Model {modelName} is now loaded!", status = "success" });
                             }
                             else
                             {
-                                steps.Add(new { message = $"Model {configuration.DefaultModelId} failed to load", status = "error" });
+                                steps.Add(new { message = $"Model {modelName} failed to load", status = "error" });
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error loading model {ModelId}", configuration.DefaultModelId);
+                        _logger.LogError(ex, "Error loading model {ModelId}", modelName);
                         steps.Add(new { message = $"Error loading model: {ex.Message}", status = "error" });
                     }
                 }
@@ -892,7 +965,7 @@ namespace OptimalyAI.Controllers
                         aiServerId = configuration?.AiServerId,
                         serverName = server?.Name ?? "Unknown",
                         serverType = server?.ServerType.ToString() ?? "Unknown",
-                        modelId = configuration?.DefaultModelId ?? "None",
+                        modelId = configuration?.DefaultModelId?.ToString() ?? "None",
                         serverRunning = isRunning
                     }
                 });
@@ -927,10 +1000,10 @@ namespace OptimalyAI.Controllers
                 _logger.LogInformation("Activating orchestrator {OrchestratorId}", request.OrchestratorId);
 
                 // Get orchestrator configuration
-                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(request.OrchestratorId) : null;
+                var configService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
+                var configuration = configService != null ? await configService.GetByOrchestratorIdAsync(request.OrchestratorId) : null;
                 
-                if (configuration?.AiServerId == null || string.IsNullOrEmpty(configuration.DefaultModelId))
+                if (configuration?.AiServerId == null || !configuration.DefaultModelId.HasValue)
                 {
                     return Json(new { 
                         success = false, 
@@ -998,7 +1071,7 @@ namespace OptimalyAI.Controllers
                     {
                         orchestratorId = request.OrchestratorId,
                         aiServerId = configuration.AiServerId,
-                        modelId = configuration.DefaultModelId,
+                        modelId = configuration.DefaultModelId?.ToString(),
                         serverRunning = true
                     }
                 });
@@ -1023,8 +1096,8 @@ namespace OptimalyAI.Controllers
                     return Json(new { success = false, error = "Invalid request data" });
                 }
                 
-                _logger.LogInformation("Request received: OrchestratorId={Id}, IsDefault={IsDefault}, AiServerId={AiServerId}, ModelId={ModelId}", 
-                    request.OrchestratorId, request.IsDefault, request.AiServerId, request.DefaultModelId);
+                _logger.LogInformation("Request received: OrchestratorId={Id}, IsDefault={IsDefault}, ModelId={ModelId}, ConversationModelId={ConversationModelId}", 
+                    request.OrchestratorId, request.IsDefault, request.DefaultModelId, request.ConversationModelId);
                 
                 if (string.IsNullOrEmpty(request.OrchestratorId))
                 {
@@ -1037,17 +1110,53 @@ namespace OptimalyAI.Controllers
                     await _orchestratorSettings.SetDefaultOrchestratorAsync(request.OrchestratorId);
                 }
 
-                // Save AI Server and Model configuration along with workflow properties
-                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-                if (settingsService != null)
+                // Get AI Server ID from the model
+                Guid? aiServerId = null;
+                if (!string.IsNullOrEmpty(request.DefaultModelId))
                 {
-                    await settingsService.SaveOrchestratorConfigurationAsync(
-                        request.OrchestratorId, 
-                        request.AiServerId, 
-                        request.DefaultModelId,
-                        request.IsWorkflowNode,
-                        request.IsDefaultChatOrchestrator,
-                        request.IsDefaultWorkflowOrchestrator);
+                    var aiModelService = _serviceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiModelService>();
+                    if (aiModelService != null && int.TryParse(request.DefaultModelId, out var modelId))
+                    {
+                        var model = await aiModelService.GetByIdAsync(modelId);
+                        if (model != null)
+                        {
+                            aiServerId = model.AiServerId;
+                        }
+                    }
+                }
+
+                // Save AI Server and Model configuration to database
+                var configService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
+                if (configService != null)
+                {
+                    var createDto = new CreateOrchestratorConfigurationDto
+                    {
+                        OrchestratorId = request.OrchestratorId,
+                        Name = request.OrchestratorId,
+                        IsDefault = request.IsDefault,
+                        AiServerId = aiServerId,
+                        DefaultModelId = string.IsNullOrEmpty(request.DefaultModelId) ? null : int.Parse(request.DefaultModelId),
+                        ConversationModelId = string.IsNullOrEmpty(request.ConversationModelId) ? null : int.Parse(request.ConversationModelId),
+                        Configuration = new Dictionary<string, object>
+                        {
+                            ["isWorkflowNode"] = request.IsWorkflowNode,
+                            ["isDefaultCodingOrchestrator"] = request.IsDefaultCodingOrchestrator,
+                            ["isDefaultChatOrchestrator"] = request.IsDefaultChatOrchestrator,
+                            ["isDefaultWorkflowOrchestrator"] = request.IsDefaultWorkflowOrchestrator
+                        },
+                        IsActive = true
+                    };
+                    
+                    _logger.LogInformation("Saving configuration to database for orchestrator {OrchestratorId} with ModelId {ModelId}", 
+                        request.OrchestratorId, request.DefaultModelId);
+                    
+                    var result = await configService.SaveConfigurationAsync(request.OrchestratorId, createDto);
+                    
+                    _logger.LogInformation("Configuration saved successfully to database with ID {Id}", result.Id);
+                }
+                else
+                {
+                    _logger.LogWarning("IOrchestratorConfigurationService not found, configuration not saved to database");
                 }
                 
                 return Json(new { success = true, message = "Configuration saved successfully" });
@@ -1075,14 +1184,30 @@ namespace OptimalyAI.Controllers
                 // Get default status
                 var isDefault = await _orchestratorSettings.IsDefaultOrchestratorAsync(id);
                 
-                // Get AI Server and Model configuration
-                var settingsService = _orchestratorSettings as OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService;
-                var configuration = settingsService != null ? await settingsService.GetOrchestratorConfigurationAsync(id) : null;
+                // Get configuration from database
+                var configService = _serviceProvider.GetService<IOrchestratorConfigurationService>();
+                _logger.LogInformation("Getting configuration for orchestrator {OrchestratorId}", id);
+                var configuration = configService != null ? await configService.GetByOrchestratorIdAsync(id) : null;
+                _logger.LogInformation("Configuration found: {Found}, ModelId: {ModelId}", 
+                    configuration != null, configuration?.DefaultModelId);
                 
-                // Get IsWorkflowNode and IsDefaultChatOrchestrator from saved configuration
-                bool isWorkflowNode = configuration?.IsWorkflowNode ?? false;
-                bool isDefaultChatOrchestrator = configuration?.IsDefaultChatOrchestrator ?? false;
-                bool isDefaultWorkflowOrchestrator = configuration?.IsDefaultWorkflowOrchestrator ?? false;
+                // Get flags from configuration
+                bool isWorkflowNode = false;
+                bool isDefaultCodingOrchestrator = false;
+                bool isDefaultChatOrchestrator = false;
+                bool isDefaultWorkflowOrchestrator = false;
+                
+                if (configuration?.Configuration != null)
+                {
+                    if (configuration.Configuration.TryGetValue("isWorkflowNode", out var wn))
+                        isWorkflowNode = Convert.ToBoolean(wn);
+                    if (configuration.Configuration.TryGetValue("isDefaultCodingOrchestrator", out var dco))
+                        isDefaultCodingOrchestrator = Convert.ToBoolean(dco);
+                    if (configuration.Configuration.TryGetValue("isDefaultChatOrchestrator", out var dch))
+                        isDefaultChatOrchestrator = Convert.ToBoolean(dch);
+                    if (configuration.Configuration.TryGetValue("isDefaultWorkflowOrchestrator", out var dwo))
+                        isDefaultWorkflowOrchestrator = Convert.ToBoolean(dwo);
+                }
                 
                 // If no configuration exists, get defaults from orchestrator metadata
                 if (configuration == null)
@@ -1103,10 +1228,12 @@ namespace OptimalyAI.Controllers
                     orchestratorId = id,
                     isDefault = isDefault,
                     isWorkflowNode = isWorkflowNode,
+                    isDefaultCodingOrchestrator = isDefaultCodingOrchestrator,
                     isDefaultChatOrchestrator = isDefaultChatOrchestrator,
                     isDefaultWorkflowOrchestrator = isDefaultWorkflowOrchestrator,
                     aiServerId = configuration?.AiServerId?.ToString(),
-                    defaultModelId = configuration?.DefaultModelId  // Already a string now
+                    defaultModelId = configuration?.DefaultModelId?.ToString(),
+                    conversationModelId = configuration?.ConversationModelId?.ToString()
                 };
                 
                 return Json(new { success = true, data = config });
@@ -1245,6 +1372,7 @@ namespace OptimalyAI.Controllers
         public bool IsWorkflowNode { get; set; }
         public bool IsDefaultChatOrchestrator { get; set; }
         public bool IsDefaultWorkflowOrchestrator { get; set; }
+        public bool IsDefaultCodingOrchestrator { get; set; }
         public int TotalExecutions { get; set; }
         public int SuccessfulExecutions { get; set; }
         public int FailedExecutions { get; set; }
@@ -1261,7 +1389,9 @@ namespace OptimalyAI.Controllers
         // AI Server configuration
         public string? AiServerName { get; set; }
         public string? DefaultModelId { get; set; }
+        public string? ConversationModelName { get; set; }
         public bool IsModelLoaded { get; set; }
+        public bool IsConversationModelLoaded { get; set; }
     }
 
     public class OrchestratorDetailsViewModel
@@ -1318,10 +1448,11 @@ namespace OptimalyAI.Controllers
         public string? Name { get; set; }
         public bool IsDefault { get; set; }
         public bool IsWorkflowNode { get; set; }
+        public bool IsDefaultCodingOrchestrator { get; set; }
         public bool IsDefaultChatOrchestrator { get; set; }
         public bool IsDefaultWorkflowOrchestrator { get; set; }
-        public Guid? AiServerId { get; set; }
         public string? DefaultModelId { get; set; }  // Changed from Guid? to string?
+        public string? ConversationModelId { get; set; }
         public Dictionary<string, object>? Configuration { get; set; }
     }
 

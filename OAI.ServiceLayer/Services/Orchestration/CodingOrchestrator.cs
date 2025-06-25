@@ -11,6 +11,7 @@ using OAI.Core.DTOs.Orchestration;
 using OAI.Core.Interfaces.AI;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.ServiceLayer.Services.Orchestration.Base;
+using OAI.ServiceLayer.Interfaces;
 
 namespace OAI.ServiceLayer.Services.Orchestration
 {
@@ -25,6 +26,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
     public class CodingOrchestrator : BaseOrchestrator<CodingOrchestratorRequestDto, CodingOrchestratorResponseDto>
     {
         private readonly IAiServiceRouter _aiServiceRouter;
+        private readonly IOrchestratorConfigurationService _configurationService;
 
         public override string Id => "coding_orchestrator";
         public override string Name => "AI Coding Orchestrator";
@@ -37,6 +39,8 @@ namespace OAI.ServiceLayer.Services.Orchestration
             IServiceProvider serviceProvider) : base(logger, metrics, serviceProvider)
         {
             _aiServiceRouter = aiServiceRouter ?? throw new ArgumentNullException(nameof(aiServiceRouter));
+            _configurationService = serviceProvider.GetService<IOrchestratorConfigurationService>() 
+                ?? throw new InvalidOperationException("IOrchestratorConfigurationService is required");
         }
 
         protected override async Task<CodingOrchestratorResponseDto> ExecuteCoreAsync(
@@ -55,6 +59,13 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
             try
             {
+                // Načtení konfigurace orchestrátoru
+                var configuration = await _configurationService.GetByOrchestratorIdAsync(Id);
+                if (configuration == null)
+                {
+                    throw new InvalidOperationException($"Configuration not found for orchestrator {Id}");
+                }
+                
                 // Extrakce uživatelského dotazu z kontextu
                 var userQuery = ExtractUserQuery(request.Task);
                 _logger.LogDebug("Extracted user query: {UserQuery}", userQuery);
@@ -62,6 +73,25 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 // Detekce typu dotazu
                 var isCodingRequest = IsCodingRequest(userQuery);
                 _logger.LogInformation("Query type detection - IsCoding: {IsCoding}, Query: {Query}", isCodingRequest, userQuery);
+                
+                // Určení modelu podle typu dotazu
+                string? modelId;
+                if (isCodingRequest)
+                {
+                    modelId = request.ModelId ?? configuration.DefaultModelId?.ToString();
+                }
+                else
+                {
+                    // Pro konverzaci použijeme ConversationModelId, nebo pokud není nastaven, tak DefaultModelId
+                    modelId = configuration.ConversationModelId?.ToString() ?? configuration.DefaultModelId?.ToString();
+                }
+                
+                if (string.IsNullOrWhiteSpace(modelId))
+                {
+                    throw new InvalidOperationException("No model configured for orchestrator");
+                }
+                
+                _logger.LogInformation("Using model {ModelId} for {QueryType} query", modelId, isCodingRequest ? "coding" : "conversation");
                 
                 if (isCodingRequest)
                 {
@@ -74,7 +104,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                     var prompt = BuildCodingPrompt(request, projectAnalysis);
 
                     // 3. Volání AI modelu s coding parametry
-                    var aiResponse = await CallAIModelForCoding(request.ModelId, prompt, cancellationToken);
+                    var aiResponse = await CallAIModelForCoding(modelId, prompt, cancellationToken);
                     response.Explanation = aiResponse;
 
                     // 4. Parsování navrhovaných změn
@@ -92,7 +122,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 {
                     // Konverzační flow
                     var conversationPrompt = BuildConversationPrompt(request, userQuery);
-                    var aiResponse = await CallAIModelForConversation(request.ModelId, conversationPrompt, cancellationToken);
+                    var aiResponse = await CallAIModelForConversation(modelId, conversationPrompt, cancellationToken);
                     response.Explanation = aiResponse;
                     response.ProjectAnalysis = "Konverzační dotaz - analýza projektu není potřeba.";
                     response.ProposedChanges = new List<CodeChange>(); // Žádné změny kódu pro konverzaci

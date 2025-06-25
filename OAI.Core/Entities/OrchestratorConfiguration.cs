@@ -23,6 +23,12 @@ namespace OAI.Core.Entities
         public virtual AiModel? DefaultModel { get; set; }
         
         /// <summary>
+        /// Model ID for conversation/chat queries (optional, defaults to DefaultModelId)
+        /// </summary>
+        public int? ConversationModelId { get; set; }
+        public virtual AiModel? ConversationModel { get; set; }
+        
+        /// <summary>
         /// JSON configuration for orchestrator-specific settings
         /// </summary>
         public string ConfigurationJson { get; set; } = "{}";

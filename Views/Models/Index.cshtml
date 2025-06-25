@@ -204,7 +204,7 @@
                         <tbody>
                             @foreach (var modelItem in Model.Models)
                             {
-                                <tr>
+                                <tr data-model-id="@modelItem.Id">
                                     <td>
                                         <strong>@modelItem.DisplayName</strong>
                                         @if (modelItem.IsDefault)

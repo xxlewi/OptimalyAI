@@ -100,6 +100,19 @@
             50% { opacity: 0.8; transform: scale(1.1); }
             100% { opacity: 1; transform: scale(1); }
         }
+        
+        .model-info {
+            padding: 4px 0;
+            border-left: 3px solid transparent;
+            padding-left: 8px;
+            margin-bottom: 4px;
+            transition: all 0.3s ease;
+        }
+        
+        .model-info:hover {
+            border-left-color: #007bff;
+            background-color: rgba(0, 123, 255, 0.05);
+        }
     </style>
 }
 
@@ -202,6 +215,12 @@
                                         <i class="fas fa-sitemap mr-1"></i>Default Workflow
                                     </span>
                                 }
+                                @if (orchestrator.IsDefaultCodingOrchestrator)
+                                {
+                                    <span class="badge badge-success ml-2">
+                                        <i class="fas fa-code mr-1"></i>Default Coding
+                                    </span>
+                                }
                             </h3>
                             <div class="card-tools">
                                 <span class="status-badge @(orchestrator.IsActive ? "active" : "inactive")">
@@ -213,45 +232,57 @@
                         <div class="card-body">
                             <p class="text-muted mb-3">@orchestrator.Description</p>
                             
-                            @if (!string.IsNullOrEmpty(orchestrator.AiServerName) && !string.IsNullOrEmpty(orchestrator.DefaultModelId))
-                            {
-                                <div class="mb-3">
-                                    <small class="text-muted">
-                                        @if (orchestrator.IsActive)
-                                        {
-                                            <i class="fas fa-circle text-success mr-1 server-status-indicator active" title="Server is running"></i>
-                                        }
-                                        else
-                                        {
-                                            <i class="fas fa-circle text-danger mr-1 server-status-indicator" title="Server is not running"></i>
-                                        }
-                                        <i class="fas fa-server mr-1"></i> @orchestrator.AiServerName
-                                        <span class="mx-2">|</span>
-                                        @if (orchestrator.IsActive && orchestrator.IsModelLoaded)
-                                        {
-                                            <i class="fas fa-circle text-success mr-1 server-status-indicator active" title="Model is loaded"></i>
-                                        }
-                                        else if (orchestrator.IsActive && !orchestrator.IsModelLoaded)
-                                        {
-                                            <i class="fas fa-circle text-warning mr-1 server-status-indicator" title="Model not loaded"></i>
-                                        }
-                                        else
-                                        {
-                                            <i class="fas fa-circle text-secondary mr-1" title="Server offline"></i>
-                                        }
-                                        <i class="fas fa-brain mr-1"></i> @orchestrator.DefaultModelId
-                                    </small>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="mb-3">
+                            <div class="mb-3">
+                                @if (!string.IsNullOrEmpty(orchestrator.DefaultModelId))
+                                {
+                                    <div class="model-info mb-1">
+                                        <small class="text-muted d-block">
+                                            @if (orchestrator.IsModelLoaded)
+                                            {
+                                                <i class="fas fa-circle text-success mr-1" title="Model je načtený a připravený"></i>
+                                            }
+                                            else if (!string.IsNullOrEmpty(orchestrator.AiServerName))
+                                            {
+                                                <i class="fas fa-circle text-warning mr-1" title="Model není načtený"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-circle text-danger mr-1" title="Server není nakonfigurován"></i>
+                                            }
+                                            <i class="fas fa-brain mr-1"></i> 
+                                            <strong>Výchozí model:</strong> @orchestrator.DefaultModelId
+                                        </small>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(orchestrator.ConversationModelName))
+                                {
+                                    <div class="model-info">
+                                        <small class="text-muted d-block">
+                                            @if (orchestrator.IsConversationModelLoaded)
+                                            {
+                                                <i class="fas fa-circle text-success mr-1" title="Model je načtený a připravený"></i>
+                                            }
+                                            else if (!string.IsNullOrEmpty(orchestrator.AiServerName))
+                                            {
+                                                <i class="fas fa-circle text-warning mr-1" title="Model není načtený"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-circle text-danger mr-1" title="Server není nakonfigurován"></i>
+                                            }
+                                            <i class="fas fa-comments mr-1"></i> 
+                                            <strong>Konverzační model:</strong> @orchestrator.ConversationModelName
+                                        </small>
+                                    </div>
+                                }
+                                @if (string.IsNullOrEmpty(orchestrator.DefaultModelId) && string.IsNullOrEmpty(orchestrator.ConversationModelName))
+                                {
                                     <small class="text-warning">
                                         <i class="fas fa-circle text-warning mr-1"></i>
-                                        <i class="fas fa-exclamation-triangle mr-1"></i> No AI server configured
+                                        <i class="fas fa-exclamation-triangle mr-1"></i> Není nakonfigurován žádný model
                                     </small>
-                                </div>
-                            }
+                                }
+                            </div>
                             
                             <div class="row text-center mb-3">
                                 <div class="col-4">
@@ -638,22 +669,24 @@
                         <input type="hidden" id="orchestratorId" value="${orchestratorId}">
                 `;
                 
-                // Add AI Server selection for all orchestrators
+                // Load models from all servers
                 content += `
-                    <div class="form-group row">
-                        <label class="col-sm-4 col-form-label">AI Server</label>
-                        <div class="col-sm-8">
-                            <select class="form-control" id="aiServerSelect" name="aiServer" onchange="loadServerModels()">
-                                <option value="">Loading servers...</option>
-                            </select>
-                        </div>
-                    </div>
                     <div class="form-group row">
                         <label class="col-sm-4 col-form-label">Default Model</label>
                         <div class="col-sm-8">
                             <select class="form-control" id="modelSelect" name="defaultModel">
-                                <option value="">Select AI Server first</option>
+                                <option value="">Loading models...</option>
                             </select>
+                            <small class="form-text text-muted">Primary model for code generation and analysis</small>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">Conversation Model</label>
+                        <div class="col-sm-8">
+                            <select class="form-control" id="conversationModelSelect" name="conversationModel">
+                                <option value="">Same as Default Model</option>
+                            </select>
+                            <small class="form-text text-muted">Model for chat and general conversation (optional)</small>
                         </div>
                     </div>
                     @* Historický IsDefault - už se nepoužívá
@@ -676,6 +709,16 @@
                                 <label class="custom-control-label" for="isWorkflowNode">Can be used as workflow node</label>
                             </div>
                             <small class="form-text text-muted">Enable to allow this orchestrator in workflow designer</small>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label class="col-sm-4 col-form-label">Default Coding Orchestrator</label>
+                        <div class="col-sm-8">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="isDefaultCodingOrchestrator" name="isDefaultCodingOrchestrator">
+                                <label class="custom-control-label" for="isDefaultCodingOrchestrator">Use as default for coding</label>
+                            </div>
+                            <small class="form-text text-muted">Set as the default orchestrator for coding and development tasks</small>
                         </div>
                     </div>
                     <div class="form-group row">
@@ -892,8 +935,8 @@
                 
                 $('#configContent').html(content);
                 
-                // Load AI servers
-                loadAIServers();
+                // Load all models from all servers
+                loadAllModels();
                 
                 // Load saved configuration
                 loadSavedConfiguration(orchestratorId);
@@ -914,23 +957,20 @@
                     
                     // Set workflow node checkbox (read-only)
                     $('#isWorkflowNode').prop('checked', config.isWorkflowNode || false);
+                    $('#isDefaultCodingOrchestrator').prop('checked', config.isDefaultCodingOrchestrator || false);
                     $('#isDefaultChatOrchestrator').prop('checked', config.isDefaultChatOrchestrator || false);
                     $('#isDefaultWorkflowOrchestrator').prop('checked', config.isDefaultWorkflowOrchestrator || false);
                     
-                    // Set AI server selection after servers are loaded
-                    if (config.aiServerId) {
-                        setTimeout(() => {
-                            $('#aiServerSelect').val(config.aiServerId);
-                            $('#aiServerSelect').trigger('change');
-                            
-                            // Set model selection after models are loaded
-                            if (config.defaultModelId) {
-                                setTimeout(() => {
-                                    $('#modelSelect').val(config.defaultModelId);
-                                }, 500);
-                            }
-                        }, 500);
-                    }
+                    // Set model selections after models are loaded
+                    setTimeout(() => {
+                        if (config.defaultModelId) {
+                            $('#modelSelect').val(config.defaultModelId);
+                        }
+                        
+                        if (config.conversationModelId) {
+                            $('#conversationModelSelect').val(config.conversationModelId);
+                        }
+                    }, 500);
                 } else {
                     // No saved configuration, set default based on current state
                     // Historický IsDefault - už se nepoužívá
@@ -948,43 +988,110 @@
             }
         }
         
-        async function loadAIServers() {
+        async function loadAllModels() {
             try {
-                // Load servers from page HTML - we'll parse the existing data
-                const response = await fetch('/AiServers');
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
+                // First, load servers to get their names
+                const serversResponse = await fetch('/AiServers');
+                const serversHtml = await serversResponse.text();
+                const serversParser = new DOMParser();
+                const serversDoc = serversParser.parseFromString(serversHtml, 'text/html');
                 
-                // Extract servers from the table
-                const servers = [];
-                doc.querySelectorAll('table tbody tr').forEach(row => {
+                // Extract servers info
+                const serversMap = {};
+                serversDoc.querySelectorAll('table tbody tr').forEach(row => {
                     const cells = row.querySelectorAll('td');
                     if (cells.length >= 5) {
                         const id = row.querySelector('button[data-id]')?.getAttribute('data-id');
                         const name = cells[0].textContent.trim();
                         const type = cells[1].querySelector('.badge')?.textContent.trim();
-                        const url = cells[2].textContent.trim();
-                        const isDefault = cells[3].querySelector('.badge-success') !== null;
                         
                         if (id) {
-                            servers.push({ id, name, type, url, isDefault });
+                            serversMap[name] = { id, name, type };
                         }
                     }
                 });
                 
-                let options = '<option value="">Select AI Server</option>';
-                servers.forEach(server => {
-                    const isDefault = server.isDefault ? ' (Default)' : '';
-                    options += `<option value="${server.id}" data-type="${server.type}" data-url="${server.url}">${server.name}${isDefault} - ${server.url}</option>`;
+                // Now load models from all servers
+                const response = await fetch('/Models');
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Extract models from table
+                const models = [];
+                doc.querySelectorAll('table tbody tr').forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 7) {
+                        const modelId = row.getAttribute('data-model-id');
+                        const modelName = cells[0].querySelector('small')?.textContent.trim();
+                        const serverBadge = cells[1].querySelector('.badge')?.textContent.trim();
+                        const sizeText = cells[2].textContent.trim();
+                        const statusBadge = cells[6].querySelector('.badge');
+                        const isLoaded = statusBadge?.textContent.includes('Načtený') || false;
+                        
+                        if (modelName && modelId) {
+                            // Find server info
+                            let serverInfo = null;
+                            for (const [serverName, info] of Object.entries(serversMap)) {
+                                if (serverName.includes(serverBadge) || info.type === serverBadge) {
+                                    serverInfo = info;
+                                    break;
+                                }
+                            }
+                            
+                            models.push({ 
+                                id: modelId,
+                                name: modelName,
+                                serverName: serverInfo?.name || serverBadge,
+                                serverType: serverInfo?.type || serverBadge,
+                                sizeText: sizeText,
+                                isLoaded: isLoaded
+                            });
+                        }
+                    }
                 });
                 
-                $('#aiServerSelect').html(options);
+                // Sort models by server and name
+                models.sort((a, b) => {
+                    if (a.serverName !== b.serverName) {
+                        return a.serverName.localeCompare(b.serverName);
+                    }
+                    return a.name.localeCompare(b.name);
+                });
                 
-                // Don't auto-select any server - let the saved configuration handle it
+                // Build options for model select
+                let options = '<option value="">Select Model</option>';
+                let currentServer = '';
+                
+                models.forEach(model => {
+                    // Add optgroup for each server
+                    if (model.serverName !== currentServer) {
+                        if (currentServer !== '') {
+                            options += '</optgroup>';
+                        }
+                        options += `<optgroup label="${model.serverName} (${model.serverType})">`;
+                        currentServer = model.serverName;
+                    }
+                    
+                    const status = model.isLoaded ? ' ✓' : '';
+                    const size = model.sizeText ? ` - ${model.sizeText}` : '';
+                    options += `<option value="${model.id}">${model.name}${size}${status}</option>`;
+                });
+                
+                if (currentServer !== '') {
+                    options += '</optgroup>';
+                }
+                
+                $('#modelSelect').html(options);
+                
+                // Also populate conversation model select
+                let conversationOptions = '<option value="">Same as Default Model</option>';
+                conversationOptions += options.replace('<option value="">Select Model</option>', '');
+                $('#conversationModelSelect').html(conversationOptions);
+                
             } catch (error) {
-                console.error('Error loading AI servers:', error);
-                $('#aiServerSelect').html('<option value="">Error loading servers</option>');
+                console.error('Error loading models:', error);
+                $('#modelSelect').html('<option value="">Error loading models</option>');
             }
         }
         
@@ -1041,6 +1148,11 @@
                 
                 $('#modelSelect').html(options);
                 
+                // Also populate conversation model select
+                let conversationOptions = '<option value="">Same as Default Model</option>';
+                conversationOptions += options.replace('<option value="">Select Model</option>', '');
+                $('#conversationModelSelect').html(conversationOptions);
+                
                 // Select default model if exists
                 const defaultModel = models.find(m => m.name.includes('llama3.2')) || models[0];
                 if (defaultModel) {
@@ -1086,13 +1198,14 @@
             Promise.resolve().then(async () => {
                 try {
                     // Prepare configuration data
-                    const aiServerId = $('#aiServerSelect').val();
                     const defaultModelId = $('#modelSelect').val();
+                    const conversationModelId = $('#conversationModelSelect').val();
                     
                     // Historický IsDefault - už se nepoužívá
                     // const isDefault = $('#isDefaultOrchestrator').is(':checked');
                     const isDefault = false; // Vždy false, už se nepoužívá
                     const isWorkflowNode = $('#isWorkflowNode').is(':checked');
+                    const isDefaultCodingOrchestrator = $('#isDefaultCodingOrchestrator').is(':checked');
                     const isDefaultChatOrchestrator = $('#isDefaultChatOrchestrator').is(':checked');
                     const isDefaultWorkflowOrchestrator = $('#isDefaultWorkflowOrchestrator').is(':checked');
                     
@@ -1101,16 +1214,17 @@
                         name: currentOrchestratorId,
                         isDefault: isDefault,
                         isWorkflowNode: isWorkflowNode,
+                        isDefaultCodingOrchestrator: isDefaultCodingOrchestrator,
                         isDefaultChatOrchestrator: isDefaultChatOrchestrator,
                         isDefaultWorkflowOrchestrator: isDefaultWorkflowOrchestrator,
-                        aiServerId: aiServerId ? aiServerId : null,
-                        defaultModelId: defaultModelId ? defaultModelId : null
+                        defaultModelId: defaultModelId ? defaultModelId : null,
+                        conversationModelId: conversationModelId ? conversationModelId : null
                     };
                     
                     console.log('Saving config data:', configData);
                     console.log('Current orchestrator ID:', currentOrchestratorId);
-                    console.log('AI Server ID:', aiServerId);
                     console.log('Model ID:', defaultModelId);
+                    console.log('Conversation Model ID:', conversationModelId);
                     console.log('Is Default:', isDefault);
                     console.log('JSON being sent:', JSON.stringify(configData));
                     

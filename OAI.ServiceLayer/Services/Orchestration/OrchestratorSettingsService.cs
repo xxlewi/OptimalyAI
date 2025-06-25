@@ -129,7 +129,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
         /// <summary>
         /// Saves orchestrator configuration with all properties
         /// </summary>
-        public async Task SaveOrchestratorConfigurationAsync(string orchestratorId, Guid? aiServerId, string? defaultModelId, bool isWorkflowNode, bool isDefaultChatOrchestrator, bool isDefaultWorkflowOrchestrator)
+        public async Task SaveOrchestratorConfigurationAsync(string orchestratorId, Guid? aiServerId, string? defaultModelId, bool isWorkflowNode, bool isDefaultCodingOrchestrator, bool isDefaultChatOrchestrator, bool isDefaultWorkflowOrchestrator, string? conversationModelId = null)
         {
             try
             {
@@ -141,7 +141,9 @@ namespace OAI.ServiceLayer.Services.Orchestration
                     OrchestratorId = orchestratorId,
                     AiServerId = aiServerId,
                     DefaultModelId = defaultModelId,
+                    ConversationModelId = conversationModelId,
                     IsWorkflowNode = isWorkflowNode,
+                    IsDefaultCodingOrchestrator = isDefaultCodingOrchestrator,
                     IsDefaultChatOrchestrator = isDefaultChatOrchestrator,
                     IsDefaultWorkflowOrchestrator = isDefaultWorkflowOrchestrator,
                     UpdatedAt = DateTime.UtcNow
@@ -235,7 +237,9 @@ namespace OAI.ServiceLayer.Services.Orchestration
         public string OrchestratorId { get; set; } = string.Empty;
         public Guid? AiServerId { get; set; }
         public string? DefaultModelId { get; set; }  // Changed from Guid? to string?
+        public string? ConversationModelId { get; set; }
         public bool IsWorkflowNode { get; set; }
+        public bool IsDefaultCodingOrchestrator { get; set; }
         public bool IsDefaultChatOrchestrator { get; set; }
         public bool IsDefaultWorkflowOrchestrator { get; set; }
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

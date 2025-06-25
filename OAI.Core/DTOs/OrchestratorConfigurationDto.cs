@@ -15,6 +15,8 @@ namespace OAI.Core.DTOs
         public AiServerType? AiServerType { get; set; }
         public int? DefaultModelId { get; set; }
         public string? DefaultModelName { get; set; }
+        public int? ConversationModelId { get; set; }
+        public string? ConversationModelName { get; set; }
         public Dictionary<string, object> Configuration { get; set; } = new();
         public bool IsActive { get; set; } = true;
     }
@@ -29,6 +31,7 @@ namespace OAI.Core.DTOs
         public bool IsDefault { get; set; }
         public Guid? AiServerId { get; set; }
         public int? DefaultModelId { get; set; }
+        public int? ConversationModelId { get; set; }
         public Dictionary<string, object> Configuration { get; set; } = new();
         public bool IsActive { get; set; } = true;
     }
@@ -42,6 +45,7 @@ namespace OAI.Core.DTOs
         public bool? IsDefault { get; set; }
         public Guid? AiServerId { get; set; }
         public int? DefaultModelId { get; set; }
+        public int? ConversationModelId { get; set; }
         public Dictionary<string, object>? Configuration { get; set; }
         public bool? IsActive { get; set; }
     }
