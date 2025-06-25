@@ -28,7 +28,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
         private readonly IAiServiceRouter _aiServiceRouter;
         private readonly IOrchestratorConfigurationService _configurationService;
 
-        public override string Id => "coding_orchestrator";
+        public override string Id => "CodingOrchestrator";
         public override string Name => "AI Coding Orchestrator";
         public override string Description => "Aktivní AI programátor asistent pro analýzu a úpravu kódu";
 

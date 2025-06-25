@@ -140,6 +140,12 @@ namespace OAI.ServiceLayer.Services.AI
                         return await defaultService.GenerateResponseAsync(modelNameOrId, prompt, conversationId, parameters, cancellationToken);
                     }
                 }
+                else
+                {
+                    // Model found - use the actual model name instead of ID
+                    modelNameOrId = model.Name;
+                    _logger.LogInformation("AiServiceRouter: Using model name {ModelName} for model ID {ModelId}", model.Name, model.Id);
+                }
 
                 _logger.LogInformation("AiServiceRouter: Model {ModelName} found, server ID: {ServerId}", model.Name, model.AiServerId);
                 

@@ -600,13 +600,13 @@ namespace OptimalyAI.Controllers.Api
                 string? modelId = request.ModelId;
                 if (string.IsNullOrWhiteSpace(modelId))
                 {
-                    var settingsService = scope.ServiceProvider.GetService<IOrchestratorSettings>() as OrchestratorSettingsService;
-                    if (settingsService != null)
+                    var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
+                    if (configService != null)
                     {
-                        var configuration = await settingsService.GetOrchestratorConfigurationAsync("coding_orchestrator");
+                        var configuration = await configService.GetByOrchestratorIdAsync("CodingOrchestrator");
                         if (configuration != null)
                         {
-                            modelId = configuration.DefaultModelId;
+                            modelId = configuration.DefaultModelId?.ToString();
                         }
                     }
                     

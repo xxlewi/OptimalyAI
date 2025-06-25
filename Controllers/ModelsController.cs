@@ -320,7 +320,31 @@ public class ModelsController : Controller
             if (aiServer.ServerType == OAI.Core.Entities.AiServerType.Ollama)
             {
                 // Load model in Ollama
-                await _ollamaService.WarmupModelAsync(model);
+                try
+                {
+                    await _ollamaService.WarmupModelAsync(model);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to load Ollama model {Model}", model);
+                    
+                    // Provide more specific error messages
+                    string errorMessage = ex.Message;
+                    if (ex.Message.Contains("llama runner process has terminated") || ex.Message.Contains("signal: killed"))
+                    {
+                        errorMessage = $"Model {model} je příliš velký pro dostupnou RAM nebo se ukončil neočekávaně";
+                    }
+                    else if (ex.Message.Contains("not found"))
+                    {
+                        errorMessage = $"Model {model} nebyl nalezen. Zkuste ho nejdříve stáhnout příkazem 'ollama pull {model}'";
+                    }
+                    else if (ex.Message.Contains("connection refused") || ex.Message.Contains("No connection could be made"))
+                    {
+                        errorMessage = "Ollama server není spuštěný. Spusťte ho příkazem 'ollama serve'";
+                    }
+                    
+                    return Json(new { success = false, error = errorMessage });
+                }
             }
             else if (aiServer.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
             {

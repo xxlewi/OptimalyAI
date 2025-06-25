@@ -62,9 +62,25 @@ public class OllamaService : IWebOllamaService
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             
             var httpResponse = await _httpClient.PostAsync("/api/generate", content);
-            httpResponse.EnsureSuccessStatusCode();
-            
             var responseJson = await httpResponse.Content.ReadAsStringAsync();
+            
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                // Try to parse Ollama error message
+                try
+                {
+                    var errorResponse = JsonSerializer.Deserialize<JsonElement>(responseJson);
+                    if (errorResponse.TryGetProperty("error", out var errorProp))
+                    {
+                        throw new InvalidOperationException(errorProp.GetString() ?? $"HTTP {httpResponse.StatusCode}");
+                    }
+                }
+                catch (JsonException)
+                {
+                    // If JSON parsing fails, fall back to status code
+                }
+                throw new InvalidOperationException($"HTTP {httpResponse.StatusCode}: {responseJson}");
+            }
             var response = JsonSerializer.Deserialize<OllamaGenerateResponse>(responseJson, _jsonOptions)
                 ?? throw new InvalidOperationException("Failed to deserialize response");
             
@@ -313,6 +329,7 @@ public class OllamaService : IWebOllamaService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to warm up model {Model}", model);
+            throw; // Propagate the exception so the controller can handle it
         }
     }
 

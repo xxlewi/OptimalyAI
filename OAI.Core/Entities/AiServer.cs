@@ -27,7 +27,7 @@ namespace OAI.Core.Entities
         public string? Description { get; set; }
 
         // Connection settings
-        public int TimeoutSeconds { get; set; } = 30;
+        public int TimeoutSeconds { get; set; } = 120;
 
         public int MaxRetries { get; set; } = 3;
 
