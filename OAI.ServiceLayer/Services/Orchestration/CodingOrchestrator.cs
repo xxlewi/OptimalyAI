@@ -13,6 +13,8 @@ using OAI.Core.DTOs.Orchestration;
 using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.AI;
 using OAI.Core.Interfaces.Orchestration;
+using OAI.Core.Interfaces.Tools;
+using OAI.Core.Interfaces.Adapters;
 using OAI.ServiceLayer.Services.Orchestration.Base;
 using OAI.ServiceLayer.Interfaces;
 
@@ -30,6 +32,8 @@ namespace OAI.ServiceLayer.Services.Orchestration
     {
         private readonly IAiServiceRouter _aiServiceRouter;
         private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly IToolRegistry _toolRegistry;
+        private readonly IAdapterRegistry _adapterRegistry;
 
         public override string Id => "CodingOrchestrator";
         public override string Name => "AI Coding Orchestrator";
@@ -40,10 +44,14 @@ namespace OAI.ServiceLayer.Services.Orchestration
             ILogger<CodingOrchestrator> logger,
             IOrchestratorMetrics metrics,
             IServiceScopeFactory serviceScopeFactory,
+            IToolRegistry toolRegistry,
+            IAdapterRegistry adapterRegistry,
             IServiceProvider serviceProvider) : base(logger, metrics, serviceProvider)
         {
             _aiServiceRouter = aiServiceRouter ?? throw new ArgumentNullException(nameof(aiServiceRouter));
             _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
+            _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+            _adapterRegistry = adapterRegistry ?? throw new ArgumentNullException(nameof(adapterRegistry));
         }
 
         protected override async Task<CodingOrchestratorResponseDto> ExecuteCoreAsync(
@@ -141,7 +149,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
                 try
                 {
                     // Vytvoř prompt
-                    var prompt = CreateReActPrompt(request, conversationHistory, iteration == 0);
+                    var prompt = await CreateReActPrompt(request, conversationHistory, iteration == 0);
                     
                     // Zavolej LLM
                     var llmResponse = await CallLLM(modelId, prompt, cancellationToken);
@@ -241,7 +249,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
         /// <summary>
         /// Vytvoří ReAct prompt
         /// </summary>
-        private string CreateReActPrompt(
+        private async Task<string> CreateReActPrompt(
             CodingOrchestratorRequestDto request,
             List<string> history,
             bool isFirstStep)
@@ -250,18 +258,27 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
             if (isFirstStep)
             {
+                // Načti dostupné nástroje
+                var allTools = await _toolRegistry.GetAllToolsAsync();
+                var availableTools = allTools.Select(t => $"- {t.Name}: {t.Description}").ToList();
+                
+                // Načti dostupné adaptery
+                var allAdapters = await _adapterRegistry.GetAllAdaptersAsync();
+                var availableAdapters = allAdapters.Select(a => $"- {a.Name}: {a.Description}").ToList();
+                
+                var toolsText = availableTools.Any() ? string.Join("\n", availableTools) : "- No tools available";
+                var adaptersText = availableAdapters.Any() ? string.Join("\n", availableAdapters) : "- No adapters available";
+
                 return $@"You are an AI coding assistant using the ReAct (Reasoning + Acting) pattern.
 
 Task: {userQuery}
 Project Path: {request.ProjectPath}
 
 Available tools:
-- FileSystem: Create, read, update, delete files
-  Actions: create, read, write, delete
-- CodeAnalysis: Analyze code structure
-  Actions: analyze
-- Shell: Execute shell commands
-  Actions: execute
+{toolsText}
+
+Available I/O adapters:
+{adaptersText}
 
 You MUST respond in this EXACT format for EVERY response:
 
@@ -364,26 +381,84 @@ Continue:";
         }
 
         /// <summary>
-        /// Vykoná nástroj
+        /// Vykoná nástroj nebo adapter dynamicky
         /// </summary>
         private async Task<string> ExecuteTool(string toolName, string actionInput, string projectPath)
         {
-            _logger.LogInformation("Executing tool {Tool} with input: {Input}", toolName, actionInput);
+            _logger.LogInformation("Executing tool/adapter {Tool} with input: {Input}", toolName, actionInput);
 
             try
             {
+                // Nejdřív zkus najít mezi nástroji
+                var tool = await _toolRegistry.GetToolAsync(toolName);
+                if (tool != null)
+                {
+                    var parameters = ParseJsonSafe(actionInput);
+                    var result = await tool.ExecuteAsync(parameters);
+                    return result?.ToString() ?? "No result from tool";
+                }
+
+                // Pak zkus najít mezi adaptery
+                var adapter = await _adapterRegistry.GetAdapterAsync(toolName);
+                if (adapter != null)
+                {
+                    var parameters = ParseJsonSafe(actionInput);
+                    var result = await ExecuteAdapter(adapter, parameters, projectPath);
+                    return result;
+                }
+
+                // Fallback na hardkódované nástroje pro zpětnou kompatibilitu
                 return toolName.ToLower() switch
                 {
                     "filesystem" => await ExecuteFileSystemTool(actionInput, projectPath),
                     "codeanalysis" => await ExecuteCodeAnalysisTool(actionInput, projectPath),
                     "shell" => await ExecuteShellTool(actionInput, projectPath),
-                    _ => $"Error: Unknown tool '{toolName}'"
+                    _ => $"Error: Tool/adapter '{toolName}' not found"
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error executing tool {Tool}", toolName);
+                _logger.LogError(ex, "Error executing tool/adapter {Tool}", toolName);
                 return $"Error: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Vykoná adapter
+        /// </summary>
+        private async Task<string> ExecuteAdapter(IAdapter adapter, Dictionary<string, object> parameters, string projectPath)
+        {
+            try
+            {
+                var context = new AdapterExecutionContext
+                {
+                    Configuration = parameters,
+                    ExecutionId = Guid.NewGuid().ToString(),
+                    ProjectId = "coding-orchestrator",
+                    UserId = "system",
+                    SessionId = "coding-session",
+                    Logger = _logger,
+                    Variables = new Dictionary<string, object>
+                    {
+                        ["projectPath"] = projectPath,
+                        ["timestamp"] = DateTime.UtcNow
+                    }
+                };
+
+                var result = await adapter.ExecuteAsync(context);
+                if (result.IsSuccess)
+                {
+                    return result.Data?.ToString() ?? "Adapter executed successfully";
+                }
+                else
+                {
+                    return $"Error: {result.Error?.Message ?? "Unknown error"}";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing adapter {Adapter}", adapter.Name);
+                return $"Error executing adapter: {ex.Message}";
             }
         }
 
@@ -707,7 +782,7 @@ Continue:";
                 RequiresAuthentication = false,
                 MaxConcurrentExecutions = 1,
                 DefaultTimeout = TimeSpan.FromMinutes(10),
-                SupportedToolCategories = new List<string> { "development", "code-analysis", "file-operations" },
+                SupportedToolCategories = new List<string> { "development", "code-analysis", "file-operations", "data-processing", "api", "web" },
                 SupportedModels = new List<string> { "deepseek-coder:6.7b", "codellama:7b", "llama3.2:3b" },
                 SupportsReActPattern = true,
                 SupportsToolCalling = true,
