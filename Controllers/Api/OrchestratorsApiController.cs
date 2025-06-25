@@ -463,89 +463,6 @@ namespace OptimalyAI.Controllers.Api
         }
 
         /// <summary>
-        /// Get AI server status for coding orchestrator
-        /// </summary>
-        [HttpGet("coding/status")]
-        public async Task<IActionResult> GetCodingOrchestratorStatus()
-        {
-            try
-            {
-                // Get orchestrator health
-                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("coding_orchestrator");
-                if (orchestrator == null)
-                {
-                    return Ok(new ApiResponse<object>
-                    {
-                        Success = false,
-                        Data = new
-                        {
-                            orchestratorAvailable = false,
-                            aiServerStatus = "unknown",
-                            modelStatus = "unknown",
-                            message = "CodingOrchestrator not found"
-                        }
-                    });
-                }
-
-                var health = await orchestrator.GetHealthStatusAsync();
-                
-                // Try to get AI server status
-                var aiServerStatus = "unknown";
-                var modelStatus = "unknown";
-                var availableModels = new List<string>();
-                
-                try
-                {
-                    // Check if we can access AI service
-                    var settingsService = _orchestratorSettings as OrchestratorSettingsService;
-                    if (settingsService != null)
-                    {
-                        var config = await settingsService.GetOrchestratorConfigurationAsync("coding_orchestrator");
-                        if (config != null && config.AiServerId.HasValue)
-                        {
-                            // TODO: Get AI server status from AiServerService
-                            aiServerStatus = "checking";
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to check AI server status");
-                }
-
-                return Ok(new ApiResponse<object>
-                {
-                    Success = true,
-                    Data = new
-                    {
-                        orchestratorAvailable = true,
-                        orchestratorHealth = health.State.ToString(),
-                        aiServerStatus = aiServerStatus,
-                        modelStatus = modelStatus,
-                        availableModels = availableModels,
-                        lastChecked = DateTime.UtcNow
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get coding orchestrator status");
-                return Ok(new ApiResponse<object>
-                {
-                    Success = false,
-                    Data = new
-                    {
-                        orchestratorAvailable = false,
-                        aiServerStatus = "error",
-                        modelStatus = "error",
-                        message = ex.Message
-                    }
-                });
-            }
-        }
-
-
-        /// <summary>
         /// Process a coding request using the CodingOrchestrator
         /// </summary>
         [HttpPost("coding/process")]
@@ -802,8 +719,33 @@ namespace OptimalyAI.Controllers.Api
                                 var server = await aiServerService.GetByIdAsync(defaultModel.AiServerId);
                                 if (server != null && server.IsHealthy)
                                 {
-                                    defaultModelLoaded = defaultModel.IsLoaded;
                                     aiServerStatus = "running";
+                                    
+                                    // Check if model is loaded based on server type
+                                    if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama)
+                                    {
+                                        // For Ollama, we would need to check if model is loaded
+                                        // but for now assume it's loaded if available
+                                        defaultModelLoaded = defaultModel.IsAvailable;
+                                    }
+                                    else if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+                                    {
+                                        // For LM Studio, check via LMStudioService
+                                        var lmStudioService = scope.ServiceProvider.GetService<OAI.Core.Interfaces.AI.ILMStudioService>();
+                                        if (lmStudioService != null)
+                                        {
+                                            try
+                                            {
+                                                defaultModelLoaded = lmStudioService.IsModelLoaded(defaultModel.Name);
+                                            }
+                                            catch { }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // For others, assume loaded if available
+                                        defaultModelLoaded = defaultModel.IsAvailable;
+                                    }
                                 }
                             }
                         }
@@ -816,7 +758,30 @@ namespace OptimalyAI.Controllers.Api
                             
                             if (conversationModel != null)
                             {
-                                conversationModelLoaded = conversationModel.IsLoaded;
+                                var server = await aiServerService.GetByIdAsync(conversationModel.AiServerId);
+                                if (server != null && server.IsHealthy)
+                                {
+                                    if (server.ServerType == OAI.Core.Entities.AiServerType.Ollama)
+                                    {
+                                        conversationModelLoaded = conversationModel.IsAvailable;
+                                    }
+                                    else if (server.ServerType == OAI.Core.Entities.AiServerType.LMStudio)
+                                    {
+                                        var lmStudioService = scope.ServiceProvider.GetService<OAI.Core.Interfaces.AI.ILMStudioService>();
+                                        if (lmStudioService != null)
+                                        {
+                                            try
+                                            {
+                                                conversationModelLoaded = lmStudioService.IsModelLoaded(conversationModel.Name);
+                                            }
+                                            catch { }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        conversationModelLoaded = conversationModel.IsAvailable;
+                                    }
+                                }
                             }
                         }
                     }
