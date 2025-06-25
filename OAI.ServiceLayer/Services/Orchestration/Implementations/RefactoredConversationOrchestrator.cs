@@ -1,621 +1,569 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Attributes;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.DTOs.Orchestration.ReAct;
+using OAI.Core.Interfaces.AI;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
-using OAI.ServiceLayer.Services.AI.Interfaces;
-using OAI.Core.Interfaces.AI;
 using OAI.ServiceLayer.Services.Orchestration.Base;
-using OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator;
-
-// Import the service namespaces
-using ToolDetectionService = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ToolDetectionService;
-using ConversationResponseBuilder = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ConversationResponseBuilder;
-using ConversationContextManager = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ConversationContextManager;
-using ToolDetectionResult = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ToolDetectionResult;
-using DetectedTool = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.DetectedTool;
-using ToolExecutionInfo = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ToolExecutionInfo;
-using ConversationContext = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ConversationContext;
-using ToolContextInfo = OAI.ServiceLayer.Services.Orchestration.Implementations.ConversationOrchestrator.ToolContextInfo;
-using ToolExecutionContext = OAI.Core.Interfaces.Tools.ToolExecutionContext;
 
 namespace OAI.ServiceLayer.Services.Orchestration.Implementations
 {
     /// <summary>
-    /// AI generation result for internal use
-    /// </summary>
-    internal class AIGenerationResult
-    {
-        public string Response { get; set; } = string.Empty;
-        public string Model { get; set; } = string.Empty;
-        public bool Success { get; set; }
-        public int PromptTokens { get; set; }
-        public int CompletionTokens { get; set; }
-        public string? DoneReason { get; set; }
-        public long TotalDuration { get; set; }
-        public long EvalDuration { get; set; }
-    }
-
-    /// <summary>
-    /// Refactored orchestrator that manages conversations between AI models and tools
+    /// Konverzační orchestrátor s integrovaným ReAct patternem
     /// </summary>
     [OrchestratorMetadata(
-        id: "refactored_conversation_orchestrator",
-        name: "Conversation Orchestrator",
-        description: "Orchestrates conversations between AI models and tools",
-        IsWorkflowNode = false,
-        IsEnabledByDefault = true,
-        Tags = new[] { "conversation", "ai", "chat", "tools" },
-        RequestTypeName = "OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto",
-        ResponseTypeName = "OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto"
+        "refactored_conversation_orchestrator",
+        "Conversation Orchestrator", 
+        "Orchestrates conversations between AI models and tools with ReAct pattern"
     )]
     public class RefactoredConversationOrchestrator : BaseOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto>
     {
-        // Core services
-        private readonly OAI.Core.Interfaces.AI.IOllamaService _ollamaService;
-        private readonly IToolExecutor _toolExecutor;
-        private readonly IReActAgent _reActAgent;
-        private readonly IConfiguration _configuration;
-        private readonly IOrchestratorConfigurationService _orchestratorConfigService;
-
-        // Specialized services
-        private readonly ToolDetectionService _toolDetection;
-        private readonly ConversationResponseBuilder _responseBuilder;
-        private readonly ConversationContextManager _contextManager;
-
-        // Configuration
-        private readonly ConversationOrchestratorOptions _options;
-        private readonly OAI.ServiceLayer.Services.AI.IAiModelService _aiModelService;
-
-        // Static capabilities for metadata-based discovery
-        public static OrchestratorCapabilities StaticCapabilities { get; } = new OrchestratorCapabilities
-        {
-            SupportsReActPattern = true,
-            SupportsToolCalling = true,
-            SupportsMultiModal = false,
-            MaxIterations = 10,
-            SupportedInputTypes = new[] { "text", "conversation" },
-            SupportedOutputTypes = new[] { "text", "json" }
-        };
+        private readonly IAiServiceRouter _aiServiceRouter;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly IToolRegistry _toolRegistry;
 
         public override string Id => "refactored_conversation_orchestrator";
         public override string Name => "Conversation Orchestrator";
-        public override string Description => "Orchestrates conversations between AI models and tools";
-        public override bool IsWorkflowNode { get; set; } = false;
-        public override bool IsDefaultChatOrchestrator { get; set; } = false;
+        public override string Description => "Orchestrates conversations between AI models and tools with ReAct pattern";
 
         public RefactoredConversationOrchestrator(
-            OAI.Core.Interfaces.AI.IOllamaService ollamaService,
-            OAI.Core.Interfaces.AI.IConversationManager conversationManager,
-            IToolExecutor toolExecutor,
-            IToolRegistry toolRegistry,
-            IConfiguration configuration,
-            IReActAgent reActAgent,
+            IAiServiceRouter aiServiceRouter,
             ILogger<RefactoredConversationOrchestrator> logger,
-            ILoggerFactory loggerFactory,
             IOrchestratorMetrics metrics,
-            IOrchestratorConfigurationService orchestratorConfigService,
-            OAI.ServiceLayer.Services.AI.IAiModelService aiModelService)
-            : base(logger, metrics)
+            IServiceScopeFactory serviceScopeFactory,
+            IToolRegistry toolRegistry,
+            IServiceProvider serviceProvider) : base(logger, metrics, serviceProvider)
         {
-            // Core services
-            _ollamaService = ollamaService ?? throw new ArgumentNullException(nameof(ollamaService));
-            _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
-            _reActAgent = reActAgent ?? throw new ArgumentNullException(nameof(reActAgent));
-            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-            _orchestratorConfigService = orchestratorConfigService ?? throw new ArgumentNullException(nameof(orchestratorConfigService));
-            _aiModelService = aiModelService ?? throw new ArgumentNullException(nameof(aiModelService));
-
-            // Initialize specialized services
-            _toolDetection = new ToolDetectionService(
-                toolRegistry,
-                loggerFactory.CreateLogger<ToolDetectionService>());
-
-            _responseBuilder = new ConversationResponseBuilder(
-                loggerFactory.CreateLogger<ConversationResponseBuilder>());
-
-            _contextManager = new ConversationContextManager(
-                conversationManager,
-                loggerFactory.CreateLogger<ConversationContextManager>());
-
-            // Load configuration
-            _options = LoadConfiguration();
-        }
-
-        public override OrchestratorCapabilities GetCapabilities()
-        {
-            return new OrchestratorCapabilities
-            {
-                SupportsStreaming = true,
-                SupportsParallelExecution = false,
-                SupportsCancel = true,
-                RequiresAuthentication = false,
-                MaxConcurrentExecutions = 10,
-                DefaultTimeout = TimeSpan.FromMinutes(5),
-                SupportedToolCategories = new List<string> { "All" },
-                SupportedModels = _options.SupportedModels,
-                CustomCapabilities = new Dictionary<string, object>
-                {
-                    ["supports_react"] = true,
-                    ["supports_tools"] = true,
-                    ["supports_context"] = true,
-                    ["max_context_length"] = _options.MaxContextLength,
-                    ["default_model"] = _options.DefaultModel
-                }
-            };
+            _aiServiceRouter = aiServiceRouter ?? throw new ArgumentNullException(nameof(aiServiceRouter));
+            _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
+            _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         }
 
         protected override async Task<ConversationOrchestratorResponseDto> ExecuteCoreAsync(
-            ConversationOrchestratorRequestDto request,
+            ConversationOrchestratorRequestDto request, 
             IOrchestratorContext context,
             OrchestratorResult<ConversationOrchestratorResponseDto> result,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken = default)
         {
-            // Create initial response
-            var response = _responseBuilder.CreateInitialResponse(request, context.ExecutionId, result.StartedAt);
+            _logger.LogInformation("Starting Conversation Orchestrator for message: {Message}", request.Message);
+
+            var response = new ConversationOrchestratorResponseDto
+            {
+                ConversationId = request.ConversationId,
+                RequestId = Guid.NewGuid().ToString(),
+                ExecutionId = context.ExecutionId,
+                StartedAt = DateTime.UtcNow
+            };
 
             try
             {
-                // Ensure conversation exists
-                var conversationId = await _contextManager.EnsureConversationAsync(
-                    request.ConversationId, 
-                    request.UserId);
-                response.ConversationId = conversationId;
-
-                // Check if ReAct mode is enabled
-                if (ShouldUseReActMode(request, context))
+                // Načti konfiguraci
+                using var scope = _serviceScopeFactory.CreateScope();
+                var configurationService = scope.ServiceProvider.GetRequiredService<IOrchestratorConfigurationService>();
+                var configuration = await configurationService.GetByOrchestratorIdAsync(Id);
+                
+                // Analyzuj, jestli uživatel chce použít nástroje
+                var needsTools = await DetectToolNeed(request.Message);
+                
+                if (needsTools)
                 {
-                    await ExecuteReActModeAsync(request, response, context, cancellationToken);
+                    _logger.LogInformation("Detected tool usage needed, using ReAct pattern");
+                    
+                    // Použij model z konfigurace pro ReAct
+                    var modelId = configuration?.DefaultModelName ?? throw new InvalidOperationException("No default model configured");
+                    var scratchpad = await ExecuteReActPattern(request, modelId, cancellationToken);
+                    
+                    response.Response = scratchpad.FinalAnswer ?? "Nepodařilo se dokončit úlohu.";
+                    response.ToolsUsed = scratchpad.Actions.Where(a => !a.IsFinalAnswer).Select(a => new ToolUsageDto
+                    {
+                        ToolName = a.ToolName ?? "unknown",
+                        ExecutedAt = a.CreatedAt,
+                        Success = true
+                    }).ToList();
+                    response.Steps = FormatProcessingSteps(scratchpad);
                 }
                 else
                 {
-                    await ExecuteStandardModeAsync(request, response, context, cancellationToken);
+                    _logger.LogInformation("Simple conversation, using direct LLM response");
+                    
+                    // Pro jednoduchou konverzaci použij konverzační model
+                    var modelId = configuration?.ConversationModelName ?? configuration?.DefaultModelName 
+                        ?? throw new InvalidOperationException("No model configured");
+                    
+                    response.Response = await HandleSimpleConversation(request.Message, modelId, cancellationToken);
+                    response.ToolsUsed = new List<ToolUsageDto>();
+                    response.Steps = new List<OrchestratorStepDto> 
+                    { 
+                        new OrchestratorStepDto 
+                        { 
+                            StepName = "Direct conversation response",
+                            Success = true,
+                            StartedAt = DateTime.UtcNow,
+                            CompletedAt = DateTime.UtcNow
+                        } 
+                    };
                 }
 
-                // Check if the response indicates failure
-                if (!response.Success)
-                {
-                    throw new InvalidOperationException($"Orchestration failed: {response.ErrorMessage ?? "Unknown error"}");
-                }
-
-                // Update conversation history only if successful
-                await _contextManager.UpdateConversationAsync(
-                    conversationId,
-                    request.Message,
-                    response.Response,
-                    GetToolExecutions(response));
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogWarning("Conversation orchestration was cancelled");
-                _responseBuilder.BuildErrorResponse(response, "Operation was cancelled", "CANCELLED");
+                response.Success = true;
+                response.CompletedAt = DateTime.UtcNow;
+                _logger.LogInformation("Conversation Orchestrator completed successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Conversation orchestration failed");
-                _responseBuilder.BuildErrorResponse(response, ex.Message, "ORCHESTRATION_ERROR");
+                _logger.LogError(ex, "Error in Conversation Orchestrator");
+                response.Success = false;
+                response.Response = "Omlouvám se, došlo k chybě při zpracování vaší zprávy.";
+                response.CompletedAt = DateTime.UtcNow;
             }
 
             return response;
         }
 
         /// <summary>
-        /// Executes standard conversation mode with optional tool usage
+        /// Detekuje, zda uživatel potřebuje nástroje
         /// </summary>
-        private async Task ExecuteStandardModeAsync(
-            ConversationOrchestratorRequestDto request,
-            ConversationOrchestratorResponseDto response,
-            IOrchestratorContext context,
-            CancellationToken cancellationToken)
+        private async Task<bool> DetectToolNeed(string message)
         {
-            var toolExecutions = new List<ToolExecutionInfo>();
+            if (string.IsNullOrWhiteSpace(message))
+                return false;
 
-            // Detect and execute tools if needed
-            if (_options.EnableToolDetection)
+            var messageLower = message.ToLower();
+
+            // Klíčová slova indikující potřebu nástrojů
+            var toolKeywords = new[]
             {
-                var detectionResult = await _toolDetection.DetectToolsAsync(request.Message);
-                
-                if (detectionResult.Confidence >= _options.ToolDetectionThreshold && 
-                    detectionResult.PrimaryTool != null)
-                {
-                    _logger.LogInformation("Detected tool {ToolId} with confidence {Confidence}",
-                        detectionResult.PrimaryTool.ToolId, detectionResult.Confidence);
-
-                    var toolExecution = await ExecuteToolAsync(
-                        detectionResult.PrimaryTool,
-                        request.Message,
-                        request,
-                        context,
-                        cancellationToken);
-
-                    if (toolExecution != null)
-                    {
-                        toolExecutions.Add(toolExecution);
-                    }
-                }
-            }
-
-            // Prepare conversation context
-            var conversationContext = await _contextManager.PrepareContextAsync(
-                request,
-                toolExecutions.FirstOrDefault());
-
-            // Generate AI response
-            var aiResponse = await GenerateAIResponseAsync(
-                conversationContext,
-                request,
-                cancellationToken);
-
-            // Build final response
-            _responseBuilder.BuildFinalResponse(response, aiResponse, toolExecutions, false);
-        }
-
-        /// <summary>
-        /// Executes ReAct mode
-        /// </summary>
-        private async Task ExecuteReActModeAsync(
-            ConversationOrchestratorRequestDto request,
-            ConversationOrchestratorResponseDto response,
-            IOrchestratorContext context,
-            CancellationToken cancellationToken)
-        {
-            _logger.LogInformation("Executing ReAct mode for conversation");
-
-            // ReAct agent expects simple string input
-            var reActResult = await _reActAgent.ExecuteAsync(request.Message, context, cancellationToken);
-
-            // Build response from ReAct result
-            _responseBuilder.BuildReActResponse(response, reActResult);
-        }
-
-        /// <summary>
-        /// Executes a single tool
-        /// </summary>
-        private async Task<ToolExecutionInfo?> ExecuteToolAsync(
-            DetectedTool tool,
-            string message,
-            ConversationOrchestratorRequestDto request,
-            IOrchestratorContext context,
-            CancellationToken cancellationToken)
-        {
-            var startTime = DateTime.UtcNow;
-
-            try
-            {
-                // Build tool parameters
-                var parameters = _toolDetection.BuildToolParameters(tool, message);
-
-                // Execute tool
-                var toolResult = await _toolExecutor.ExecuteToolAsync(
-                    tool.ToolId,
-                    parameters,
-                    new ToolExecutionContext
-                    {
-                        ConversationId = context.Metadata.ContainsKey("conversationId") ? context.Metadata["conversationId"].ToString() : request.ConversationId,
-                        UserId = context.UserId,
-                        SessionId = context.SessionId
-                    },
-                    cancellationToken: cancellationToken);
-
-                var duration = DateTime.UtcNow - startTime;
-
-                if (toolResult.IsSuccess)
-                {
-                    _logger.LogInformation("Tool {ToolId} executed successfully in {Duration}ms",
-                        tool.ToolId, duration.TotalMilliseconds);
-
-                    return new ToolExecutionInfo
-                    {
-                        ToolId = tool.ToolId,
-                        ToolName = tool.ToolName,
-                        Success = true,
-                        Result = toolResult.Data,
-                        Duration = duration,
-                        Confidence = tool.Confidence
-                    };
-                }
-                else
-                {
-                    _logger.LogWarning("Tool {ToolId} execution failed: {Error}",
-                        tool.ToolId, toolResult.Error?.Message);
-
-                    return new ToolExecutionInfo
-                    {
-                        ToolId = tool.ToolId,
-                        ToolName = tool.ToolName,
-                        Success = false,
-                        Error = toolResult.Error?.Message,
-                        Duration = duration,
-                        Confidence = tool.Confidence
-                    };
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to execute tool {ToolId}", tool.ToolId);
-                
-                return new ToolExecutionInfo
-                {
-                    ToolId = tool.ToolId,
-                    ToolName = tool.ToolName,
-                    Success = false,
-                    Error = ex.Message,
-                    Duration = DateTime.UtcNow - startTime,
-                    Confidence = tool.Confidence
-                };
-            }
-        }
-
-        /// <summary>
-        /// Generates AI response
-        /// </summary>
-        private async Task<AIGenerationResult?> GenerateAIResponseAsync(
-            ConversationContext context,
-            ConversationOrchestratorRequestDto request,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                // Build prompt from context
-                var prompt = BuildPromptFromContext(context);
-                
-                // Add tool context if available
-                if (context.ToolContext != null)
-                {
-                    prompt = BuildToolContextPrompt(context.ToolContext) + "\n\n" + prompt;
-                }
-
-                // Build parameters
-                var parameters = new Dictionary<string, object>
-                {
-                    ["temperature"] = request.Temperature ?? _options.DefaultTemperature,
-                    ["max_tokens"] = request.MaxTokens ?? _options.DefaultMaxTokens
-                };
-
-                // Determine which model to use
-                string modelToUse = request.ModelId ?? await GetConfiguredModelAsync() ?? _options.DefaultModel;
-
-                // Generate response
-                var response = await _ollamaService.GenerateResponseAsync(
-                    modelToUse,
-                    prompt,
-                    request.ConversationId ?? Guid.NewGuid().ToString(),
-                    parameters,
-                    cancellationToken);
-
-                _logger.LogInformation("Generated AI response with length {Length} using model {Model}", 
-                    response?.Length ?? 0, modelToUse);
-
-                return new AIGenerationResult
-                {
-                    Response = response ?? string.Empty,
-                    Model = modelToUse,
-                    Success = !string.IsNullOrEmpty(response)
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to generate AI response");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets the configured model from orchestrator settings
-        /// </summary>
-        private async Task<string?> GetConfiguredModelAsync()
-        {
-            try
-            {
-                var configuration = await _orchestratorConfigService.GetByOrchestratorIdAsync(Id);
-                if (configuration != null && !string.IsNullOrEmpty(configuration.DefaultModelName))
-                {
-                    _logger.LogDebug("Using configured model {Model} for orchestrator {OrchestratorId}", 
-                        configuration.DefaultModelName, Id);
-                    return configuration.DefaultModelName;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to get orchestrator configuration, using default model");
-            }
-            
-            return null;
-        }
-
-        /// <summary>
-        /// Builds prompt from conversation context
-        /// </summary>
-        private string BuildPromptFromContext(ConversationContext context)
-        {
-            var prompt = new System.Text.StringBuilder();
-            
-            // Add system prompt if available
-            if (!string.IsNullOrEmpty(context.SystemPrompt))
-            {
-                prompt.AppendLine($"System: {context.SystemPrompt}");
-                prompt.AppendLine();
-            }
-            
-            // Add conversation history
-            foreach (var message in context.Messages)
-            {
-                prompt.AppendLine($"{message.Role}: {message.Content}");
-            }
-            
-            return prompt.ToString().TrimEnd();
-        }
-
-        /// <summary>
-        /// Builds tool context prompt
-        /// </summary>
-        private string BuildToolContextPrompt(ToolContextInfo toolContext)
-        {
-            return $"The following tool was used to gather information:\n" +
-                   $"Tool: {toolContext.ToolName}\n" +
-                   $"Result: {toolContext.Result}\n\n" +
-                   $"Please use this information to provide a comprehensive response.";
-        }
-
-        /// <summary>
-        /// Determines if ReAct mode should be used
-        /// </summary>
-        private bool ShouldUseReActMode(ConversationOrchestratorRequestDto request, IOrchestratorContext context)
-        {
-            // Check explicit request
-            if (request.Metadata?.ContainsKey("enableReAct") == true)
-                return Convert.ToBoolean(request.Metadata["enableReAct"]);
-
-            // Check context override
-            if (context.Metadata.ContainsKey("enableReAct"))
-                return Convert.ToBoolean(context.Metadata["enableReAct"]);
-
-            // Check if message requires complex reasoning
-            if (_options.AutoDetectReActMode)
-            {
-                return RequiresComplexReasoning(request.Message);
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Checks if message requires complex reasoning
-        /// </summary>
-        private bool RequiresComplexReasoning(string message)
-        {
-            var complexIndicators = new[]
-            {
-                "step by step", "analyze", "compare", "explain why",
-                "krok po kroku", "analyzuj", "porovnej", "vysvětli proč"
+                "vyhledej", "najdi", "search", "hledej",
+                "zpracuj", "analyzuj", "přečti", "stáhni",
+                "vytvoř", "naprogramuj", "kód", "soubor",
+                "web", "url", "stránka", "dokument"
             };
 
-            var lowerMessage = message.ToLowerInvariant();
-            return complexIndicators.Any(indicator => lowerMessage.Contains(indicator));
+            return toolKeywords.Any(keyword => messageLower.Contains(keyword));
         }
 
         /// <summary>
-        /// Extracts tool executions from response metadata
+        /// Spustí ReAct pattern pro složitější úlohy s nástroji
         /// </summary>
-        private List<ToolExecutionInfo>? GetToolExecutions(ConversationOrchestratorResponseDto response)
+        private async Task<AgentScratchpad> ExecuteReActPattern(
+            ConversationOrchestratorRequestDto request,
+            string modelId,
+            CancellationToken cancellationToken)
         {
-            if (response.Metadata.TryGetValue("toolExecutions", out var executions))
+            var scratchpad = new AgentScratchpad
             {
-                // Convert metadata back to ToolExecutionInfo list
-                // This is simplified - in real implementation would properly deserialize
-                return new List<ToolExecutionInfo>();
-            }
+                OriginalInput = request.Message
+            };
 
-            return null;
-        }
+            const int maxIterations = 3; // Méně iterací pro konverzaci
+            var conversationHistory = new List<string>();
 
-        /// <summary>
-        /// Loads configuration
-        /// </summary>
-        private ConversationOrchestratorOptions LoadConfiguration()
-        {
-            var options = new ConversationOrchestratorOptions();
-            // Load configuration manually since Bind extension might not be available
-            var section = _configuration.GetSection("Orchestrators:Conversation");
-            
-            options.DefaultModel = section["DefaultModel"] ?? options.DefaultModel;
-            options.EnableToolDetection = bool.TryParse(section["EnableToolDetection"], out var enableTools) ? enableTools : options.EnableToolDetection;
-            options.ToolDetectionThreshold = double.TryParse(section["ToolDetectionThreshold"], out var threshold) ? threshold : options.ToolDetectionThreshold;
-            options.AutoDetectReActMode = bool.TryParse(section["AutoDetectReActMode"], out var autoReact) ? autoReact : options.AutoDetectReActMode;
-            options.ReActMaxIterations = int.TryParse(section["ReActMaxIterations"], out var iterations) ? iterations : options.ReActMaxIterations;
-            options.ReActThoughtVisibility = section["ReActThoughtVisibility"] ?? options.ReActThoughtVisibility;
-            options.DefaultTemperature = double.TryParse(section["DefaultTemperature"], out var temp) ? temp : options.DefaultTemperature;
-            options.DefaultMaxTokens = int.TryParse(section["DefaultMaxTokens"], out var tokens) ? tokens : options.DefaultMaxTokens;
-            options.MaxMessageLength = int.TryParse(section["MaxMessageLength"], out var msgLen) ? msgLen : options.MaxMessageLength;
-            options.MaxContextLength = int.TryParse(section["MaxContextLength"], out var ctxLen) ? ctxLen : options.MaxContextLength;
-            options.EnableDetailedLogging = bool.TryParse(section["EnableDetailedLogging"], out var logging) ? logging : options.EnableDetailedLogging;
-            return options;
-        }
-
-        public override async Task<OrchestratorValidationResult> ValidateAsync(ConversationOrchestratorRequestDto request)
-        {
-            var errors = new List<string>();
-
-            if (string.IsNullOrWhiteSpace(request.Message))
+            for (int iteration = 0; iteration < maxIterations; iteration++)
             {
-                errors.Add("Message is required");
-            }
+                _logger.LogInformation("ReAct iteration {Iteration}/{Max}", iteration + 1, maxIterations);
 
-            if (request.Message?.Length > _options.MaxMessageLength)
-            {
-                errors.Add($"Message exceeds maximum length of {_options.MaxMessageLength} characters");
-            }
-
-            // Validate model against registered models from database
-            if (!string.IsNullOrEmpty(request.ModelId))
-            {
                 try
                 {
-                    var availableModels = await _aiModelService.GetAvailableModelsAsync();
-                    var modelNames = availableModels.Select(m => m.Name).ToList();
+                    // Vytvoř prompt
+                    var prompt = await CreateReActPrompt(request, conversationHistory, iteration == 0);
                     
-                    if (!modelNames.Contains(request.ModelId))
+                    // Zavolej LLM
+                    var llmResponse = await CallLLM(modelId, prompt, cancellationToken);
+                    
+                    if (string.IsNullOrEmpty(llmResponse))
                     {
-                        errors.Add($"Model '{request.ModelId}' is not registered. Available models: {string.Join(", ", modelNames)}");
+                        _logger.LogWarning("Empty response from LLM");
+                        break;
+                    }
+
+                    // Parsuj odpověď
+                    var parsedResponse = ParseReActResponse(llmResponse);
+                    
+                    // Ulož thought
+                    if (!string.IsNullOrEmpty(parsedResponse.Thought))
+                    {
+                        scratchpad.Thoughts.Add(new AgentThought
+                        {
+                            Content = parsedResponse.Thought,
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        conversationHistory.Add($"Thought: {parsedResponse.Thought}");
+                    }
+
+                    // Je to finální odpověď?
+                    if (!string.IsNullOrEmpty(parsedResponse.FinalAnswer))
+                    {
+                        scratchpad.FinalAnswer = parsedResponse.FinalAnswer;
+                        scratchpad.Actions.Add(new AgentAction
+                        {
+                            IsFinalAnswer = true,
+                            FinalAnswer = parsedResponse.FinalAnswer,
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        _logger.LogInformation("ReAct completed with final answer");
+                        break;
+                    }
+
+                    // Vykonej akci s nástroji
+                    if (!string.IsNullOrEmpty(parsedResponse.Action) && 
+                        !string.IsNullOrEmpty(parsedResponse.ActionInput))
+                    {
+                        var action = new AgentAction
+                        {
+                            ToolName = parsedResponse.Action,
+                            Parameters = ParseJsonSafe(parsedResponse.ActionInput),
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        scratchpad.Actions.Add(action);
+                        conversationHistory.Add($"Action: {parsedResponse.Action}");
+                        conversationHistory.Add($"Action Input: {parsedResponse.ActionInput}");
+
+                        // Vykonej tool pomocí registry
+                        var toolResult = await ExecuteToolFromRegistry(
+                            parsedResponse.Action, 
+                            parsedResponse.ActionInput);
+
+                        var observation = new AgentObservation
+                        {
+                            ToolName = parsedResponse.Action,
+                            Content = toolResult,
+                            IsSuccess = !toolResult.StartsWith("Error:"),
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        scratchpad.Observations.Add(observation);
+                        conversationHistory.Add($"Observation: {toolResult}");
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Could not parse action from response");
+                        break;
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to validate model, skipping model validation");
+                    _logger.LogError(ex, "Error in ReAct iteration {Iteration}", iteration + 1);
+                    scratchpad.Observations.Add(new AgentObservation
+                    {
+                        ToolName = "system",
+                        Content = $"Error: {ex.Message}",
+                        IsSuccess = false,
+                        StepNumber = iteration + 1,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    break;
                 }
             }
 
-            return new OrchestratorValidationResult
+            return scratchpad;
+        }
+
+        /// <summary>
+        /// Vytvoří ReAct prompt pro konverzaci
+        /// </summary>
+        private async Task<string> CreateReActPrompt(
+            ConversationOrchestratorRequestDto request,
+            List<string> history,
+            bool isFirstStep)
+        {
+            if (isFirstStep)
             {
-                IsValid = errors.Count == 0,
-                Errors = errors
+                // Získej dostupné nástroje
+                var allTools = await _toolRegistry.GetAllToolsAsync();
+                var availableTools = allTools.Select(t => $"- {t.Name}: {t.Description}").ToList();
+                var toolsText = availableTools.Any() ? string.Join("\n", availableTools) : "- No tools available";
+
+                return $@"You are an AI assistant using the ReAct (Reasoning + Acting) pattern for conversations.
+
+User message: {request.Message}
+
+Available tools:
+{toolsText}
+
+You MUST respond in this EXACT format:
+
+Thought: [your reasoning about what to do]
+Action: [tool name]
+Action Input: [JSON parameters for the tool]
+
+OR when you're done:
+
+Thought: [your reasoning about the complete response]
+Final Answer: [your final response to the user in Czech]
+
+Example for web search:
+Thought: The user wants information about something, I should search for it
+Action: WebSearch
+Action Input: {{""query"": ""search terms""}}
+
+Begin with your first Thought:";
+            }
+            else
+            {
+                var recentHistory = string.Join("\n", history.TakeLast(6));
+                return $@"Continue the conversation. Here's what happened so far:
+
+{recentHistory}
+
+Remember to use this EXACT format:
+Thought: [reasoning]
+Action: [tool name]
+Action Input: [JSON]
+
+OR:
+Thought: [reasoning]
+Final Answer: [response in Czech]
+
+Continue:";
+            }
+        }
+
+        /// <summary>
+        /// Zpracuje jednoduchou konverzaci
+        /// </summary>
+        private async Task<string> HandleSimpleConversation(string message, string modelId, CancellationToken cancellationToken)
+        {
+            var prompt = $@"Jsi přátelský AI asistent. Odpovídej stručně a přirozeně v češtině.
+
+Uživatel: {message}
+
+Asistent:";
+
+            try
+            {
+                var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
+                    modelId,
+                    prompt,
+                    Guid.NewGuid().ToString(),
+                    new Dictionary<string, object>
+                    {
+                        ["max_tokens"] = 500,
+                        ["temperature"] = 0.7
+                    },
+                    cancellationToken);
+
+                return response ?? "Omlouvám se, nepodařilo se mi vygenerovat odpověď.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in simple conversation");
+                return $"Omlouvám se, došlo k chybě: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Zavolá LLM model
+        /// </summary>
+        private async Task<string> CallLLM(string modelId, string prompt, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
+                    modelId,
+                    prompt,
+                    Guid.NewGuid().ToString(),
+                    new Dictionary<string, object>
+                    {
+                        ["max_tokens"] = 800,
+                        ["temperature"] = 0.4
+                    },
+                    cancellationToken);
+
+                return response ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calling LLM model {ModelId}", modelId);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Parsuje ReAct odpověď
+        /// </summary>
+        private ReActParsedResponse ParseReActResponse(string response)
+        {
+            var result = new ReActParsedResponse();
+
+            var thoughtMatch = Regex.Match(response, @"Thought:\s*(.+?)(?=Action:|Final Answer:|$)", RegexOptions.Singleline);
+            var actionMatch = Regex.Match(response, @"Action:\s*(.+?)(?=Action Input:|$)", RegexOptions.Singleline);
+            var actionInputMatch = Regex.Match(response, @"Action Input:\s*(.+?)(?=Thought:|Final Answer:|$)", RegexOptions.Singleline);
+            var finalAnswerMatch = Regex.Match(response, @"Final Answer:\s*(.+?)$", RegexOptions.Singleline);
+
+            if (thoughtMatch.Success)
+                result.Thought = thoughtMatch.Groups[1].Value.Trim();
+
+            if (finalAnswerMatch.Success)
+            {
+                result.FinalAnswer = finalAnswerMatch.Groups[1].Value.Trim();
+            }
+            else
+            {
+                if (actionMatch.Success)
+                    result.Action = actionMatch.Groups[1].Value.Trim();
+
+                if (actionInputMatch.Success)
+                    result.ActionInput = actionInputMatch.Groups[1].Value.Trim();
+            }
+
+            _logger.LogDebug("Parsed ReAct response - Thought: {Thought}, Action: {Action}, Input: {Input}, Final: {Final}",
+                result.Thought, result.Action, result.ActionInput, result.FinalAnswer);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Vykoná nástroj pomocí ToolRegistry
+        /// </summary>
+        private async Task<string> ExecuteToolFromRegistry(string toolName, string actionInput)
+        {
+            _logger.LogInformation("Executing tool {Tool} with input: {Input}", toolName, actionInput);
+
+            try
+            {
+                var tool = await _toolRegistry.GetToolAsync(toolName);
+                if (tool == null)
+                {
+                    return $"Error: Tool '{toolName}' not found";
+                }
+
+                var parameters = ParseJsonSafe(actionInput);
+                var result = await tool.ExecuteAsync(parameters);
+                return result?.ToString() ?? "No result";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing tool {Tool}", toolName);
+                return $"Error: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Formátuje processing steps
+        /// </summary>
+        private List<OrchestratorStepDto> FormatProcessingSteps(AgentScratchpad scratchpad)
+        {
+            var steps = new List<OrchestratorStepDto>();
+
+            for (int i = 0; i < scratchpad.Thoughts.Count; i++)
+            {
+                var thought = scratchpad.Thoughts[i];
+                var step = new OrchestratorStepDto
+                {
+                    StepId = $"step_{i + 1}",
+                    StepName = $"Step {i + 1}: {thought.Content}",
+                    Success = true,
+                    StartedAt = thought.CreatedAt,
+                    CompletedAt = thought.CreatedAt
+                };
+
+                if (i < scratchpad.Actions.Count && !scratchpad.Actions[i].IsFinalAnswer)
+                {
+                    var action = scratchpad.Actions[i];
+                    step.StepName += $" | Action: Used {action.ToolName}";
+
+                    if (i < scratchpad.Observations.Count)
+                    {
+                        var observation = scratchpad.Observations[i];
+                        var status = observation.IsSuccess ? "Success" : "Failed";
+                        step.StepName += $" | Result: {status}";
+                        step.Success = observation.IsSuccess;
+                        step.CompletedAt = observation.CreatedAt;
+                        if (!observation.IsSuccess)
+                        {
+                            step.Error = observation.Content;
+                        }
+                    }
+                }
+
+                steps.Add(step);
+            }
+
+            return steps;
+        }
+
+        /// <summary>
+        /// Parsuje JSON bezpečně
+        /// </summary>
+        private Dictionary<string, object> ParseJsonSafe(string json)
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+                return parsed ?? new Dictionary<string, object>();
+            }
+            catch
+            {
+                return new Dictionary<string, object> { ["raw"] = json };
+            }
+        }
+
+        /// <summary>
+        /// Validuje request
+        /// </summary>
+        public override async Task<OrchestratorValidationResult> ValidateAsync(ConversationOrchestratorRequestDto request)
+        {
+            var result = new OrchestratorValidationResult { IsValid = true };
+
+            if (string.IsNullOrWhiteSpace(request.Message))
+            {
+                result.IsValid = false;
+                result.Errors.Add("Message je povinná");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ConversationId))
+            {
+                result.IsValid = false;
+                result.Errors.Add("ConversationId je povinné");
+            }
+
+            return await Task.FromResult(result);
+        }
+
+        /// <summary>
+        /// Vrací capabilities
+        /// </summary>
+        public override OrchestratorCapabilities GetCapabilities()
+        {
+            return new OrchestratorCapabilities
+            {
+                SupportsStreaming = false,
+                SupportsParallelExecution = false,
+                SupportsCancel = true,
+                RequiresAuthentication = false,
+                MaxConcurrentExecutions = 5,
+                DefaultTimeout = TimeSpan.FromMinutes(5),
+                SupportedToolCategories = new List<string> { "search", "analysis", "web", "data" },
+                SupportedModels = new List<string> { "llama3.2:3b", "deepseek-coder:6.7b", "mixtral:8x7b" },
+                SupportsReActPattern = true,
+                SupportsToolCalling = true,
+                SupportsMultiModal = false,
+                MaxIterations = 3,
+                SupportedInputTypes = new[] { "text/plain" },
+                SupportedOutputTypes = new[] { "text/plain" }
             };
         }
-    }
 
-    /// <summary>
-    /// Configuration options for conversation orchestrator
-    /// </summary>
-    public class ConversationOrchestratorOptions
-    {
-        public string DefaultModel { get; set; } = "google/gemma-3-12b"; // Use a model that actually exists
-        public List<string> SupportedModels { get; set; } = new() 
-        { 
-            "llama3.2:latest", 
-            "llama3.2",
-            "llama3.1",
-            "llama-fast-cline:latest",
-            "llama-fast-cline",
-            "mistral:latest",
-            "mistral",
-            "gemma:latest",
-            "gemma",
-            "qwen2.5-14b-instruct",
-            "qwen2.5:14b-instruct",
-            "codellama",
-            "google/gemma-3-12b",
-            "gemma-3-12b",
-            "phi3:medium",
-            "llama2",
-            "neural-chat"
-        };
-        public bool EnableToolDetection { get; set; } = true;
-        public double ToolDetectionThreshold { get; set; } = 0.7;
-        public bool AutoDetectReActMode { get; set; } = true;
-        public int ReActMaxIterations { get; set; } = 5;
-        public string ReActThoughtVisibility { get; set; } = "hidden";
-        public double DefaultTemperature { get; set; } = 0.7;
-        public int DefaultMaxTokens { get; set; } = 2000;
-        public int MaxMessageLength { get; set; } = 10000;
-        public int MaxContextLength { get; set; } = 4000;
-        public bool EnableDetailedLogging { get; set; } = false;
+        /// <summary>
+        /// Helper třída pro parsování ReAct odpovědi
+        /// </summary>
+        private class ReActParsedResponse
+        {
+            public string Thought { get; set; } = "";
+            public string Action { get; set; } = "";
+            public string ActionInput { get; set; } = "";
+            public string FinalAnswer { get; set; } = "";
+        }
     }
 }

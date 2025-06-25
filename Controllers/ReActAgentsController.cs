@@ -51,25 +51,24 @@ namespace OptimalyAI.Controllers
                 CurrentSettings = new ReActSettings
                 {
                     Enabled = _configuration.GetValue<bool>("ReActSettings:Enabled", true),
-                    MaxIterations = _configuration.GetValue<int>("ReActSettings:MaxIterations", 3),
+                    MaxIterations = _configuration.GetValue<int>("ReActSettings:MaxIterations", 10),
                     ThoughtVisibility = _configuration.GetValue<string>("ReActSettings:ThoughtVisibility", "Full"),
                     AutoEnableForComplexQueries = _configuration.GetValue<bool>("ReActSettings:AutoEnableForComplexQueries", true),
-                    DefaultModel = _configuration.GetValue<string>("ReActSettings:DefaultModel", "llama3.2")
+                    DefaultModel = _configuration.GetValue<string>("ReActSettings:DefaultModel", "deepseek-coder:6.7b")
                 },
                 
-                // Get available agents (for now just the one)
+                // Get available agents
                 AvailableAgents = new List<AgentInfo>
                 {
                     new AgentInfo
                     {
-                        Id = "conversation",
-                        Name = "Conversation ReAct Agent",
-                        Type = "ConversationReActAgent",
-                        Description = "Hlavní agent pro konverzační úlohy s podporou nástrojů",
+                        Id = "universal",
+                        Name = "Universal ReAct Agent",
+                        Type = "UniversalReActAgent",
+                        Description = "Univerzální agent pro všechny typy úloh - coding, konverzace, workflow",
                         Status = "Active",
-                        Capabilities = new[] { "Web Search", "Tool Execution", "Multi-step Reasoning" }
+                        Capabilities = new[] { "Coding", "File Operations", "Web Search", "Tool Execution", "Multi-step Reasoning", "Dynamic Model Selection" }
                     }
-                    // V budoucnu zde budou další agenti
                 },
                 
                 // Get recent executions from memory
@@ -208,11 +207,11 @@ namespace OptimalyAI.Controllers
             // Default profile
             profiles["default"] = new ReActProfile
             {
-                Name = "Default",
-                Description = "Vyvážený profil pro běžné úlohy",
-                MaxIterations = 3,
-                Model = "llama3.2",
-                Temperature = 0.7
+                Name = "Universal",
+                Description = "Univerzální profil pro všechny typy úloh",
+                MaxIterations = 10,
+                Model = "deepseek-coder:6.7b",
+                Temperature = 0.3
             };
 
             // Load custom profiles from configuration if available

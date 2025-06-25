@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OAI.Core.Attributes;
 using OAI.Core.DTOs.Orchestration;
+using OAI.Core.DTOs.Orchestration.ReAct;
 using OAI.Core.Interfaces.AI;
 using OAI.Core.Interfaces.Orchestration;
 using OAI.ServiceLayer.Services.Orchestration.Base;
@@ -16,12 +19,12 @@ using OAI.ServiceLayer.Interfaces;
 namespace OAI.ServiceLayer.Services.Orchestration
 {
     /// <summary>
-    /// AI Coding Orchestrator - aktivní AI programátor asistent
+    /// AI Coding Orchestrator s integrovaným ReAct patternem
     /// </summary>
     [OrchestratorMetadata(
         "coding_orchestrator",
         "AI Coding Orchestrator", 
-        "Aktivní AI programátor asistent pro analýzu a úpravu kódu"
+        "Aktivní AI programátor asistent s ReAct patternem pro analýzu a úpravu kódu"
     )]
     public class CodingOrchestrator : BaseOrchestrator<CodingOrchestratorRequestDto, CodingOrchestratorResponseDto>
     {
@@ -30,7 +33,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
         public override string Id => "CodingOrchestrator";
         public override string Name => "AI Coding Orchestrator";
-        public override string Description => "Aktivní AI programátor asistent pro analýzu a úpravu kódu";
+        public override string Description => "Aktivní AI programátor asistent s ReAct patternem";
 
         public CodingOrchestrator(
             IAiServiceRouter aiServiceRouter,
@@ -49,7 +52,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
             OrchestratorResult<CodingOrchestratorResponseDto> result,
             CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting AI Coding Orchestrator for task: {Task}", request.Task);
+            _logger.LogInformation("Starting AI Orchestrator for task: {Task}", request.Task);
 
             var response = new CodingOrchestratorResponseDto
             {
@@ -59,86 +62,53 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
             try
             {
-                // Načtení konfigurace orchestrátoru
-                // Vytvořit scope pro získání scoped services
+                // Načti konfiguraci
                 using var scope = _serviceScopeFactory.CreateScope();
                 var configurationService = scope.ServiceProvider.GetRequiredService<IOrchestratorConfigurationService>();
                 var configuration = await configurationService.GetByOrchestratorIdAsync(Id);
-                if (configuration == null)
-                {
-                    throw new InvalidOperationException($"Configuration not found for orchestrator {Id}");
-                }
                 
-                // Extrakce uživatelského dotazu z kontextu
+                // Analyzuj, jestli je to coding nebo konverzace
                 var userQuery = ExtractUserQuery(request.Task);
-                _logger.LogDebug("Extracted user query: {UserQuery}", userQuery);
+                var isCodingTask = IsCodingRequest(userQuery);
                 
-                // Detekce typu dotazu
-                var isCodingRequest = IsCodingRequest(userQuery);
-                _logger.LogInformation("Query type detection - IsCoding: {IsCoding}, Query: {Query}", isCodingRequest, userQuery);
-                
-                // Určení modelu podle typu dotazu
-                string? modelId;
-                if (isCodingRequest)
+                if (isCodingTask)
                 {
-                    modelId = request.ModelId ?? configuration.DefaultModelId?.ToString();
-                }
-                else
-                {
-                    // Pro konverzaci použijeme ConversationModelId, nebo pokud není nastaven, tak DefaultModelId
-                    modelId = configuration.ConversationModelId?.ToString() ?? configuration.DefaultModelId?.ToString();
-                }
-                
-                if (string.IsNullOrWhiteSpace(modelId))
-                {
-                    throw new InvalidOperationException("No model configured for orchestrator");
-                }
-                
-                _logger.LogInformation("Using model {ModelId} for {QueryType} query", modelId, isCodingRequest ? "coding" : "conversation");
-                
-                if (isCodingRequest)
-                {
-                    // Původní coding flow
-                    // 1. Analýza projektového stromu
-                    var projectAnalysis = await AnalyzeProjectStructure(request.ProjectPath, request.TargetFiles);
-                    response.ProjectAnalysis = projectAnalysis;
-
-                    // 2. Sestavení kontextu a promptu
-                    var prompt = BuildCodingPrompt(request, projectAnalysis);
-
-                    // 3. Volání AI modelu s coding parametry
-                    var aiResponse = await CallAIModelForCoding(modelId, prompt, cancellationToken);
-                    response.Explanation = aiResponse;
-
-                    // 4. Parsování navrhovaných změn
-                    var proposedChanges = ParseProposedChanges(aiResponse, request.ProjectPath);
-                    response.ProposedChanges = proposedChanges;
-
-                    // 5. Aplikace změn (pokud je autoApply = true)
-                    if (request.AutoApply)
+                    _logger.LogInformation("Detected coding task, using ReAct pattern");
+                    
+                    // Použij model z konfigurace
+                    var modelId = configuration?.DefaultModelName ?? throw new InvalidOperationException("No default model configured");
+                    var scratchpad = await ExecuteReActPattern(request, modelId, cancellationToken);
+                    
+                    response.Explanation = FormatReActResults(scratchpad);
+                    response.ProposedChanges = ExtractCodeChanges(scratchpad);
+                    
+                    if (request.AutoApply && response.ProposedChanges.Any())
                     {
-                        var appliedChanges = await ApplyChanges(proposedChanges);
-                        response.AppliedChanges = appliedChanges;
+                        response.AppliedChanges = await ApplyChanges(response.ProposedChanges);
                     }
                 }
                 else
                 {
-                    // Konverzační flow
-                    var conversationPrompt = BuildConversationPrompt(request, userQuery);
-                    var aiResponse = await CallAIModelForConversation(modelId, conversationPrompt, cancellationToken);
-                    response.Explanation = aiResponse;
-                    response.ProjectAnalysis = "Konverzační dotaz - analýza projektu není potřeba.";
-                    response.ProposedChanges = new List<CodeChange>(); // Žádné změny kódu pro konverzaci
+                    _logger.LogInformation("Detected conversation, using direct LLM response");
+                    
+                    // Použij konverzační model z konfigurace (nebo default pokud není nastaven)
+                    var modelId = configuration?.ConversationModelName ?? configuration?.DefaultModelName 
+                        ?? throw new InvalidOperationException("No model configured");
+                    
+                    var conversationResponse = await HandleConversation(userQuery, modelId, cancellationToken);
+                    
+                    response.Explanation = conversationResponse;
+                    response.ProposedChanges = new List<CodeChange>();
+                    response.AppliedChanges = new List<CodeChange>();
                 }
 
                 response.Success = true;
                 response.CompletedAt = DateTime.UtcNow;
-
-                _logger.LogInformation("AI Coding Orchestrator completed successfully");
+                _logger.LogInformation("AI Orchestrator completed successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in AI Coding Orchestrator");
+                _logger.LogError(ex, "Error in AI Orchestrator");
                 response.Success = false;
                 response.ErrorMessage = ex.Message;
                 response.Errors.Add(ex.Message);
@@ -149,403 +119,552 @@ namespace OAI.ServiceLayer.Services.Orchestration
         }
 
         /// <summary>
-        /// Analyzuje strukturu projektu
+        /// Hlavní ReAct pattern implementace
         /// </summary>
-        private async Task<string> AnalyzeProjectStructure(string projectPath, List<string> targetFiles)
+        private async Task<AgentScratchpad> ExecuteReActPattern(
+            CodingOrchestratorRequestDto request,
+            string modelId,
+            CancellationToken cancellationToken)
         {
-            var analysis = new List<string>();
-            
-            try
+            var scratchpad = new AgentScratchpad
             {
-                if (!Directory.Exists(projectPath))
+                OriginalInput = request.Task
+            };
+
+            const int maxIterations = 5;
+            var conversationHistory = new List<string>();
+
+            for (int iteration = 0; iteration < maxIterations; iteration++)
+            {
+                _logger.LogInformation("ReAct iteration {Iteration}/{Max}", iteration + 1, maxIterations);
+
+                try
                 {
-                    return $"Projektová cesta neexistuje: {projectPath}";
-                }
-
-                analysis.Add($"=== Analýza projektu: {projectPath} ===");
-                
-                // Základní struktura
-                var directories = Directory.GetDirectories(projectPath, "*", SearchOption.TopDirectoryOnly)
-                    .Take(10)
-                    .Select(d => Path.GetFileName(d));
-                analysis.Add($"Hlavní složky: {string.Join(", ", directories)}");
-
-                // Relevantní soubory
-                var relevantFiles = GetRelevantFiles(projectPath, targetFiles);
-                analysis.Add($"Relevantní soubory ({relevantFiles.Count}): {string.Join(", ", relevantFiles.Take(10))}");
-
-                // Obsah vybraných souborů
-                if (targetFiles.Any())
-                {
-                    foreach (var file in targetFiles.Take(3)) // Maximálně 3 soubory
+                    // Vytvoř prompt
+                    var prompt = CreateReActPrompt(request, conversationHistory, iteration == 0);
+                    
+                    // Zavolej LLM
+                    var llmResponse = await CallLLM(modelId, prompt, cancellationToken);
+                    
+                    if (string.IsNullOrEmpty(llmResponse))
                     {
-                        var fullPath = Path.IsPathRooted(file) ? file : Path.Combine(projectPath, file);
-                        if (File.Exists(fullPath))
+                        _logger.LogWarning("Empty response from LLM");
+                        break;
+                    }
+
+                    // Parsuj odpověď
+                    var parsedResponse = ParseReActResponse(llmResponse);
+                    
+                    // Ulož thought
+                    if (!string.IsNullOrEmpty(parsedResponse.Thought))
+                    {
+                        scratchpad.Thoughts.Add(new AgentThought
                         {
-                            var content = await File.ReadAllTextAsync(fullPath);
-                            analysis.Add($"\n--- Obsah {file} ---\n{content.Substring(0, Math.Min(content.Length, 2000))}");
-                        }
+                            Content = parsedResponse.Thought,
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        conversationHistory.Add($"Thought: {parsedResponse.Thought}");
+                    }
+
+                    // Je to finální odpověď?
+                    if (!string.IsNullOrEmpty(parsedResponse.FinalAnswer))
+                    {
+                        scratchpad.FinalAnswer = parsedResponse.FinalAnswer;
+                        scratchpad.Actions.Add(new AgentAction
+                        {
+                            IsFinalAnswer = true,
+                            FinalAnswer = parsedResponse.FinalAnswer,
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        _logger.LogInformation("ReAct completed with final answer");
+                        break;
+                    }
+
+                    // Vykonej akci
+                    if (!string.IsNullOrEmpty(parsedResponse.Action) && 
+                        !string.IsNullOrEmpty(parsedResponse.ActionInput))
+                    {
+                        var action = new AgentAction
+                        {
+                            ToolName = parsedResponse.Action,
+                            Parameters = ParseJsonSafe(parsedResponse.ActionInput),
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        scratchpad.Actions.Add(action);
+                        conversationHistory.Add($"Action: {parsedResponse.Action}");
+                        conversationHistory.Add($"Action Input: {parsedResponse.ActionInput}");
+
+                        // Vykonej tool
+                        var toolResult = await ExecuteTool(
+                            parsedResponse.Action, 
+                            parsedResponse.ActionInput, 
+                            request.ProjectPath);
+
+                        var observation = new AgentObservation
+                        {
+                            ToolName = parsedResponse.Action,
+                            Content = toolResult,
+                            IsSuccess = !toolResult.StartsWith("Error:"),
+                            StepNumber = iteration + 1,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        scratchpad.Observations.Add(observation);
+                        conversationHistory.Add($"Observation: {toolResult}");
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Could not parse action from response");
+                        break;
                     }
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in ReAct iteration {Iteration}", iteration + 1);
+                    scratchpad.Observations.Add(new AgentObservation
+                    {
+                        ToolName = "system",
+                        Content = $"Error: {ex.Message}",
+                        IsSuccess = false,
+                        StepNumber = iteration + 1,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    break;
+                }
             }
-            catch (Exception ex)
+
+            return scratchpad;
+        }
+
+        /// <summary>
+        /// Vytvoří ReAct prompt
+        /// </summary>
+        private string CreateReActPrompt(
+            CodingOrchestratorRequestDto request,
+            List<string> history,
+            bool isFirstStep)
+        {
+            var userQuery = ExtractUserQuery(request.Task);
+
+            if (isFirstStep)
             {
-                analysis.Add($"Chyba při analýze: {ex.Message}");
+                return $@"You are an AI coding assistant using the ReAct (Reasoning + Acting) pattern.
+
+Task: {userQuery}
+Project Path: {request.ProjectPath}
+
+Available tools:
+- FileSystem: Create, read, update, delete files
+  Actions: create, read, write, delete
+- CodeAnalysis: Analyze code structure
+  Actions: analyze
+- Shell: Execute shell commands
+  Actions: execute
+
+You MUST respond in this EXACT format for EVERY response:
+
+Thought: [your reasoning about what to do next]
+Action: [tool name]
+Action Input: [JSON parameters]
+
+OR when you're done:
+
+Thought: [your reasoning about why the task is complete]
+Final Answer: [your final response to the user]
+
+Example for creating a file:
+Thought: I need to create a file test.md in the project root directory
+Action: FileSystem
+Action Input: {{""action"": ""create"", ""path"": ""test.md"", ""content"": ""# Test\n\nThis is a test file.""}}
+
+Begin with your first Thought:";
             }
-
-            return string.Join("\n", analysis);
-        }
-
-        /// <summary>
-        /// Získá relevantní soubory projektu
-        /// </summary>
-        private List<string> GetRelevantFiles(string projectPath, List<string> targetFiles)
-        {
-            if (targetFiles.Any())
+            else
             {
-                return targetFiles;
+                var recentHistory = string.Join("\n", history.TakeLast(8));
+                return $@"Continue the task. Here's what happened so far:
+
+{recentHistory}
+
+Remember to use this EXACT format:
+Thought: [reasoning]
+Action: [tool name]
+Action Input: [JSON]
+
+OR:
+Thought: [reasoning]
+Final Answer: [response]
+
+Continue:";
             }
-
-            var extensions = new[] { ".cs", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json" };
-            
-            return Directory.GetFiles(projectPath, "*.*", SearchOption.AllDirectories)
-                .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
-                .Where(f => !f.Contains("bin") && !f.Contains("obj") && !f.Contains("node_modules"))
-                .Select(f => Path.GetRelativePath(projectPath, f))
-                .Take(20)
-                .ToList();
         }
 
         /// <summary>
-        /// Sestaví prompt pro AI model
+        /// Zavolá LLM model
         /// </summary>
-        private string BuildCodingPrompt(CodingOrchestratorRequestDto request, string projectAnalysis)
-        {
-            return $@"Jsi aktivní AI programátor asistent. Tvým úkolem je analyzovat projekt a provést požadované změny.
-
-ÚKOL:
-{request.Task}
-
-KONTEXT:
-{request.Context}
-
-ANALÝZA PROJEKTU:
-{projectAnalysis}
-
-INSTRUKCE:
-1. Analyzuj současný stav kódu
-2. Navrhni konkrétní změny pro splnění úkolu
-3. Vysvětli své rozhodnutí
-4. Poskytni konkrétní kód pro implementaci
-
-FORMÁT ODPOVĚDI:
-```
-ANALÝZA:
-[Tvá analýza problému]
-
-ŘEŠENÍ:
-[Popis navrhovaného řešení]
-
-ZMĚNY:
-FILE: path/to/file.cs
-ACTION: create|modify|delete
-CONTENT:
-[obsah souboru]
----
-
-FILE: path/to/another/file.cs  
-ACTION: modify
-CONTENT:
-[nový obsah]
----
-```
-
-Odpověz profesionálně a konkrétně.";
-        }
-
-        /// <summary>
-        /// Extrahuje uživatelský dotaz z kontextu
-        /// </summary>
-        private string ExtractUserQuery(string task)
-        {
-            // Hledáme "Uživatelský dotaz:" v textu
-            var userQueryMarker = "Uživatelský dotaz:";
-            var index = task.IndexOf(userQueryMarker);
-            
-            if (index >= 0)
-            {
-                // Vrátíme část po "Uživatelský dotaz:"
-                return task.Substring(index + userQueryMarker.Length).Trim();
-            }
-            
-            // Pokud marker nenajdeme, vrátíme celý task
-            return task;
-        }
-
-        /// <summary>
-        /// Detekuje, zda jde o programovací dotaz
-        /// </summary>
-        private bool IsCodingRequest(string task)
-        {
-            var taskLower = task.ToLower();
-            
-            // Pokud obsahuje pozdrav nebo obecný dotaz, není to programovací úkol
-            var conversationKeywords = new[] 
-            { 
-                "ahoj", "jak se", "dobrý den", "děkuji", "díky", "prosím",
-                "co umíš", "pomoc", "nápověda", "vysvětli mi", "řekni mi"
-            };
-            
-            if (conversationKeywords.Any(keyword => taskLower.Contains(keyword)))
-            {
-                return false;
-            }
-            
-            // Programovací klíčová slova
-            var codingKeywords = new[] 
-            { 
-                "unit test", "refactor", "implementuj", "vytvoř", "uprav", "oprav", 
-                "analyzuj", "kód", "code", "function", "class", "method", "debug",
-                "struktur", "projekt", "soubor", "třída", "metoda", "funkce",
-                "přidej", "odstraň", "změň", "optimalizuj", "vylepši"
-            };
-            
-            return codingKeywords.Any(keyword => taskLower.Contains(keyword));
-        }
-
-        /// <summary>
-        /// Sestaví prompt pro konverzaci
-        /// </summary>
-        private string BuildConversationPrompt(CodingOrchestratorRequestDto request, string userQuery)
-        {
-            var contextParts = request.Context?.Split('\n')
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .ToList() ?? new List<string>();
-
-            return $@"Jsi přátelský AI asistent pro vývoj aplikací. Odpovídej stručně a přirozeně v češtině.
-
-{string.Join("\n", contextParts)}
-
-Uživatel: {userQuery}
-
-Asistent:";
-        }
-
-        /// <summary>
-        /// Volá AI model pro programování
-        /// </summary>
-        private async Task<string> CallAIModelForCoding(string modelId, string prompt, CancellationToken cancellationToken)
+        private async Task<string> CallLLM(string modelId, string prompt, CancellationToken cancellationToken)
         {
             try
             {
-                // Pro coding používáme nižší teplotu pro přesnější odpovědi
                 var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
-                    modelId, 
+                    modelId,
                     prompt,
                     Guid.NewGuid().ToString(),
                     new Dictionary<string, object>
                     {
-                        { "max_tokens", 4000 },
-                        { "temperature", 0.1 }
+                        ["max_tokens"] = 1000,
+                        ["temperature"] = 0.3
                     },
                     cancellationToken);
 
-                return response ?? "Prázdná odpověď z AI modelu";
+                return response ?? string.Empty;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Chyba při volání AI modelu pro coding {ModelId}", modelId);
-                return $"Chyba při volání AI: {ex.Message}";
+                _logger.LogError(ex, "Error calling LLM model {ModelId}", modelId);
+                throw;
             }
         }
 
         /// <summary>
-        /// Volá AI model pro konverzaci
+        /// Parsuje ReAct odpověď
         /// </summary>
-        private async Task<string> CallAIModelForConversation(string modelId, string prompt, CancellationToken cancellationToken)
+        private ReActParsedResponse ParseReActResponse(string response)
+        {
+            var result = new ReActParsedResponse();
+
+            // Regex patterns
+            var thoughtMatch = Regex.Match(response, @"Thought:\s*(.+?)(?=Action:|Final Answer:|$)", RegexOptions.Singleline);
+            var actionMatch = Regex.Match(response, @"Action:\s*(.+?)(?=Action Input:|$)", RegexOptions.Singleline);
+            var actionInputMatch = Regex.Match(response, @"Action Input:\s*(.+?)(?=Thought:|Final Answer:|$)", RegexOptions.Singleline);
+            var finalAnswerMatch = Regex.Match(response, @"Final Answer:\s*(.+?)$", RegexOptions.Singleline);
+
+            if (thoughtMatch.Success)
+                result.Thought = thoughtMatch.Groups[1].Value.Trim();
+
+            if (finalAnswerMatch.Success)
+            {
+                result.FinalAnswer = finalAnswerMatch.Groups[1].Value.Trim();
+            }
+            else
+            {
+                if (actionMatch.Success)
+                    result.Action = actionMatch.Groups[1].Value.Trim();
+
+                if (actionInputMatch.Success)
+                    result.ActionInput = actionInputMatch.Groups[1].Value.Trim();
+            }
+
+            _logger.LogDebug("Parsed ReAct response - Thought: {Thought}, Action: {Action}, Input: {Input}, Final: {Final}",
+                result.Thought, result.Action, result.ActionInput, result.FinalAnswer);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Vykoná nástroj
+        /// </summary>
+        private async Task<string> ExecuteTool(string toolName, string actionInput, string projectPath)
+        {
+            _logger.LogInformation("Executing tool {Tool} with input: {Input}", toolName, actionInput);
+
+            try
+            {
+                return toolName.ToLower() switch
+                {
+                    "filesystem" => await ExecuteFileSystemTool(actionInput, projectPath),
+                    "codeanalysis" => await ExecuteCodeAnalysisTool(actionInput, projectPath),
+                    "shell" => await ExecuteShellTool(actionInput, projectPath),
+                    _ => $"Error: Unknown tool '{toolName}'"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing tool {Tool}", toolName);
+                return $"Error: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// FileSystem tool
+        /// </summary>
+        private async Task<string> ExecuteFileSystemTool(string actionInput, string projectPath)
         {
             try
             {
-                // Pro konverzaci používáme vyšší teplotu pro přirozenější odpovědi
-                var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
-                    modelId, 
-                    prompt,
-                    Guid.NewGuid().ToString(),
-                    new Dictionary<string, object>
-                    {
-                        { "max_tokens", 1000 },
-                        { "temperature", 0.7 }
-                    },
-                    cancellationToken);
+                var parameters = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(actionInput);
+                if (parameters == null)
+                    return "Error: Invalid JSON parameters";
 
-                return response ?? "Prázdná odpověď z AI modelu";
+                var action = parameters.ContainsKey("action") ? parameters["action"].GetString() : "";
+                var path = parameters.ContainsKey("path") ? parameters["path"].GetString() : "";
+
+                if (string.IsNullOrEmpty(action) || string.IsNullOrEmpty(path))
+                    return "Error: Missing required parameters 'action' or 'path'";
+
+                // Zajisti absolutní cestu
+                if (!Path.IsPathRooted(path))
+                {
+                    path = Path.Combine(projectPath, path);
+                }
+
+                switch (action.ToLower())
+                {
+                    case "create":
+                    case "write":
+                        var content = parameters.ContainsKey("content") ? parameters["content"].GetString() : "";
+                        var dir = Path.GetDirectoryName(path);
+                        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                        {
+                            Directory.CreateDirectory(dir);
+                        }
+                        await File.WriteAllTextAsync(path, content ?? "");
+                        return $"File {(action == "create" ? "created" : "updated")} successfully: {path}";
+
+                    case "read":
+                        if (!File.Exists(path))
+                            return $"Error: File not found: {path}";
+                        var fileContent = await File.ReadAllTextAsync(path);
+                        return $"File content:\n{fileContent}";
+
+                    case "delete":
+                        if (File.Exists(path))
+                        {
+                            File.Delete(path);
+                            return $"File deleted: {path}";
+                        }
+                        return $"File not found: {path}";
+
+                    default:
+                        return $"Error: Unknown FileSystem action '{action}'";
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Chyba při volání AI modelu pro konverzaci {ModelId}", modelId);
-                return $"Chyba při volání AI: {ex.Message}";
+                return $"Error in FileSystem tool: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Volá AI model (deprecated - použij CallAIModelForCoding nebo CallAIModelForConversation)
+        /// CodeAnalysis tool
         /// </summary>
-        [Obsolete("Use CallAIModelForCoding or CallAIModelForConversation instead")]
-        private async Task<string> CallAIModel(string modelId, string prompt, CancellationToken cancellationToken)
+        private async Task<string> ExecuteCodeAnalysisTool(string actionInput, string projectPath)
         {
             try
             {
-                // Používáme AiServiceRouter, který správně routuje na LM Studio nebo jiný nakonfigurovaný server
-                var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
-                    modelId, 
-                    prompt,
-                    Guid.NewGuid().ToString(), // conversationId
-                    new Dictionary<string, object>
-                    {
-                        { "max_tokens", 4000 },
-                        { "temperature", 0.1 }
-                    },
-                    cancellationToken);
+                var parameters = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(actionInput);
+                var path = parameters?.ContainsKey("path") == true ? parameters["path"].GetString() : projectPath;
 
-                return response ?? "Prázdná odpověď z AI modelu";
+                if (string.IsNullOrEmpty(path))
+                    path = projectPath;
+
+                if (!Path.IsPathRooted(path))
+                    path = Path.Combine(projectPath, path);
+
+                if (!Directory.Exists(path))
+                    return $"Error: Directory not found: {path}";
+
+                var files = Directory.GetFiles(path, "*.cs", SearchOption.AllDirectories)
+                    .Where(f => !f.Contains("bin") && !f.Contains("obj"))
+                    .Take(20)
+                    .Select(f => Path.GetRelativePath(projectPath, f));
+
+                return $"Found {files.Count()} C# files:\n" + string.Join("\n", files);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Chyba při volání AI modelu {ModelId}", modelId);
-                return $"Chyba při volání AI: {ex.Message}";
+                return $"Error in CodeAnalysis tool: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Parsuje navrhované změny z AI odpovědi
+        /// Shell tool
         /// </summary>
-        private List<CodeChange> ParseProposedChanges(string aiResponse, string projectPath)
+        private async Task<string> ExecuteShellTool(string actionInput, string projectPath)
+        {
+            try
+            {
+                var parameters = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(actionInput);
+                var command = parameters?.ContainsKey("command") == true ? parameters["command"].GetString() : "";
+
+                if (string.IsNullOrEmpty(command))
+                    return "Error: No command specified";
+
+                // Bezpečnostní kontrola
+                var allowedCommands = new[] { "ls", "pwd", "echo", "cat", "grep", "find", "head", "tail" };
+                var firstWord = command.Split(' ')[0];
+
+                if (!allowedCommands.Contains(firstWord))
+                    return $"Error: Command '{firstWord}' is not allowed for security reasons";
+
+                // Spusť příkaz
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = $"-c \"{command}\"",
+                    WorkingDirectory = projectPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = System.Diagnostics.Process.Start(processInfo);
+                if (process == null)
+                    return "Error: Failed to start process";
+
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+
+                await process.WaitForExitAsync();
+
+                if (!string.IsNullOrEmpty(error))
+                    return $"Error: {error}";
+
+                return string.IsNullOrEmpty(output) ? "Command executed successfully (no output)" : output;
+            }
+            catch (Exception ex)
+            {
+                return $"Error in Shell tool: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Formátuje výsledky ReAct
+        /// </summary>
+        private string FormatReActResults(AgentScratchpad scratchpad)
+        {
+            var result = new List<string>();
+
+            if (!string.IsNullOrEmpty(scratchpad.FinalAnswer))
+            {
+                result.Add("=== VÝSLEDEK ===");
+                result.Add(scratchpad.FinalAnswer);
+            }
+
+            if (scratchpad.Actions.Any(a => !a.IsFinalAnswer))
+            {
+                result.Add("\n=== PROVEDENÉ AKCE ===");
+                foreach (var action in scratchpad.Actions.Where(a => !a.IsFinalAnswer))
+                {
+                    result.Add($"- {action.ToolName}: {action.CreatedAt:HH:mm:ss}");
+                }
+            }
+
+            if (scratchpad.Thoughts.Any())
+            {
+                result.Add("\n=== MYŠLENKOVÝ PROCES ===");
+                foreach (var thought in scratchpad.Thoughts.Take(5))
+                {
+                    result.Add($"{thought.StepNumber}. {thought.Content}");
+                }
+            }
+
+            return string.Join("\n", result);
+        }
+
+        /// <summary>
+        /// Extrahuje změny kódu
+        /// </summary>
+        private List<CodeChange> ExtractCodeChanges(AgentScratchpad scratchpad)
         {
             var changes = new List<CodeChange>();
-            
-            try
+
+            foreach (var action in scratchpad.Actions.Where(a => !a.IsFinalAnswer && a.ToolName?.ToLower() == "filesystem"))
             {
-                // Jednoduchý parser - hledá bloky FILE:, ACTION:, CONTENT:
-                var lines = aiResponse.Split('\n');
-                CodeChange? currentChange = null;
-                bool inContent = false;
-                var contentLines = new List<string>();
-
-                foreach (var line in lines)
+                if (action.Parameters != null)
                 {
-                    if (line.StartsWith("FILE:"))
-                    {
-                        // Dokončení předchozí změny
-                        if (currentChange != null)
-                        {
-                            currentChange.NewContent = string.Join("\n", contentLines);
-                            changes.Add(currentChange);
-                        }
+                    var actionType = action.Parameters.ContainsKey("action") ? action.Parameters["action"]?.ToString() : "";
+                    var path = action.Parameters.ContainsKey("path") ? action.Parameters["path"]?.ToString() : "";
+                    var content = action.Parameters.ContainsKey("content") ? action.Parameters["content"]?.ToString() : "";
 
-                        // Nová změna
-                        currentChange = new CodeChange
+                    if (!string.IsNullOrEmpty(actionType) && !string.IsNullOrEmpty(path))
+                    {
+                        changes.Add(new CodeChange
                         {
-                            FilePath = line.Substring(5).Trim()
-                        };
-                        contentLines.Clear();
-                        inContent = false;
-                    }
-                    else if (line.StartsWith("ACTION:") && currentChange != null)
-                    {
-                        currentChange.ChangeType = line.Substring(7).Trim().ToLower();
-                    }
-                    else if (line.StartsWith("CONTENT:"))
-                    {
-                        inContent = true;
-                    }
-                    else if (line.Trim() == "---")
-                    {
-                        inContent = false;
-                        if (currentChange != null)
-                        {
-                            currentChange.NewContent = string.Join("\n", contentLines);
-                            changes.Add(currentChange);
-                            currentChange = null;
-                            contentLines.Clear();
-                        }
-                    }
-                    else if (inContent)
-                    {
-                        contentLines.Add(line);
+                            FilePath = path,
+                            ChangeType = actionType.ToLower(),
+                            NewContent = content ?? "",
+                            Description = $"{actionType} file: {Path.GetFileName(path)}"
+                        });
                     }
                 }
-
-                // Dokončení poslední změny
-                if (currentChange != null)
-                {
-                    currentChange.NewContent = string.Join("\n", contentLines);
-                    changes.Add(currentChange);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Chyba při parsování změn");
             }
 
             return changes;
         }
 
         /// <summary>
-        /// Aplikuje změny na disk
+        /// Aplikuje změny
         /// </summary>
-        private async Task<List<CodeChange>> ApplyChanges(List<CodeChange> proposedChanges)
+        private async Task<List<CodeChange>> ApplyChanges(List<CodeChange> changes)
         {
-            var appliedChanges = new List<CodeChange>();
+            var applied = new List<CodeChange>();
 
-            foreach (var change in proposedChanges)
+            foreach (var change in changes)
             {
                 try
                 {
                     switch (change.ChangeType?.ToLower())
                     {
                         case "create":
-                            if (!string.IsNullOrEmpty(change.NewContent))
+                        case "write":
+                            var dir = Path.GetDirectoryName(change.FilePath);
+                            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                             {
-                                await File.WriteAllTextAsync(change.FilePath, change.NewContent);
-                                change.Applied = true;
-                                change.Description = "Soubor vytvořen";
+                                Directory.CreateDirectory(dir);
                             }
-                            break;
-
-                        case "modify":
-                            if (File.Exists(change.FilePath) && !string.IsNullOrEmpty(change.NewContent))
-                            {
-                                change.OriginalContent = await File.ReadAllTextAsync(change.FilePath);
-                                await File.WriteAllTextAsync(change.FilePath, change.NewContent);
-                                change.Applied = true;
-                                change.Description = "Soubor upraven";
-                            }
+                            await File.WriteAllTextAsync(change.FilePath, change.NewContent ?? "");
+                            change.Applied = true;
+                            applied.Add(change);
                             break;
 
                         case "delete":
                             if (File.Exists(change.FilePath))
                             {
-                                change.OriginalContent = await File.ReadAllTextAsync(change.FilePath);
                                 File.Delete(change.FilePath);
                                 change.Applied = true;
-                                change.Description = "Soubor smazán";
+                                applied.Add(change);
                             }
                             break;
-                    }
-
-                    if (change.Applied)
-                    {
-                        appliedChanges.Add(change);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Chyba při aplikaci změny pro soubor {FilePath}", change.FilePath);
-                    change.Description = $"Chyba: {ex.Message}";
+                    _logger.LogError(ex, "Error applying change to {FilePath}", change.FilePath);
+                    change.Description = $"Error: {ex.Message}";
                 }
             }
 
-            return appliedChanges;
+            return applied;
+        }
+
+        /// <summary>
+        /// Parsuje JSON bezpečně
+        /// </summary>
+        private Dictionary<string, object> ParseJsonSafe(string json)
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+                return parsed ?? new Dictionary<string, object>();
+            }
+            catch
+            {
+                return new Dictionary<string, object> { ["raw"] = json };
+            }
+        }
+
+        /// <summary>
+        /// Extrahuje uživatelský dotaz
+        /// </summary>
+        private string ExtractUserQuery(string task)
+        {
+            var marker = "Uživatelský dotaz:";
+            var index = task.IndexOf(marker);
+            return index >= 0 ? task.Substring(index + marker.Length).Trim() : task;
         }
 
         /// <summary>
@@ -572,13 +691,11 @@ Asistent:";
                 result.Errors.Add($"ProjectPath neexistuje: {request.ProjectPath}");
             }
 
-            // ModelId je nyní volitelný - pokud není zadán, použije se z konfigurace orchestrátoru
-
             return await Task.FromResult(result);
         }
 
         /// <summary>
-        /// Vrací capabilities orchestrátoru
+        /// Vrací capabilities
         /// </summary>
         public override OrchestratorCapabilities GetCapabilities()
         {
@@ -590,15 +707,93 @@ Asistent:";
                 RequiresAuthentication = false,
                 MaxConcurrentExecutions = 1,
                 DefaultTimeout = TimeSpan.FromMinutes(10),
-                SupportedToolCategories = new List<string> { "development", "code-analysis" },
+                SupportedToolCategories = new List<string> { "development", "code-analysis", "file-operations" },
                 SupportedModels = new List<string> { "deepseek-coder:6.7b", "codellama:7b", "llama3.2:3b" },
-                SupportsReActPattern = false,
-                SupportsToolCalling = false,
+                SupportsReActPattern = true,
+                SupportsToolCalling = true,
                 SupportsMultiModal = false,
-                MaxIterations = 1,
+                MaxIterations = 5,
                 SupportedInputTypes = new[] { "text/plain", "application/json" },
                 SupportedOutputTypes = new[] { "text/plain", "application/json" }
             };
+        }
+
+        /// <summary>
+        /// Detekuje, zda jde o programovací úlohu
+        /// </summary>
+        private bool IsCodingRequest(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return false;
+
+            var queryLower = query.ToLower();
+
+            // Konverzační klíčová slova - pokud jsou, není to coding
+            var conversationKeywords = new[]
+            {
+                "ahoj", "jak se", "dobrý den", "děkuji", "díky", 
+                "co umíš", "pomoc", "vysvětli mi", "řekni mi",
+                "jak se máš", "zdravím", "čau", "nashle"
+            };
+
+            if (conversationKeywords.Any(keyword => queryLower.Contains(keyword)))
+            {
+                return false;
+            }
+
+            // Programovací klíčová slova
+            var codingKeywords = new[]
+            {
+                "vytvoř", "soubor", "file", "kód", "code", "funkce", "function",
+                "třída", "class", "metoda", "method", "implementuj", "naprogramuj",
+                "oprav", "debug", "refactor", "test", "analyzuj", "struktur"
+            };
+
+            return codingKeywords.Any(keyword => queryLower.Contains(keyword));
+        }
+
+        /// <summary>
+        /// Zpracuje konverzaci přímým voláním LLM
+        /// </summary>
+        private async Task<string> HandleConversation(string query, string modelId, CancellationToken cancellationToken)
+        {
+            var prompt = $@"Jsi přátelský AI asistent. Odpovídej stručně a přirozeně v češtině.
+
+Uživatel: {query}
+
+Asistent:";
+
+            try
+            {
+                var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
+                    modelId,
+                    prompt,
+                    Guid.NewGuid().ToString(),
+                    new Dictionary<string, object>
+                    {
+                        ["max_tokens"] = 500,
+                        ["temperature"] = 0.7
+                    },
+                    cancellationToken);
+
+                return response ?? "Omlouvám se, nepodařilo se mi vygenerovat odpověď.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in conversation handling");
+                return $"Omlouvám se, došlo k chybě: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Helper třída pro parsování ReAct odpovědi
+        /// </summary>
+        private class ReActParsedResponse
+        {
+            public string Thought { get; set; } = "";
+            public string Action { get; set; } = "";
+            public string ActionInput { get; set; } = "";
+            public string FinalAnswer { get; set; } = "";
         }
     }
 }

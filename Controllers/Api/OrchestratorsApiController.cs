@@ -602,7 +602,6 @@ namespace OptimalyAI.Controllers.Api
                             Success = true,
                             Data = new
                             {
-                                projectAnalysis = result.Data.ProjectAnalysis,
                                 proposedChanges = result.Data.ProposedChanges,
                                 appliedChanges = result.Data.AppliedChanges,
                                 explanation = result.Data.Explanation,
