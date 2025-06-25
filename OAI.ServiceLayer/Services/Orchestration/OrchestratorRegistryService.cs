@@ -16,7 +16,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
     /// </summary>
     public class OrchestratorRegistryService : IOrchestratorRegistry
     {
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<OrchestratorRegistryService> _logger;
         private readonly Dictionary<string, OrchestratorTypeInfo> _registeredOrchestrators = new();
         private readonly object _lock = new();
@@ -30,10 +30,10 @@ namespace OAI.ServiceLayer.Services.Orchestration
         }
 
         public OrchestratorRegistryService(
-            IServiceProvider serviceProvider,
+            IServiceScopeFactory serviceScopeFactory,
             ILogger<OrchestratorRegistryService> logger)
         {
-            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             
             // Discover and register orchestrators on startup
@@ -177,7 +177,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
             try
             {
-                using var scope = _serviceProvider.CreateScope();
+                using var scope = _serviceScopeFactory.CreateScope();
                 var orchestrator = scope.ServiceProvider.GetService(typeInfo.Type) as IOrchestrator;
                 
                 if (orchestrator == null)

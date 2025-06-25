@@ -523,7 +523,7 @@
         const appContext = {
             id: '@Model.Id',
             name: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Name)),
-            projectPath: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ProjectPath)),
+            projectPath: @Html.Raw(System.Text.Json.JsonSerializer.Serialize("/Users/lewi/Documents/Vyvoj/OptimalyAI")),
             language: '@Model.ProgrammingLanguage',
             framework: '@Model.Framework',
             description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Description ?? ""))
@@ -568,7 +568,7 @@ ${appContext.description ? `- Popis: ${appContext.description}` : ''}
 
 Uživatelský dotaz: ${message}`;
                 
-                // Send to coding orchestrator
+                // Send to CodingOrchestrator - it will handle both coding and conversation
                 const requestBody = {
                     applicationId: appContext.id,
                     prompt: contextMessage,
@@ -604,33 +604,39 @@ Uživatelský dotaz: ${message}`;
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    // Format the response from CodingOrchestrator
                     let responseMessage = '';
                     
-                    // Check if there's an analysis
-                    if (result.data.projectAnalysis) {
-                        responseMessage += result.data.projectAnalysis + '\n\n';
+                    // Pro konverzační odpovědi - zobrazíme pouze explanation
+                    if (result.data.explanation && (!result.data.proposedChanges || result.data.proposedChanges.length === 0)) {
+                        responseMessage = result.data.explanation;
                     }
-                    
-                    // Add proposed changes if any
-                    if (result.data.proposedChanges && result.data.proposedChanges.length > 0) {
-                        responseMessage += '**Navrhované změny:**\n';
-                        result.data.proposedChanges.forEach((change, index) => {
-                            responseMessage += `${index + 1}. ${change.description}\n`;
-                            if (change.code) {
-                                responseMessage += `\`\`\`${change.language || ''}\n${change.code}\n\`\`\`\n`;
-                            }
-                        });
-                    }
-                    
-                    // Add explanation if available
-                    if (result.data.explanation) {
-                        responseMessage += result.data.explanation;
+                    // Pro coding odpovědi - zobrazíme celou strukturu
+                    else {
+                        // Check if there's an analysis
+                        if (result.data.projectAnalysis && result.data.projectAnalysis !== "Konverzační dotaz - analýza projektu není potřeba.") {
+                            responseMessage += result.data.projectAnalysis + '\n\n';
+                        }
+                        
+                        // Add proposed changes if any
+                        if (result.data.proposedChanges && result.data.proposedChanges.length > 0) {
+                            responseMessage += '**Navrhované změny:**\n';
+                            result.data.proposedChanges.forEach((change, index) => {
+                                responseMessage += `${index + 1}. ${change.description}\n`;
+                                if (change.code) {
+                                    responseMessage += `\`\`\`${change.language || ''}\n${change.code}\n\`\`\`\n`;
+                                }
+                            });
+                        }
+                        
+                        // Add explanation if available
+                        if (result.data.explanation) {
+                            responseMessage += result.data.explanation;
+                        }
                     }
                     
                     // If no content, show raw data
                     if (!responseMessage.trim()) {
-                        responseMessage = result.data.message || JSON.stringify(result.data, null, 2);
+                        responseMessage = JSON.stringify(result.data, null, 2);
                     }
                     
                     appendMessage(responseMessage, 'assistant');

@@ -55,26 +55,47 @@ namespace OAI.ServiceLayer.Services.Orchestration
 
             try
             {
-                // 1. Analýza projektového stromu
-                var projectAnalysis = await AnalyzeProjectStructure(request.ProjectPath, request.TargetFiles);
-                response.ProjectAnalysis = projectAnalysis;
-
-                // 2. Sestavení kontextu a promptu
-                var prompt = BuildCodingPrompt(request, projectAnalysis);
-
-                // 3. Volání AI modelu
-                var aiResponse = await CallAIModel(request.ModelId, prompt, cancellationToken);
-                response.Explanation = aiResponse;
-
-                // 4. Parsování navrhovaných změn
-                var proposedChanges = ParseProposedChanges(aiResponse, request.ProjectPath);
-                response.ProposedChanges = proposedChanges;
-
-                // 5. Aplikace změn (pokud je autoApply = true)
-                if (request.AutoApply)
+                // Extrakce uživatelského dotazu z kontextu
+                var userQuery = ExtractUserQuery(request.Task);
+                _logger.LogDebug("Extracted user query: {UserQuery}", userQuery);
+                
+                // Detekce typu dotazu
+                var isCodingRequest = IsCodingRequest(userQuery);
+                _logger.LogInformation("Query type detection - IsCoding: {IsCoding}, Query: {Query}", isCodingRequest, userQuery);
+                
+                if (isCodingRequest)
                 {
-                    var appliedChanges = await ApplyChanges(proposedChanges);
-                    response.AppliedChanges = appliedChanges;
+                    // Původní coding flow
+                    // 1. Analýza projektového stromu
+                    var projectAnalysis = await AnalyzeProjectStructure(request.ProjectPath, request.TargetFiles);
+                    response.ProjectAnalysis = projectAnalysis;
+
+                    // 2. Sestavení kontextu a promptu
+                    var prompt = BuildCodingPrompt(request, projectAnalysis);
+
+                    // 3. Volání AI modelu s coding parametry
+                    var aiResponse = await CallAIModelForCoding(request.ModelId, prompt, cancellationToken);
+                    response.Explanation = aiResponse;
+
+                    // 4. Parsování navrhovaných změn
+                    var proposedChanges = ParseProposedChanges(aiResponse, request.ProjectPath);
+                    response.ProposedChanges = proposedChanges;
+
+                    // 5. Aplikace změn (pokud je autoApply = true)
+                    if (request.AutoApply)
+                    {
+                        var appliedChanges = await ApplyChanges(proposedChanges);
+                        response.AppliedChanges = appliedChanges;
+                    }
+                }
+                else
+                {
+                    // Konverzační flow
+                    var conversationPrompt = BuildConversationPrompt(request, userQuery);
+                    var aiResponse = await CallAIModelForConversation(request.ModelId, conversationPrompt, cancellationToken);
+                    response.Explanation = aiResponse;
+                    response.ProjectAnalysis = "Konverzační dotaz - analýza projektu není potřeba.";
+                    response.ProposedChanges = new List<CodeChange>(); // Žádné změny kódu pro konverzaci
                 }
 
                 response.Success = true;
@@ -210,8 +231,133 @@ Odpověz profesionálně a konkrétně.";
         }
 
         /// <summary>
-        /// Volá AI model
+        /// Extrahuje uživatelský dotaz z kontextu
         /// </summary>
+        private string ExtractUserQuery(string task)
+        {
+            // Hledáme "Uživatelský dotaz:" v textu
+            var userQueryMarker = "Uživatelský dotaz:";
+            var index = task.IndexOf(userQueryMarker);
+            
+            if (index >= 0)
+            {
+                // Vrátíme část po "Uživatelský dotaz:"
+                return task.Substring(index + userQueryMarker.Length).Trim();
+            }
+            
+            // Pokud marker nenajdeme, vrátíme celý task
+            return task;
+        }
+
+        /// <summary>
+        /// Detekuje, zda jde o programovací dotaz
+        /// </summary>
+        private bool IsCodingRequest(string task)
+        {
+            var taskLower = task.ToLower();
+            
+            // Pokud obsahuje pozdrav nebo obecný dotaz, není to programovací úkol
+            var conversationKeywords = new[] 
+            { 
+                "ahoj", "jak se", "dobrý den", "děkuji", "díky", "prosím",
+                "co umíš", "pomoc", "nápověda", "vysvětli mi", "řekni mi"
+            };
+            
+            if (conversationKeywords.Any(keyword => taskLower.Contains(keyword)))
+            {
+                return false;
+            }
+            
+            // Programovací klíčová slova
+            var codingKeywords = new[] 
+            { 
+                "unit test", "refactor", "implementuj", "vytvoř", "uprav", "oprav", 
+                "analyzuj", "kód", "code", "function", "class", "method", "debug",
+                "struktur", "projekt", "soubor", "třída", "metoda", "funkce",
+                "přidej", "odstraň", "změň", "optimalizuj", "vylepši"
+            };
+            
+            return codingKeywords.Any(keyword => taskLower.Contains(keyword));
+        }
+
+        /// <summary>
+        /// Sestaví prompt pro konverzaci
+        /// </summary>
+        private string BuildConversationPrompt(CodingOrchestratorRequestDto request, string userQuery)
+        {
+            var contextParts = request.Context?.Split('\n')
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .ToList() ?? new List<string>();
+
+            return $@"Jsi přátelský AI asistent pro vývoj aplikací. Odpovídej stručně a přirozeně v češtině.
+
+{string.Join("\n", contextParts)}
+
+Uživatel: {userQuery}
+
+Asistent:";
+        }
+
+        /// <summary>
+        /// Volá AI model pro programování
+        /// </summary>
+        private async Task<string> CallAIModelForCoding(string modelId, string prompt, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Pro coding používáme nižší teplotu pro přesnější odpovědi
+                var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
+                    modelId, 
+                    prompt,
+                    Guid.NewGuid().ToString(),
+                    new Dictionary<string, object>
+                    {
+                        { "max_tokens", 4000 },
+                        { "temperature", 0.1 }
+                    },
+                    cancellationToken);
+
+                return response ?? "Prázdná odpověď z AI modelu";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Chyba při volání AI modelu pro coding {ModelId}", modelId);
+                return $"Chyba při volání AI: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Volá AI model pro konverzaci
+        /// </summary>
+        private async Task<string> CallAIModelForConversation(string modelId, string prompt, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Pro konverzaci používáme vyšší teplotu pro přirozenější odpovědi
+                var response = await _aiServiceRouter.GenerateResponseWithRoutingAsync(
+                    modelId, 
+                    prompt,
+                    Guid.NewGuid().ToString(),
+                    new Dictionary<string, object>
+                    {
+                        { "max_tokens", 1000 },
+                        { "temperature", 0.7 }
+                    },
+                    cancellationToken);
+
+                return response ?? "Prázdná odpověď z AI modelu";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Chyba při volání AI modelu pro konverzaci {ModelId}", modelId);
+                return $"Chyba při volání AI: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Volá AI model (deprecated - použij CallAIModelForCoding nebo CallAIModelForConversation)
+        /// </summary>
+        [Obsolete("Use CallAIModelForCoding or CallAIModelForConversation instead")]
         private async Task<string> CallAIModel(string modelId, string prompt, CancellationToken cancellationToken)
         {
             try

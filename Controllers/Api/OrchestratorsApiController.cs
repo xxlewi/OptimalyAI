@@ -6,6 +6,7 @@ using OAI.Core.DTOs.Discovery;
 using System.Text.Json;
 using OAI.ServiceLayer.Services.Orchestration.Base;
 using OAI.ServiceLayer.Services.Orchestration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace OptimalyAI.Controllers.Api
 {
@@ -17,17 +18,20 @@ namespace OptimalyAI.Controllers.Api
         private readonly IOrchestratorMetrics _metrics;
         private readonly ILogger<OrchestratorsApiController> _logger;
         private readonly IOrchestratorSettings _orchestratorSettings;
+        private readonly IServiceProvider _serviceProvider;
 
         public OrchestratorsApiController(
             IOrchestratorRegistry orchestratorRegistry,
             IOrchestratorMetrics metrics,
             ILogger<OrchestratorsApiController> logger,
-            IOrchestratorSettings orchestratorSettings)
+            IOrchestratorSettings orchestratorSettings,
+            IServiceProvider serviceProvider)
         {
             _orchestratorRegistry = orchestratorRegistry;
             _metrics = metrics;
             _logger = logger;
             _orchestratorSettings = orchestratorSettings;
+            _serviceProvider = serviceProvider;
         }
 
         /// <summary>
@@ -539,11 +543,17 @@ namespace OptimalyAI.Controllers.Api
             }
         }
 
+
         /// <summary>
         /// Process a coding request using the CodingOrchestrator
         /// </summary>
         [HttpPost("coding/process")]
         public async Task<IActionResult> ProcessCodingRequest([FromBody] CodingOrchestratorApiRequest request)
+        {
+            return await ProcessCodingRequestInternal(request);
+        }
+
+        private async Task<IActionResult> ProcessCodingRequestInternal(CodingOrchestratorApiRequest request)
         {
             try
             {
@@ -574,8 +584,9 @@ namespace OptimalyAI.Controllers.Api
                     });
                 }
 
-                // Get the CodingOrchestrator
-                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("coding_orchestrator");
+                // Create a scope to properly manage scoped dependencies (like DbContext)
+                using var scope = _serviceProvider.CreateScope();
+                var orchestrator = scope.ServiceProvider.GetService<OAI.ServiceLayer.Services.Orchestration.CodingOrchestrator>();
                 if (orchestrator == null)
                 {
                     return NotFound(new ApiResponse<object>
@@ -589,7 +600,7 @@ namespace OptimalyAI.Controllers.Api
                 string? modelId = request.ModelId;
                 if (string.IsNullOrWhiteSpace(modelId))
                 {
-                    var settingsService = _orchestratorSettings as OrchestratorSettingsService;
+                    var settingsService = scope.ServiceProvider.GetService<IOrchestratorSettings>() as OrchestratorSettingsService;
                     if (settingsService != null)
                     {
                         var configuration = await settingsService.GetOrchestratorConfigurationAsync("coding_orchestrator");
@@ -707,6 +718,7 @@ namespace OptimalyAI.Controllers.Api
             }
         }
 
+
         private object? CreateRequestObject(string orchestratorId, OrchestratorExecuteRequest request)
         {
             return orchestratorId switch
@@ -759,5 +771,6 @@ namespace OptimalyAI.Controllers.Api
         public string ProjectPath { get; set; } = string.Empty;
         public string? ModelId { get; set; }
         public bool? AutoApply { get; set; }
+        public string? OrchestratorType { get; set; } // "coding" or "conversation"
     }
 }
