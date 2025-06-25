@@ -504,13 +504,38 @@ namespace OptimalyAI.Controllers.Api
 
                 // Create a scope to properly manage scoped dependencies (like DbContext)
                 using var scope = _serviceProvider.CreateScope();
-                var orchestrator = scope.ServiceProvider.GetService<OAI.ServiceLayer.Services.Orchestration.CodingOrchestrator>();
+                
+                // Find the default coding orchestrator
+                var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
+                if (configService == null)
+                {
+                    return StatusCode(500, new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Configuration service not available"
+                    });
+                }
+                
+                var allConfigs = await configService.GetActiveConfigurationsAsync();
+                var defaultCodingConfig = allConfigs.FirstOrDefault(c => c.IsDefault);
+                
+                if (defaultCodingConfig == null)
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "No default coding orchestrator configured"
+                    });
+                }
+                
+                // Get the orchestrator from registry
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync(defaultCodingConfig.OrchestratorId);
                 if (orchestrator == null)
                 {
                     return NotFound(new ApiResponse<object>
                     {
                         Success = false,
-                        Message = "CodingOrchestrator not found"
+                        Message = $"Orchestrator '{defaultCodingConfig.OrchestratorId}' not found in registry"
                     });
                 }
 
@@ -518,22 +543,14 @@ namespace OptimalyAI.Controllers.Api
                 string? modelId = request.ModelId;
                 if (string.IsNullOrWhiteSpace(modelId))
                 {
-                    var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
-                    if (configService != null)
-                    {
-                        var configuration = await configService.GetByOrchestratorIdAsync("CodingOrchestrator");
-                        if (configuration != null)
-                        {
-                            modelId = configuration.DefaultModelId?.ToString();
-                        }
-                    }
+                    modelId = defaultCodingConfig.DefaultModelId?.ToString();
                     
                     if (string.IsNullOrWhiteSpace(modelId))
                     {
                         return BadRequest(new ApiResponse<object>
                         {
                             Success = false,
-                            Message = "No model specified and no default model configured for CodingOrchestrator"
+                            Message = "No model specified and no default model configured for default coding orchestrator"
                         });
                     }
                 }
@@ -576,7 +593,7 @@ namespace OptimalyAI.Controllers.Api
 
                     // Record metrics
                     var duration = DateTime.UtcNow - startTime;
-                    await _metrics.RecordExecutionCompleteAsync("coding_orchestrator", executionId, result.IsSuccess, duration);
+                    await _metrics.RecordExecutionCompleteAsync(defaultCodingConfig.OrchestratorId, executionId, result.IsSuccess, duration);
 
                     if (result.IsSuccess && result.Data != null)
                     {
@@ -614,7 +631,7 @@ namespace OptimalyAI.Controllers.Api
                 {
                     // Record failure metrics
                     var duration = DateTime.UtcNow - startTime;
-                    await _metrics.RecordExecutionCompleteAsync("coding_orchestrator", executionId, false, duration);
+                    await _metrics.RecordExecutionCompleteAsync(defaultCodingConfig.OrchestratorId, executionId, false, duration);
 
                     _logger.LogError(ex, "Failed to execute CodingOrchestrator");
                     
@@ -680,29 +697,58 @@ namespace OptimalyAI.Controllers.Api
             {
                 using var scope = _serviceProvider.CreateScope();
                 
-                // Get orchestrator status - try both IDs
-                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("coding_orchestrator");
-                if (orchestrator == null)
+                // Find the default coding orchestrator
+                var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
+                if (configService == null)
                 {
-                    orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("CodingOrchestrator");
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Data = new
+                        {
+                            orchestratorAvailable = false,
+                            aiServerStatus = "unknown",
+                            message = "Configuration service not available"
+                        }
+                    });
                 }
                 
+                // Get all configurations and find the one marked as default coding orchestrator
+                var allConfigs = await configService.GetActiveConfigurationsAsync();
+                var defaultCodingConfig = allConfigs.FirstOrDefault(c => c.IsDefault);
+                
+                if (defaultCodingConfig == null)
+                {
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = true,
+                        Data = new
+                        {
+                            orchestratorAvailable = false,
+                            orchestratorHealth = "Unknown",
+                            aiServerStatus = "unknown",
+                            defaultModelLoaded = false,
+                            conversationModelLoaded = false,
+                            modelsWarmedUp = false,
+                            canWarmUp = false,
+                            message = "No default coding orchestrator configured"
+                        }
+                    });
+                }
+                
+                // Get the orchestrator
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync(defaultCodingConfig.OrchestratorId);
                 var orchestratorAvailable = orchestrator != null;
                 var orchestratorHealth = "Unknown";
                 
                 if (orchestrator != null)
                 {
-                    var metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync("coding_orchestrator");
-                    if (metadata == null)
-                    {
-                        metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync("CodingOrchestrator");
-                    }
+                    var metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync(defaultCodingConfig.OrchestratorId);
                     orchestratorHealth = metadata?.HealthStatus ?? "Unknown";
                 }
                 
-                // Get configuration
-                var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
-                var configuration = await configService?.GetByOrchestratorIdAsync("CodingOrchestrator");
+                // Use the configuration we already have
+                var configuration = defaultCodingConfig;
                 
                 // Check AI server and model status
                 var aiServerStatus = "unknown";
@@ -834,20 +880,26 @@ namespace OptimalyAI.Controllers.Api
             {
                 using var scope = _serviceProvider.CreateScope();
                 var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
-                var configuration = await configService?.GetByOrchestratorIdAsync("CodingOrchestrator");
                 
-                if (configuration == null)
+                if (configService == null)
                 {
-                    // Try also with underscore
-                    configuration = await configService?.GetByOrchestratorIdAsync("coding_orchestrator");
+                    return StatusCode(500, new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Configuration service not available"
+                    });
                 }
+                
+                // Find the default coding orchestrator configuration
+                var allConfigs = await configService.GetActiveConfigurationsAsync();
+                var configuration = allConfigs.FirstOrDefault(c => c.IsDefault);
                 
                 if (configuration == null)
                 {
                     return BadRequest(new ApiResponse<object>
                     {
                         Success = false,
-                        Message = "Coding orchestrator configuration not found"
+                        Message = "No default coding orchestrator configured"
                     });
                 }
                 

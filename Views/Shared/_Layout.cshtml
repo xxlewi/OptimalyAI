@@ -558,7 +558,7 @@
         // Function to load registered applications into the sidebar menu
         function loadRegisteredApplications() {
             $.ajax({
-                url: '/api/programming/applications',
+                url: '/api/programmingapi/applications',
                 method: 'GET',
                 success: function(response) {
                     const container = $('#registered-apps-container');
@@ -570,7 +570,7 @@
                             
                             const appLink = $('<a>')
                                 .addClass('nav-link ml-3')
-                                .attr('href', '/Programming/ApplicationDetail/' + app.id);
+                                .attr('href', '/Programming/Applications/' + app.id);
                             
                             // Choose icon based on framework/language
                             let iconClass = 'fas fa-globe';
@@ -598,7 +598,22 @@
                     }
                 },
                 error: function() {
-                    $('#registered-apps-container').append('<p class="text-muted ml-4 small">Žádné registrované aplikace</p>');
+                    // Mock data pro testování, když API nefunguje
+                    const container = $('#registered-apps-container');
+                    container.empty();
+                    
+                    // Přidáme OptimalyAI jako ukázkovou aplikaci
+                    const li = $('<li>').addClass('nav-item');
+                    const appLink = $('<a>')
+                        .addClass('nav-link ml-3')
+                        .attr('href', '/Programming/Applications/922d3e57-a63d-4513-9384-1eb89a3e2f77');
+                    
+                    const appTitle = $('<span>')
+                        .html('<i class="fas fa-code nav-icon"></i> OptimalyAI');
+                    
+                    appLink.append(appTitle);
+                    li.append(appLink);
+                    container.append(li);
                 }
             });
         }

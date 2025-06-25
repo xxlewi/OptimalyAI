@@ -75,6 +75,16 @@ namespace OptimalyAI.Controllers
         }
 
         /// <summary>
+        /// Get active projects
+        /// </summary>
+        [HttpGet("active")]
+        public async Task<IActionResult> GetActiveProjects()
+        {
+            var (projects, _) = await _projectService.GetProjectsAsync(1, int.MaxValue, "active", null, null);
+            return Ok(projects);
+        }
+
+        /// <summary>
         /// Get project by ID
         /// </summary>
         [HttpGet("{id}")]

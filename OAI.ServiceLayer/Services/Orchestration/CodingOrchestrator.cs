@@ -26,7 +26,7 @@ namespace OAI.ServiceLayer.Services.Orchestration
     public class CodingOrchestrator : BaseOrchestrator<CodingOrchestratorRequestDto, CodingOrchestratorResponseDto>
     {
         private readonly IAiServiceRouter _aiServiceRouter;
-        private readonly IOrchestratorConfigurationService _configurationService;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
 
         public override string Id => "CodingOrchestrator";
         public override string Name => "AI Coding Orchestrator";
@@ -36,11 +36,11 @@ namespace OAI.ServiceLayer.Services.Orchestration
             IAiServiceRouter aiServiceRouter,
             ILogger<CodingOrchestrator> logger,
             IOrchestratorMetrics metrics,
+            IServiceScopeFactory serviceScopeFactory,
             IServiceProvider serviceProvider) : base(logger, metrics, serviceProvider)
         {
             _aiServiceRouter = aiServiceRouter ?? throw new ArgumentNullException(nameof(aiServiceRouter));
-            _configurationService = serviceProvider.GetService<IOrchestratorConfigurationService>() 
-                ?? throw new InvalidOperationException("IOrchestratorConfigurationService is required");
+            _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
         }
 
         protected override async Task<CodingOrchestratorResponseDto> ExecuteCoreAsync(
@@ -60,7 +60,10 @@ namespace OAI.ServiceLayer.Services.Orchestration
             try
             {
                 // Načtení konfigurace orchestrátoru
-                var configuration = await _configurationService.GetByOrchestratorIdAsync(Id);
+                // Vytvořit scope pro získání scoped services
+                using var scope = _serviceScopeFactory.CreateScope();
+                var configurationService = scope.ServiceProvider.GetRequiredService<IOrchestratorConfigurationService>();
+                var configuration = await configurationService.GetByOrchestratorIdAsync(Id);
                 if (configuration == null)
                 {
                     throw new InvalidOperationException($"Configuration not found for orchestrator {Id}");
@@ -569,11 +572,7 @@ Asistent:";
                 result.Errors.Add($"ProjectPath neexistuje: {request.ProjectPath}");
             }
 
-            if (string.IsNullOrWhiteSpace(request.ModelId))
-            {
-                result.IsValid = false;
-                result.Errors.Add("ModelId je povinný");
-            }
+            // ModelId je nyní volitelný - pokud není zadán, použije se z konfigurace orchestrátoru
 
             return await Task.FromResult(result);
         }

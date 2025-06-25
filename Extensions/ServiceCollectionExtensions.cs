@@ -377,9 +377,7 @@ public static class ServiceCollectionExtensions
         // Register Orchestrator Configuration Service FIRST (before any orchestrators)
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestratorConfigurationService, OAI.ServiceLayer.Services.Orchestration.OrchestratorConfigurationService>();
         
-        // Register AI Server Service (using existing implementation)
-        services.AddScoped<OAI.ServiceLayer.Services.AI.IAiServerService, OAI.ServiceLayer.Services.AI.AiServerService>();
-        // Note: OAI.Core.Interfaces.Services.IAiServerService is implemented by a different service if needed
+        // AI Server Service is already registered in AddDomainServices()
         
         // Register main Conversation Manager
         // services.TryAddSingleton<IConversationManager, ConversationManager>();
