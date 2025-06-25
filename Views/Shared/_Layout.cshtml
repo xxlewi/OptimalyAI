@@ -224,14 +224,34 @@
                             </a>
                         </li>
                         
-                        <li class="nav-item">
-                            <a asp-controller="Projects" asp-action="Index" class="nav-link">
+                        <li class="nav-item has-treeview" id="projects-menu">
+                            <a href="#" class="nav-link">
                                 <i class="nav-icon fas fa-project-diagram"></i>
                                 <p>
                                     Projekty
                                     <span class="badge badge-info right project-count-active">0</span>
+                                    <i class="right fas fa-angle-left"></i>
                                 </p>
                             </a>
+                            <ul class="nav nav-treeview">
+                                <li class="nav-item">
+                                    <a asp-controller="Projects" asp-action="Index" class="nav-link">
+                                        <i class="fas fa-list nav-icon"></i>
+                                        <p>Všechny projekty</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Projects" asp-action="Create" class="nav-link">
+                                        <i class="fas fa-plus nav-icon"></i>
+                                        <p>Nový projekt</p>
+                                    </a>
+                                </li>
+                                <li class="nav-divider"></li>
+                                <li id="active-projects-container">
+                                    <!-- Zde budou dynamicky načítány aktivní projekty -->
+                                </li>
+                                <li class="nav-divider"></li>
+                            </ul>
                         </li>
                         
                         <li class="nav-item has-treeview" id="ai-system-menu">
@@ -283,11 +303,27 @@
                         </li>
                         
                         <li class="nav-header">PROGRAMOVÁNÍ</li>
-                        <li class="nav-item">
-                            <a asp-controller="Programming" asp-action="Applications" class="nav-link">
-                                <i class="nav-icon fas fa-globe"></i>
-                                <p>Aplikace</p>
+                        <li class="nav-item has-treeview" id="programming-menu">
+                            <a href="#" class="nav-link">
+                                <i class="nav-icon fas fa-code"></i>
+                                <p>
+                                    Programování
+                                    <i class="right fas fa-angle-left"></i>
+                                </p>
                             </a>
+                            <ul class="nav nav-treeview">
+                                <li class="nav-item">
+                                    <a asp-controller="Programming" asp-action="Applications" class="nav-link">
+                                        <i class="fas fa-globe nav-icon"></i>
+                                        <p>Všechny aplikace</p>
+                                    </a>
+                                </li>
+                                <li class="nav-divider"></li>
+                                <li id="registered-apps-container">
+                                    <!-- Zde budou dynamicky načítány registrované aplikace -->
+                                </li>
+                                <li class="nav-divider"></li>
+                            </ul>
                         </li>
                         
                         <li class="nav-header">KOMUNIKACE</li>
@@ -410,6 +446,12 @@
             
             // Load recent chats into menu
             loadRecentChats();
+            
+            // Load registered applications into menu
+            loadRegisteredApplications();
+            
+            // Load active projects into menu
+            loadActiveProjects();
         });
         
         // Function to load recent chats into the sidebar menu
@@ -514,6 +556,108 @@
                     }
                 });
             }
+        }
+        
+        // Function to load registered applications into the sidebar menu
+        function loadRegisteredApplications() {
+            $.ajax({
+                url: '/api/programming/applications',
+                method: 'GET',
+                success: function(response) {
+                    const container = $('#registered-apps-container');
+                    container.empty();
+                    
+                    if (response && response.data && response.data.length > 0) {
+                        response.data.forEach(function(app) {
+                            const li = $('<li>').addClass('nav-item');
+                            
+                            const appLink = $('<a>')
+                                .addClass('nav-link ml-3')
+                                .attr('href', '/Programming/ApplicationDetail/' + app.id);
+                            
+                            // Choose icon based on framework/language
+                            let iconClass = 'fas fa-globe';
+                            if (app.framework && app.framework.toLowerCase().includes('react')) {
+                                iconClass = 'fab fa-react';
+                            } else if (app.framework && app.framework.toLowerCase().includes('angular')) {
+                                iconClass = 'fab fa-angular';
+                            } else if (app.framework && app.framework.toLowerCase().includes('vue')) {
+                                iconClass = 'fab fa-vuejs';
+                            } else if (app.programmingLanguage && app.programmingLanguage.toLowerCase().includes('python')) {
+                                iconClass = 'fab fa-python';
+                            } else if (app.programmingLanguage && app.programmingLanguage.toLowerCase().includes('javascript')) {
+                                iconClass = 'fab fa-js';
+                            }
+                            
+                            const appTitle = $('<span>')
+                                .html('<i class="' + iconClass + ' nav-icon"></i> ' + app.name);
+                            
+                            appLink.append(appTitle);
+                            li.append(appLink);
+                            container.append(li);
+                        });
+                    } else {
+                        container.append('<p class="text-muted ml-4 small">Žádné registrované aplikace</p>');
+                    }
+                },
+                error: function() {
+                    $('#registered-apps-container').append('<p class="text-muted ml-4 small">Žádné registrované aplikace</p>');
+                }
+            });
+        }
+        
+        // Function to load active projects into the sidebar menu
+        function loadActiveProjects() {
+            $.ajax({
+                url: '/api/projects/active',
+                method: 'GET',
+                success: function(response) {
+                    const container = $('#active-projects-container');
+                    container.empty();
+                    
+                    if (response && response.length > 0) {
+                        response.forEach(function(project) {
+                            const li = $('<li>').addClass('nav-item');
+                            
+                            const projectLink = $('<a>')
+                                .addClass('nav-link ml-3 d-flex align-items-center justify-content-between')
+                                .attr('href', '/Projects/Details/' + project.id);
+                            
+                            // Status icon based on project status
+                            let statusClass = 'text-muted';
+                            if (project.status === 'Aktivní' || project.status === 'Active') {
+                                statusClass = 'text-success';
+                            } else if (project.status === 'Dokončený' || project.status === 'Completed') {
+                                statusClass = 'text-info';
+                            } else if (project.status === 'Pozastavený' || project.status === 'OnHold') {
+                                statusClass = 'text-warning';
+                            }
+                            
+                            const projectTitle = $('<span>')
+                                .addClass('d-flex align-items-center')
+                                .html('<i class="far fa-folder nav-icon ' + statusClass + '"></i> ' + project.name);
+                            
+                            // Progress badge if available
+                            if (project.progress !== undefined && project.progress !== null) {
+                                const progressBadge = $('<span>')
+                                    .addClass('badge badge-secondary')
+                                    .text(project.progress + '%');
+                                projectLink.append(projectTitle).append(progressBadge);
+                            } else {
+                                projectLink.append(projectTitle);
+                            }
+                            
+                            li.append(projectLink);
+                            container.append(li);
+                        });
+                    } else {
+                        container.append('<p class="text-muted ml-4 small">Žádné aktivní projekty</p>');
+                    }
+                },
+                error: function() {
+                    $('#active-projects-container').append('<p class="text-muted ml-4 small">Žádné aktivní projekty</p>');
+                }
+            });
         }
     </script>
     
@@ -644,7 +788,19 @@
             
             // Special handling for Programming menu
             if (currentPath.startsWith('/programming')) {
-                $('.nav-sidebar .nav-link[href*="/Programming/Applications"]').addClass('active');
+                $('#programming-menu').addClass('menu-open');
+                $('#programming-menu > .nav-link').addClass('active');
+                
+                // Mark specific application link as active if viewing application detail
+                if (currentPath.includes('/applicationdetail/')) {
+                    // The specific app link will be marked active by the dynamic loading
+                }
+            }
+            
+            // Special handling for Projects menu
+            if (currentPath.startsWith('/projects')) {
+                $('#projects-menu').addClass('menu-open');
+                $('#projects-menu > .nav-link').addClass('active');
             }
         });
     </script>

@@ -459,6 +459,9 @@
                             <i class="fas fa-circle text-secondary" id="statusIcon" style="font-size: 0.8rem;"></i>
                             <span class="ms-1 small text-white" id="statusText">Kontroluji...</span>
                         </div>
+                        <button class="btn btn-sm btn-light" id="warmupButton" onclick="warmupModels()" title="Zahřát modely" style="display: none;">
+                            <i class="fas fa-fire"></i>
+                        </button>
                         <button class="btn btn-sm btn-light" onclick="clearChat()" title="Vymazat konverzaci">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -780,6 +783,8 @@ Uživatelský dotaz: ${message}`;
         });
         
         // Check AI server status
+        let modelsWarmedUp = false;
+        
         async function checkAIStatus() {
             try {
                 const response = await fetch('/api/orchestrators/coding/status');
@@ -787,6 +792,7 @@ Uživatelský dotaz: ${message}`;
                 
                 const statusIcon = document.getElementById('statusIcon');
                 const statusText = document.getElementById('statusText');
+                const warmupButton = document.getElementById('warmupButton');
                 
                 if (result.success && result.data) {
                     const data = result.data;
@@ -794,24 +800,87 @@ Uživatelský dotaz: ${message}`;
                     if (!data.orchestratorAvailable) {
                         statusIcon.className = 'fas fa-circle text-danger';
                         statusText.textContent = 'Orchestrátor nedostupný';
+                        warmupButton.style.display = 'none';
                     } else if (data.orchestratorHealth !== 'Healthy') {
                         statusIcon.className = 'fas fa-circle text-warning';
                         statusText.textContent = 'Orchestrátor má problémy';
-                    } else if (data.aiServerStatus === 'error') {
+                        warmupButton.style.display = 'none';
+                    } else if (data.aiServerStatus === 'error' || data.aiServerStatus === 'unknown') {
                         statusIcon.className = 'fas fa-circle text-danger';
                         statusText.textContent = 'AI server nedostupný';
+                        warmupButton.style.display = 'none';
+                    } else if (!data.defaultModelLoaded && !data.conversationModelLoaded) {
+                        statusIcon.className = 'fas fa-circle text-warning';
+                        statusText.textContent = 'Modely nejsou načtené';
+                        warmupButton.style.display = 'none';
+                    } else if (!modelsWarmedUp) {
+                        statusIcon.className = 'fas fa-circle text-warning';
+                        statusText.textContent = 'Modely načtené (nezahřáté)';
+                        warmupButton.style.display = 'inline-block';
+                        
+                        // Auto warm-up on first load
+                        if (!window.warmupAttempted) {
+                            window.warmupAttempted = true;
+                            warmupModels();
+                        }
                     } else {
                         statusIcon.className = 'fas fa-circle text-success';
-                        statusText.textContent = 'AI připraveno';
+                        statusText.textContent = 'AI připraveno (zahřáté)';
+                        warmupButton.style.display = 'none';
                     }
                 } else {
                     statusIcon.className = 'fas fa-circle text-danger';
                     statusText.textContent = 'Chyba připojení';
+                    warmupButton.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Failed to check AI status:', error);
                 document.getElementById('statusIcon').className = 'fas fa-circle text-danger';
                 document.getElementById('statusText').textContent = 'Chyba připojení';
+                document.getElementById('warmupButton').style.display = 'none';
+            }
+        }
+        
+        // Warm up models
+        async function warmupModels() {
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            const warmupButton = document.getElementById('warmupButton');
+            
+            statusIcon.className = 'fas fa-circle-notch fa-spin text-warning';
+            statusText.textContent = 'Zahřívám modely...';
+            warmupButton.disabled = true;
+            
+            try {
+                const response = await fetch('/api/orchestrators/coding/warmup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    modelsWarmedUp = true;
+                    statusIcon.className = 'fas fa-circle text-success';
+                    statusText.textContent = 'AI připraveno (zahřáté)';
+                    warmupButton.style.display = 'none';
+                    toastr.success('Modely byly úspěšně zahřáté');
+                } else {
+                    statusIcon.className = 'fas fa-circle text-warning';
+                    statusText.textContent = 'Zahřátí selhalo';
+                    toastr.error('Nepodařilo se zahřát všechny modely');
+                }
+            } catch (error) {
+                console.error('Failed to warm up models:', error);
+                statusIcon.className = 'fas fa-circle text-warning';
+                statusText.textContent = 'Chyba při zahřívání';
+                toastr.error('Chyba při zahřívání modelů');
+            } finally {
+                warmupButton.disabled = false;
+                // Re-check status after warm-up
+                setTimeout(checkAIStatus, 2000);
             }
         }
         

@@ -417,7 +417,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<OAI.ServiceLayer.Services.AI.SimpleOllamaService>("OrchestratorOllamaService", client =>
         {
             var baseUrl = configuration.GetSection("OllamaSettings:BaseUrl").Value ?? "http://localhost:11434";
-            var timeout = int.Parse(configuration.GetSection("OllamaSettings:DefaultTimeout").Value ?? "120");
+            var timeout = int.Parse(configuration.GetSection("OllamaSettings:DefaultTimeout").Value ?? "30");
             
             client.BaseAddress = new Uri(baseUrl);
             client.Timeout = TimeSpan.FromSeconds(timeout);
@@ -469,9 +469,6 @@ public static class ServiceCollectionExtensions
         
         // Register Discovery services
         services.AddDiscoveryServices(configuration);
-        
-        // Register Model Warmup Service
-        services.AddHostedService<OAI.ServiceLayer.Services.AI.ModelWarmupService>();
         
         return services;
     }

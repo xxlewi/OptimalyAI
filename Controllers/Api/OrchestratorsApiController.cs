@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using OAI.Core.Interfaces.Orchestration;
+using OAI.Core.Interfaces.AI;
 using OAI.Core.DTOs;
 using OAI.Core.DTOs.Orchestration;
 using OAI.Core.DTOs.Discovery;
@@ -750,6 +751,205 @@ namespace OptimalyAI.Controllers.Api
                 },
                 _ => request.Input
             };
+        }
+
+        /// <summary>
+        /// Get the status of the coding orchestrator and its models
+        /// </summary>
+        [HttpGet("coding/status")]
+        public async Task<IActionResult> GetCodingOrchestratorStatus()
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                
+                // Get orchestrator status
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("CodingOrchestrator");
+                var orchestratorAvailable = orchestrator != null;
+                var orchestratorHealth = "Unknown";
+                
+                if (orchestrator != null)
+                {
+                    var metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync("CodingOrchestrator");
+                    orchestratorHealth = metadata?.HealthStatus ?? "Unknown";
+                }
+                
+                // Get configuration
+                var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
+                var configuration = await configService?.GetByOrchestratorIdAsync("CodingOrchestrator");
+                
+                // Check AI server and model status
+                var aiServerStatus = "unknown";
+                var defaultModelLoaded = false;
+                var conversationModelLoaded = false;
+                var modelsWarmedUp = false;
+                
+                if (configuration != null)
+                {
+                    var aiModelService = scope.ServiceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiModelService>();
+                    var aiServerService = scope.ServiceProvider.GetService<OAI.ServiceLayer.Services.AI.IAiServerService>();
+                    
+                    if (aiModelService != null && aiServerService != null)
+                    {
+                        // Check default model
+                        if (configuration.DefaultModelId.HasValue)
+                        {
+                            var models = await aiModelService.GetAvailableModelsAsync();
+                            var defaultModel = models.FirstOrDefault(m => m.Id == configuration.DefaultModelId.Value);
+                            
+                            if (defaultModel != null)
+                            {
+                                var server = await aiServerService.GetByIdAsync(defaultModel.AiServerId);
+                                if (server != null && server.IsHealthy)
+                                {
+                                    defaultModelLoaded = defaultModel.IsLoaded;
+                                    aiServerStatus = "running";
+                                }
+                            }
+                        }
+                        
+                        // Check conversation model
+                        if (configuration.ConversationModelId.HasValue)
+                        {
+                            var models = await aiModelService.GetAvailableModelsAsync();
+                            var conversationModel = models.FirstOrDefault(m => m.Id == configuration.ConversationModelId.Value);
+                            
+                            if (conversationModel != null)
+                            {
+                                conversationModelLoaded = conversationModel.IsLoaded;
+                            }
+                        }
+                    }
+                }
+                
+                var response = new
+                {
+                    orchestratorAvailable,
+                    orchestratorHealth,
+                    aiServerStatus,
+                    defaultModelLoaded,
+                    conversationModelLoaded,
+                    modelsWarmedUp,
+                    canWarmUp = (defaultModelLoaded || conversationModelLoaded) && !modelsWarmedUp
+                };
+                
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Data = response
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get coding orchestrator status");
+                return Ok(new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to get status"
+                });
+            }
+        }
+        
+        /// <summary>
+        /// Warm up models for the coding orchestrator
+        /// </summary>
+        [HttpPost("coding/warmup")]
+        public async Task<IActionResult> WarmupCodingOrchestratorModels()
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
+                var configuration = await configService?.GetByOrchestratorIdAsync("CodingOrchestrator");
+                
+                if (configuration == null)
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Coding orchestrator configuration not found"
+                    });
+                }
+                
+                var aiServiceRouter = scope.ServiceProvider.GetService<OAI.Core.Interfaces.AI.IAiServiceRouter>();
+                if (aiServiceRouter == null)
+                {
+                    return StatusCode(500, new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "AI service router not available"
+                    });
+                }
+                
+                var warmedModels = new List<string>();
+                var errors = new List<string>();
+                
+                // Warm up default model
+                if (configuration.DefaultModelId.HasValue)
+                {
+                    try
+                    {
+                        var testPrompt = "test";
+                        await aiServiceRouter.GenerateResponseWithRoutingAsync(
+                            configuration.DefaultModelId.Value.ToString(),
+                            testPrompt,
+                            Guid.NewGuid().ToString(),
+                            new Dictionary<string, object>
+                            {
+                                { "max_tokens", 1 },
+                                { "temperature", 0.1 }
+                            });
+                        warmedModels.Add($"Default model (ID: {configuration.DefaultModelId.Value})");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Failed to warm up default model: {ex.Message}");
+                    }
+                }
+                
+                // Warm up conversation model
+                if (configuration.ConversationModelId.HasValue)
+                {
+                    try
+                    {
+                        var testPrompt = "test";
+                        await aiServiceRouter.GenerateResponseWithRoutingAsync(
+                            configuration.ConversationModelId.Value.ToString(),
+                            testPrompt,
+                            Guid.NewGuid().ToString(),
+                            new Dictionary<string, object>
+                            {
+                                { "max_tokens", 1 },
+                                { "temperature", 0.1 }
+                            });
+                        warmedModels.Add($"Conversation model (ID: {configuration.ConversationModelId.Value})");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Failed to warm up conversation model: {ex.Message}");
+                    }
+                }
+                
+                return Ok(new ApiResponse<object>
+                {
+                    Success = errors.Count == 0,
+                    Data = new
+                    {
+                        warmedModels,
+                        errors
+                    },
+                    Message = errors.Count == 0 ? "Models warmed up successfully" : "Some models failed to warm up"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to warm up coding orchestrator models");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to warm up models"
+                });
+            }
         }
     }
 
