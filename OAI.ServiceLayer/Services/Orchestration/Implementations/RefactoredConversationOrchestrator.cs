@@ -20,7 +20,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
     /// Konverzační orchestrátor s integrovaným ReAct patternem
     /// </summary>
     [OrchestratorMetadata(
-        "refactored_conversation_orchestrator",
+        "conversation_orchestrator",
         "Conversation Orchestrator", 
         "Orchestrates conversations between AI models and tools with ReAct pattern"
     )]
@@ -30,7 +30,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IToolRegistry _toolRegistry;
 
-        public override string Id => "refactored_conversation_orchestrator";
+        public override string Id => "conversation_orchestrator";
         public override string Name => "Conversation Orchestrator";
         public override string Description => "Orchestrates conversations between AI models and tools with ReAct pattern";
 
@@ -140,10 +140,10 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             // Klíčová slova indikující potřebu nástrojů
             var toolKeywords = new[]
             {
-                "vyhledej", "najdi", "search", "hledej",
+                "vyhledej", "najdi", "search", "hledej", "najít",
                 "zpracuj", "analyzuj", "přečti", "stáhni",
                 "vytvoř", "naprogramuj", "kód", "soubor",
-                "web", "url", "stránka", "dokument"
+                "web", "url", "stránka", "dokument", "internet", "online"
             };
 
             return toolKeywords.Any(keyword => messageLower.Contains(keyword));
@@ -303,8 +303,10 @@ Final Answer: [your final response to the user in Czech]
 
 Example for web search:
 Thought: The user wants information about something, I should search for it
-Action: WebSearch
+Action: Web Search
 Action Input: {{""query"": ""search terms""}}
+
+IMPORTANT: When user asks to find/search information, ALWAYS use Web Search tool!
 
 Begin with your first Thought:";
             }
