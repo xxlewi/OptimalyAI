@@ -680,14 +680,23 @@ namespace OptimalyAI.Controllers.Api
             {
                 using var scope = _serviceProvider.CreateScope();
                 
-                // Get orchestrator status
-                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("CodingOrchestrator");
+                // Get orchestrator status - try both IDs
+                var orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("coding_orchestrator");
+                if (orchestrator == null)
+                {
+                    orchestrator = await _orchestratorRegistry.GetOrchestratorAsync("CodingOrchestrator");
+                }
+                
                 var orchestratorAvailable = orchestrator != null;
                 var orchestratorHealth = "Unknown";
                 
                 if (orchestrator != null)
                 {
-                    var metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync("CodingOrchestrator");
+                    var metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync("coding_orchestrator");
+                    if (metadata == null)
+                    {
+                        metadata = await _orchestratorRegistry.GetOrchestratorMetadataAsync("CodingOrchestrator");
+                    }
                     orchestratorHealth = metadata?.HealthStatus ?? "Unknown";
                 }
                 
@@ -826,6 +835,12 @@ namespace OptimalyAI.Controllers.Api
                 using var scope = _serviceProvider.CreateScope();
                 var configService = scope.ServiceProvider.GetService<IOrchestratorConfigurationService>();
                 var configuration = await configService?.GetByOrchestratorIdAsync("CodingOrchestrator");
+                
+                if (configuration == null)
+                {
+                    // Try also with underscore
+                    configuration = await configService?.GetByOrchestratorIdAsync("coding_orchestrator");
+                }
                 
                 if (configuration == null)
                 {
