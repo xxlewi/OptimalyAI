@@ -159,11 +159,18 @@ namespace OAI.ServiceLayer.Services.Tools
             }
         }
 
-        public Task<ITool?> GetToolAsync(string toolId)
+        public Task<ITool?> GetToolAsync(string toolIdOrName)
         {
-            if (string.IsNullOrEmpty(toolId)) return Task.FromResult<ITool?>(null);
+            if (string.IsNullOrEmpty(toolIdOrName)) return Task.FromResult<ITool?>(null);
 
-            _registeredTools.TryGetValue(toolId, out var tool);
+            // Try exact ID match first
+            if (_registeredTools.TryGetValue(toolIdOrName, out var tool))
+            {
+                return Task.FromResult<ITool?>(tool);
+            }
+
+            // If not found by ID, try by name
+            tool = _registeredTools.Values.FirstOrDefault(t => t.Name.Equals(toolIdOrName, StringComparison.OrdinalIgnoreCase));
             return Task.FromResult<ITool?>(tool);
         }
 

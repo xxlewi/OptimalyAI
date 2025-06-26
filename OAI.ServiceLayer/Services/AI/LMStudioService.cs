@@ -301,14 +301,14 @@ namespace OAI.ServiceLayer.Services.AI
                 };
 
                 var json = JsonSerializer.Serialize(payload);
-                _logger.LogDebug("LMStudioService sending request: {Json}", json);
+                _logger.LogError("LMStudioService sending request: {Json}", json);
                 
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync("/v1/chat/completions", content, cancellationToken);
                 var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
                 
-                _logger.LogDebug("LMStudioService received response: Status={Status}, Body={Body}", 
+                _logger.LogError("LMStudioService received response: Status={Status}, Body={Body}", 
                     response.StatusCode, responseJson);
                 
                 response.EnsureSuccessStatusCode();

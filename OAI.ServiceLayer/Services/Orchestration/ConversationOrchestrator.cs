@@ -14,7 +14,7 @@ using OAI.Core.Interfaces.Orchestration;
 using OAI.Core.Interfaces.Tools;
 using OAI.ServiceLayer.Services.Orchestration.Base;
 
-namespace OAI.ServiceLayer.Services.Orchestration.Implementations
+namespace OAI.ServiceLayer.Services.Orchestration
 {
     /// <summary>
     /// Konverzační orchestrátor s integrovaným ReAct patternem
@@ -24,7 +24,7 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         "Conversation Orchestrator", 
         "Orchestrates conversations between AI models and tools with ReAct pattern"
     )]
-    public class RefactoredConversationOrchestrator : BaseOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto>
+    public class ConversationOrchestrator : BaseOrchestrator<ConversationOrchestratorRequestDto, ConversationOrchestratorResponseDto>
     {
         private readonly IAiServiceRouter _aiServiceRouter;
         private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -34,9 +34,9 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
         public override string Name => "Conversation Orchestrator";
         public override string Description => "Orchestrates conversations between AI models and tools with ReAct pattern";
 
-        public RefactoredConversationOrchestrator(
+        public ConversationOrchestrator(
             IAiServiceRouter aiServiceRouter,
-            ILogger<RefactoredConversationOrchestrator> logger,
+            ILogger<ConversationOrchestrator> logger,
             IOrchestratorMetrics metrics,
             IServiceScopeFactory serviceScopeFactory,
             IToolRegistry toolRegistry,
@@ -70,19 +70,24 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                 var configurationService = scope.ServiceProvider.GetRequiredService<IOrchestratorConfigurationService>();
                 var configuration = await configurationService.GetByOrchestratorIdAsync(Id);
                 
+                // Použij model z requestu nebo z konfigurace
+                var modelId = request.ModelId ?? configuration?.DefaultModelName 
+                    ?? throw new InvalidOperationException("No model configured");
+                
                 // Analyzuj, jestli uživatel chce použít nástroje
                 var needsTools = await DetectToolNeed(request.Message);
+                response.ToolsDetected = needsTools;
                 
                 if (needsTools)
                 {
                     _logger.LogInformation("Detected tool usage needed, using ReAct pattern");
                     
-                    // Použij model z konfigurace pro ReAct
-                    var modelId = configuration?.DefaultModelName ?? throw new InvalidOperationException("No default model configured");
                     var scratchpad = await ExecuteReActPattern(request, modelId, cancellationToken);
                     
                     response.Response = scratchpad.FinalAnswer ?? "Nepodařilo se dokončit úlohu.";
-                    response.ToolsUsed = scratchpad.Actions.Where(a => !a.IsFinalAnswer).Select(a => new ToolUsageDto
+                    var toolActions = scratchpad.Actions.Where(a => !a.IsFinalAnswer).ToList();
+                    
+                    response.ToolsUsed = toolActions.Select(a => new ToolUsageDto
                     {
                         ToolName = a.ToolName ?? "unknown",
                         ExecutedAt = a.CreatedAt,
@@ -95,10 +100,8 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                     _logger.LogInformation("Simple conversation, using direct LLM response");
                     
                     // Pro jednoduchou konverzaci použij konverzační model
-                    var modelId = configuration?.ConversationModelName ?? configuration?.DefaultModelName 
-                        ?? throw new InvalidOperationException("No model configured");
-                    
-                    response.Response = await HandleSimpleConversation(request.Message, modelId, cancellationToken);
+                    var conversationModelId = configuration?.ConversationModelName ?? modelId;
+                    response.Response = await HandleSimpleConversation(request.Message, conversationModelId, cancellationToken);
                     response.ToolsUsed = new List<ToolUsageDto>();
                     response.Steps = new List<OrchestratorStepDto> 
                     { 
@@ -136,17 +139,23 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                 return false;
 
             var messageLower = message.ToLower();
+            _logger.LogDebug("Detecting tool need for message: '{MessageLower}'", messageLower);
 
             // Klíčová slova indikující potřebu nástrojů
             var toolKeywords = new[]
             {
                 "vyhledej", "najdi", "search", "hledej", "najít",
-                "zpracuj", "analyzuj", "přečti", "stáhni",
-                "vytvoř", "naprogramuj", "kód", "soubor",
-                "web", "url", "stránka", "dokument", "internet", "online"
+                "informace", "novinky", "aktuální", "současné",
+                "porovnej", "ceny", "data", "statistiky"
             };
 
-            return toolKeywords.Any(keyword => messageLower.Contains(keyword));
+            var foundKeywords = toolKeywords.Where(keyword => messageLower.Contains(keyword)).ToList();
+            _logger.LogDebug("Found keywords: {Keywords}", string.Join(", ", foundKeywords));
+
+            var needsTools = foundKeywords.Any();
+            _logger.LogDebug("Tool detection result: {NeedsTools}", needsTools);
+            
+            return needsTools;
         }
 
         /// <summary>
@@ -183,8 +192,12 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                         break;
                     }
 
+                    _logger.LogError("RAW LLM RESPONSE: {Response}", llmResponse);
+
                     // Parsuj odpověď
                     var parsedResponse = ParseReActResponse(llmResponse);
+                    _logger.LogError("PARSED: Thought='{Thought}', Action='{Action}', ActionInput='{Input}', Final='{Final}'", 
+                        parsedResponse.Thought, parsedResponse.Action, parsedResponse.ActionInput, parsedResponse.FinalAnswer);
                     
                     // Ulož thought
                     if (!string.IsNullOrEmpty(parsedResponse.Thought))
@@ -222,7 +235,8 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
                             ToolName = parsedResponse.Action,
                             Parameters = ParseJsonSafe(parsedResponse.ActionInput),
                             StepNumber = iteration + 1,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = DateTime.UtcNow,
+                            IsFinalAnswer = false // Explicitně nastavit že to není final answer
                         };
                         scratchpad.Actions.Add(action);
                         conversationHistory.Add($"Action: {parsedResponse.Action}");
@@ -280,51 +294,45 @@ namespace OAI.ServiceLayer.Services.Orchestration.Implementations
             {
                 // Získej dostupné nástroje
                 var allTools = await _toolRegistry.GetAllToolsAsync();
-                var availableTools = allTools.Select(t => $"- {t.Name}: {t.Description}").ToList();
-                var toolsText = availableTools.Any() ? string.Join("\n", availableTools) : "- No tools available";
+                var availableTools = allTools?.Select(t => $"- {t.Name}: {t.Description}").ToList() ?? new List<string>();
+                var toolsText = availableTools.Any() ? string.Join("\n", availableTools) : "- Web Search: Search the internet for information";
 
-                return $@"You are an AI assistant using the ReAct (Reasoning + Acting) pattern for conversations.
+                return $@"You are a helpful assistant that MUST use tools when users ask for information.
 
-User message: {request.Message}
+User request: {request.Message}
 
 Available tools:
-{toolsText}
+- web_search: Search the internet for current information
 
-You MUST respond in this EXACT format:
+IMPORTANT: The user is asking for information that requires a web search. You MUST use the web_search tool EXACTLY as shown (lowercase with underscore).
 
-Thought: [your reasoning about what to do]
-Action: [tool name]
-Action Input: [JSON parameters for the tool]
+You must respond in this EXACT format:
 
-OR when you're done:
+Thought: I need to search for information about this topic
+Action: web_search
+Action Input: {{""query"": ""relevant search terms""}}
 
-Thought: [your reasoning about the complete response]
-Final Answer: [your final response to the user in Czech]
+Example:
+Thought: I need to search for information about TypeScript
+Action: web_search
+Action Input: {{""query"": ""TypeScript programming language""}}
 
-Example for web search:
-Thought: The user wants information about something, I should search for it
-Action: Web Search
-Action Input: {{""query"": ""search terms""}}
-
-IMPORTANT: When user asks to find/search information, ALWAYS use Web Search tool!
-
-Begin with your first Thought:";
+Start your response now:";
             }
             else
             {
                 var recentHistory = string.Join("\n", history.TakeLast(6));
-                return $@"Continue the conversation. Here's what happened so far:
-
+                return $@"Continue ReAct. Previous steps:
 {recentHistory}
 
-Remember to use this EXACT format:
+Next step - use exact format:
 Thought: [reasoning]
-Action: [tool name]
+Action: [tool]
 Action Input: [JSON]
 
 OR:
 Thought: [reasoning]
-Final Answer: [response in Czech]
+Final Answer: [answer in Czech]
 
 Continue:";
             }
@@ -376,11 +384,10 @@ Asistent:";
                     Guid.NewGuid().ToString(),
                     new Dictionary<string, object>
                     {
-                        ["max_tokens"] = 800,
-                        ["temperature"] = 0.4
+                        ["max_tokens"] = 500,  // Kratší response pro rychlost
+                        ["temperature"] = 0.3  // Méně kreativity pro konzistenci
                     },
                     cancellationToken);
-
                 return response ?? string.Empty;
             }
             catch (Exception ex)
@@ -397,10 +404,24 @@ Asistent:";
         {
             var result = new ReActParsedResponse();
 
+            // Try standard format first
             var thoughtMatch = Regex.Match(response, @"Thought:\s*(.+?)(?=Action:|Final Answer:|$)", RegexOptions.Singleline);
             var actionMatch = Regex.Match(response, @"Action:\s*(.+?)(?=Action Input:|$)", RegexOptions.Singleline);
             var actionInputMatch = Regex.Match(response, @"Action Input:\s*(.+?)(?=Thought:|Final Answer:|$)", RegexOptions.Singleline);
             var finalAnswerMatch = Regex.Match(response, @"Final Answer:\s*(.+?)$", RegexOptions.Singleline);
+
+            // Fallback: try <think> tags if no standard format found
+            if (!thoughtMatch.Success && !finalAnswerMatch.Success && !actionMatch.Success)
+            {
+                var thinkMatch = Regex.Match(response, @"<think>\s*(.+?)\s*</think>", RegexOptions.Singleline);
+                if (thinkMatch.Success)
+                {
+                    // If we have <think> tags, treat as incomplete response - force final answer
+                    result.Thought = "User request is too vague, need clarification.";
+                    result.FinalAnswer = "Prosím upřesněte, jaké informace hledáte. Napište například 'najdi informace o...' a konkrétní téma.";
+                    return result;
+                }
+            }
 
             if (thoughtMatch.Success)
                 result.Thought = thoughtMatch.Groups[1].Value.Trim();

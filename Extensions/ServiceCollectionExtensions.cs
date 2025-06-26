@@ -389,12 +389,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestratorSettings, OAI.ServiceLayer.Services.Orchestration.OrchestratorSettingsService>();
         
         
-        // Register refactored conversation orchestrator
-        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>();
+        // Register conversation orchestrator
+        services.AddScoped<OAI.ServiceLayer.Services.Orchestration.ConversationOrchestrator>();
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator<OAI.Core.DTOs.Orchestration.ConversationOrchestratorRequestDto, OAI.Core.DTOs.Orchestration.ConversationOrchestratorResponseDto>, 
-            OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>();
+            OAI.ServiceLayer.Services.Orchestration.ConversationOrchestrator>();
         services.AddScoped<OAI.Core.Interfaces.Orchestration.IOrchestrator>(provider => 
-            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.Implementations.RefactoredConversationOrchestrator>());
+            provider.GetRequiredService<OAI.ServiceLayer.Services.Orchestration.ConversationOrchestrator>());
             
         // Register AI Coding Orchestrator
         services.AddScoped<OAI.ServiceLayer.Services.Orchestration.CodingOrchestrator>();

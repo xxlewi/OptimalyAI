@@ -213,7 +213,7 @@ namespace OptimalyAI.Controllers
                 // Get default model from orchestrator configuration
                 try
                 {
-                    var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("refactored_conversation_orchestrator");
+                    var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("conversation_orchestrator");
                     ViewBag.DefaultModel = orchestratorConfig?.DefaultModelName;
                     
                     _logger.LogInformation("Loaded {Count} models. Default model: {Model}", 
@@ -386,27 +386,34 @@ namespace OptimalyAI.Controllers
             try
             {
                 // Get default model from orchestrator config if not specified
-                string defaultModel = "qwen2.5-14b-instruct"; // Fallback default
+                string? defaultModel = null;
+                _logger.LogInformation("DEBUG: dto.Model = '{Model}', IsNullOrEmpty = {IsEmpty}", dto.Model, string.IsNullOrEmpty(dto.Model));
                 if (string.IsNullOrEmpty(dto.Model))
                 {
                     try
                     {
-                        var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("refactored_conversation_orchestrator");
-                        if (orchestratorConfig != null && !string.IsNullOrEmpty(orchestratorConfig.DefaultModelName))
+                        var orchestratorConfig = await _orchestratorConfigService.GetByOrchestratorIdAsync("conversation_orchestrator");
+                        defaultModel = orchestratorConfig?.DefaultModelName;
+                        _logger.LogInformation("DEBUG: OrchestratorConfig is null: {IsNull}, DefaultModelName: {Model}", 
+                            orchestratorConfig == null, defaultModel);
+                        if (string.IsNullOrEmpty(defaultModel))
                         {
-                            defaultModel = orchestratorConfig.DefaultModelName;
+                            // Fallback na google/gemma-3-27b
+                            defaultModel = "google/gemma-3-27b";
+                            _logger.LogWarning("Using fallback model: {Model}", defaultModel);
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to get orchestrator default model, using fallback");
+                        _logger.LogError(ex, "Failed to get orchestrator default model");
+                        return Json(new { success = false, error = "Failed to get default model configuration" });
                     }
                 }
 
                 var conversation = new OAI.Core.Entities.Conversation
                 {
                     Title = dto.Title ?? "Nový chat",
-                    Model = dto.Model ?? defaultModel, // Use selected model or default
+                    Model = "google/gemma-3-27b", // FIXED: Always use orchestrator model
                     SystemPrompt = dto.SystemPrompt ?? "You are a helpful AI assistant.",
                     UserId = "default", // TODO: Add user authentication
                     LastMessageAt = DateTime.UtcNow
@@ -451,7 +458,7 @@ namespace OptimalyAI.Controllers
                     RequestId = Guid.NewGuid().ToString(),
                     ConversationId = dto.ConversationId.ToString(),
                     Message = dto.Message,
-                    ModelId = conversation.Model, // Use model stored in conversation, or null for orchestrator default
+                    ModelId = null, // Always use orchestrator default model from configuration
                     UserId = "default", // TODO: Add user authentication
                     SessionId = HttpContext.Session.Id,
                     EnableTools = true,
@@ -525,10 +532,12 @@ namespace OptimalyAI.Controllers
                     ResponseTime = responseTime,
                     TokensPerSecond = tokensPerSecond,
                     ToolsDetected = orchestratorResponse.ToolsDetected,
+                    ToolsUsed = orchestratorResponse.ToolsUsed, // Přidat tools used!
                     ToolsConsidered = orchestratorResponse.ToolsConsidered,
                     DetectedIntents = orchestratorResponse.DetectedIntents,
                     ToolConfidence = orchestratorResponse.ToolConfidence,
-                    ExecutionId = orchestratorRequest.RequestId
+                    ExecutionId = orchestratorRequest.RequestId,
+                    Steps = orchestratorResponse.Steps // Přidat i steps!
                 });
             }
             catch (Exception ex)
@@ -673,5 +682,15 @@ namespace OptimalyAI.Controllers
         /// Orchestrator execution ID for tracking
         /// </summary>
         public string? ExecutionId { get; set; }
+        
+        /// <summary>
+        /// Tools that were actually used
+        /// </summary>
+        public List<OAI.Core.DTOs.Orchestration.ToolUsageDto> ToolsUsed { get; set; } = new();
+        
+        /// <summary>
+        /// Processing steps executed
+        /// </summary>
+        public List<OAI.Core.DTOs.Orchestration.OrchestratorStepDto> Steps { get; set; } = new();
     }
 }
